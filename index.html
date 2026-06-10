@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Outreach Script Bot</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0A0A0F;
+    --bg2:       #111118;
+    --bg3:       #1A1A24;
+    --border:    #2A2A38;
+    --accent:    #2563EB;
+    --accent2:   #3B82F6;
+    --green:     #10B981;
+    --amber:     #F59E0B;
+    --red:       #EF4444;
+    --text:      #F0F0F8;
+    --muted:     #6B7280;
+    --subtle:    #9CA3AF;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* HEADER */
+  .header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    font-family: 'Courier Prime', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.5px;
+  }
+  .logo span { color: var(--accent2); }
+  .badge {
+    background: var(--accent);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .header-right { display: flex; align-items: center; gap: 8px; }
+  .research-indicator {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .research-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+  .research-dot.searching {
+    animation: pulse 1s infinite;
+    background: var(--amber);
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* MAIN LAYOUT */
+  .main {
+    display: grid;
+    grid-template-columns: 280px 1fr 1fr;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* PANEL BASE */
+  .panel {
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .panel:last-child { border-right: none; }
+  .panel-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    background: var(--bg2);
+  }
+  .panel-body { flex: 1; overflow-y: auto; padding: 16px; }
+  .panel-body::-webkit-scrollbar { width: 4px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* LEFT — CLIENT SIDEBAR */
+  .client-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    background: var(--bg2);
+  }
+  .client-card:hover { border-color: var(--accent); background: var(--bg3); }
+  .client-card.active { border-color: var(--accent); background: var(--bg3); }
+  .client-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+  .client-meta {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .client-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tag {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .tag-blue  { background: rgba(37,99,235,.15); color: var(--accent2); }
+  .tag-green { background: rgba(16,185,129,.15); color: var(--green); }
+  .tag-amber { background: rgba(245,158,11,.15); color: var(--amber); }
+  .tag-red   { background: rgba(239,68,68,.15);  color: var(--red); }
+
+  .section-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+    margin: 16px 0 8px;
+  }
+  .section-label:first-child { margin-top: 0; }
+
+  /* CENTRE — BUILDER */
+  .form-group { margin-bottom: 14px; }
+  .form-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .form-input, .form-select, .form-textarea {
+    width: 100%;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    padding: 8px 11px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus {
+    border-color: var(--accent);
+  }
+  .form-select option { background: var(--bg3); }
+  .form-textarea { resize: vertical; min-height: 70px; }
+
+  .toggle-row {
+    display: flex; align-items: center;
+    justify-content: space-between;
+    padding: 9px 11px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+  }
+  .toggle-label { font-size: 12px; color: var(--subtle); }
+  .toggle {
+    position: relative; width: 34px; height: 18px;
+    cursor: pointer;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; inset: 0;
+    background: var(--border);
+    border-radius: 18px;
+    transition: .2s;
+  }
+  .toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 12px; height: 12px;
+    left: 3px; bottom: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: .2s;
+  }
+  .toggle input:checked + .toggle-slider { background: var(--accent); }
+  .toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
+
+  .context-box {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+  }
+  .context-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent2);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .context-item {
+    font-size: 12px;
+    color: var(--subtle);
+    line-height: 1.6;
+    padding: 2px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .context-item:last-child { border-bottom: none; }
+  .context-item strong { color: var(--text); }
+
+  .btn {
+    width: 100%;
+    padding: 11px 16px;
+    border-radius: 6px;
+    border: none;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: .15s;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--subtle);
+    margin-top: 8px;
+  }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--text); }
+
+  /* RIGHT — OUTPUT */
+  .output-panel { background: var(--bg); }
+  .output-toolbar {
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    background: var(--bg2);
+  }
+  .output-tabs { display: flex; gap: 4px; }
+  .tab-btn {
+    padding: 5px 12px;
+    border-radius: 5px;
+    border: none;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    background: transparent;
+    color: var(--muted);
+    transition: .15s;
+    font-family: 'Inter', sans-serif;
+  }
+  .tab-btn.active { background: var(--accent); color: #fff; }
+  .tab-btn:hover:not(.active) { color: var(--text); background: var(--bg3); }
+  .output-actions { display: flex; gap: 6px; }
+  .action-btn {
+    padding: 5px 10px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: .15s;
+  }
+  .action-btn:hover { border-color: var(--accent); color: var(--text); }
+
+  .output-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    font-family: 'Courier Prime', monospace;
+    font-size: 14px;
+    line-height: 1.8;
+    color: var(--text);
+  }
+  .output-body::-webkit-scrollbar { width: 4px; }
+  .output-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .placeholder-state {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .placeholder-icon { font-size: 40px; opacity: .4; }
+  .placeholder-text { font-size: 13px; font-family: 'Inter', sans-serif; max-width: 220px; line-height: 1.6; }
+
+  .script-output { white-space: pre-wrap; }
+  .cursor {
+    display: inline-block;
+    width: 2px; height: 16px;
+    background: var(--accent2);
+    vertical-align: middle;
+    animation: blink .8s infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  .variant-block {
+    margin-bottom: 28px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .variant-header {
+    padding: 8px 14px;
+    background: var(--bg3);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .variant-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent2);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .copy-btn {
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: .15s;
+  }
+  .copy-btn:hover { border-color: var(--accent); color: var(--text); }
+  .copy-btn.copied { border-color: var(--green); color: var(--green); }
+  .variant-body { padding: 16px; white-space: pre-wrap; }
+
+  .framework-block {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 14px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+  }
+  .framework-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent2);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+  .framework-row {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 6px;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+    align-items: start;
+  }
+  .framework-row:last-child { border-bottom: none; }
+  .framework-key { color: var(--muted); font-weight: 500; }
+  .framework-val { color: var(--text); }
+
+  .loading-state {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 14px; height: 100%;
+    font-family: 'Inter', sans-serif;
+  }
+  .loading-spinner {
+    width: 32px; height: 32px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-step { font-size: 12px; color: var(--muted); }
+  .loading-steps { display: flex; flex-direction: column; gap: 6px; text-align: center; }
+  .step-item {
+    font-size: 11px; color: var(--border);
+    transition: color .3s;
+  }
+  .step-item.active { color: var(--accent2); }
+  .step-item.done { color: var(--green); }
+
+  .research-result {
+    background: rgba(37,99,235,.06);
+    border: 1px solid rgba(37,99,235,.2);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    color: var(--subtle);
+    line-height: 1.6;
+  }
+  .research-result-title {
+    font-weight: 600;
+    color: var(--accent2);
+    margin-bottom: 4px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .notif {
+    position: fixed;
+    bottom: 20px; right: 20px;
+    background: var(--bg3);
+    border: 1px solid var(--green);
+    color: var(--green);
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: .25s;
+    pointer-events: none;
+    z-index: 999;
+  }
+  .notif.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo">script<span>.</span>bot</div>
+    <div class="badge">AI Powered</div>
+  </div>
+  <div class="header-right">
+    <div class="research-indicator" id="researchIndicator">
+      <div class="research-dot" id="researchDot"></div>
+      <span id="researchLabel">Web Research Ready</span>
+    </div>
+  </div>
+</header>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT: CLIENT SELECTOR -->
+  <div class="panel">
+    <div class="panel-header">Clients & Case Studies</div>
+    <div class="panel-body">
+
+      <div class="section-label">Pricing Strategy</div>
+
+      <div class="client-card active" onclick="selectClient('ehealth')" id="card-ehealth">
+        <div class="client-name">VC-backed eHealth</div>
+        <div class="client-meta">US · ~$500M B2C Revenue</div>
+        <div class="client-tags">
+          <span class="tag tag-green">20% ARR Uplift</span>
+          <span class="tag tag-blue">SaaS</span>
+        </div>
+      </div>
+
+      <div class="client-card" onclick="selectClient('insurance')" id="card-insurance">
+        <div class="client-name">Insurance Pricing Platform</div>
+        <div class="client-meta">UK · ~$70M Series B</div>
+        <div class="client-tags">
+          <span class="tag tag-green">17% ARR Uplift</span>
+          <span class="tag tag-blue">SaaS</span>
+        </div>
+      </div>
+
+      <div class="client-card" onclick="selectClient('ux')" id="card-ux">
+        <div class="client-name">PE-backed UX Software</div>
+        <div class="client-meta">Nordics · $10–30M ARR</div>
+        <div class="client-tags">
+          <span class="tag tag-green">$8M ARR Uplift</span>
+          <span class="tag tag-amber">PE-owned</span>
+        </div>
+      </div>
+
+      <div class="client-card" onclick="selectClient('infra')" id="card-infra">
+        <div class="client-name">Infrastructure Streaming</div>
+        <div class="client-meta">US · $20M+ Revenue</div>
+        <div class="client-tags">
+          <span class="tag tag-red">Prevented Bad Rollout</span>
+          <span class="tag tag-amber">PE-owned</span>
+        </div>
+      </div>
+
+      <div class="client-card" onclick="selectClient('finserv')" id="card-finserv">
+        <div class="client-name">Financial Services Software</div>
+        <div class="client-meta">APAC · Multi-product</div>
+        <div class="client-tags">
+          <span class="tag tag-green">5% TCV Uplift</span>
+          <span class="tag tag-amber">PE-owned</span>
+        </div>
+      </div>
+
+      <div class="section-label">Amazon / eCommerce</div>
+
+      <div class="client-card" onclick="selectClient('flourish')" id="card-flourish">
+        <div class="client-name">Flourish Pancakes</div>
+        <div class="client-meta">DTC Food · Amazon + Shopify</div>
+        <div class="client-tags">
+          <span class="tag tag-green">$25K → $100K/mo</span>
+          <span class="tag tag-blue">Amazon</span>
+        </div>
+      </div>
+
+      <div class="client-card" onclick="selectClient('heladiv')" id="card-heladiv">
+        <div class="client-name">Heladiv</div>
+        <div class="client-meta">Restaurant + eCom</div>
+        <div class="client-tags">
+          <span class="tag tag-green">2x Sales in 90 Days</span>
+          <span class="tag tag-blue">Amazon</span>
+        </div>
+      </div>
+
+      <div class="section-label">Consulting / Strategy</div>
+
+      <div class="client-card" onclick="selectClient('erp')" id="card-erp">
+        <div class="client-name">Retail ERP Provider</div>
+        <div class="client-meta">Nordics & Baltics</div>
+        <div class="client-tags">
+          <span class="tag tag-blue">AI Pricing</span>
+          <span class="tag tag-amber">Strategy</span>
+        </div>
+      </div>
+
+      <div class="client-card" onclick="selectClient('retailtech')" id="card-retailtech">
+        <div class="client-name">Retail-Tech Platform</div>
+        <div class="client-meta">€130M+ Recurring Revenue</div>
+        <div class="client-tags">
+          <span class="tag tag-blue">AI Innovation</span>
+          <span class="tag tag-green">Pilot Shipped</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CENTRE: BUILDER -->
+  <div class="panel">
+    <div class="panel-header">Script Builder</div>
+    <div class="panel-body" id="builderPanel">
+
+      <!-- Client context box (populated on select) -->
+      <div class="context-box" id="clientContext">
+        <div class="context-title">Selected Client Context</div>
+        <div id="contextRows"></div>
+      </div>
+
+      <!-- Prospect details -->
+      <div class="form-group">
+        <label class="form-label">Prospect First Name</label>
+        <input class="form-input" id="fname" placeholder="e.g. Sarah" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Prospect Company</label>
+        <input class="form-input" id="company" placeholder="e.g. Acme Corp" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Prospect Company URL (for research)</label>
+        <input class="form-input" id="companyUrl" placeholder="e.g. acmecorp.com" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Industry / Classification</label>
+        <input class="form-input" id="classification" placeholder="e.g. DTC skincare brand" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Script Category</label>
+        <select class="form-select" id="scriptCategory" onchange="updateAngleOptions()">
+          <option value="">Select category...</option>
+          <optgroup label="SaaS Pricing">
+            <option value="saas_pricing">Full Pricing Strategy</option>
+            <option value="saas_arr">ARR Growth Angle</option>
+            <option value="saas_cac">CAC Reduction Angle</option>
+          </optgroup>
+          <optgroup label="Amazon / eCommerce">
+            <option value="amazon_audit">Audit Offer</option>
+            <option value="amazon_ppc">PPC & Listing CRO</option>
+            <option value="amazon_generic">Generic Winning Script</option>
+            <option value="amazon_shopify">Shopify → Amazon Launch</option>
+          </optgroup>
+          <optgroup label="Strategy & Consulting">
+            <option value="strategy_ai">AI Pricing Strategy</option>
+            <option value="strategy_innovation">AI Innovation</option>
+            <option value="strategy_delivery">Delivery Scaling</option>
+            <option value="strategy_bets">Big Bets & Focus</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Angle / Hook</label>
+        <select class="form-select" id="angle">
+          <option value="">Select category first...</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Number of Variants</label>
+        <select class="form-select" id="variants">
+          <option value="1">1 variant</option>
+          <option value="2">2 variants</option>
+          <option value="3" selected>3 variants</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Custom Pain Point (optional)</label>
+        <textarea class="form-textarea" id="customPain" placeholder="e.g. They recently raised a Series B and are under pressure to hit growth targets..."></textarea>
+      </div>
+
+      <!-- Toggles -->
+      <div class="toggle-row">
+        <span class="toggle-label">🌐 Web research prospect</span>
+        <label class="toggle"><input type="checkbox" id="toggleResearch" checked><span class="toggle-slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">📋 Show framework fill</span>
+        <label class="toggle"><input type="checkbox" id="toggleFramework" checked><span class="toggle-slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">⚡ Include objection handling</span>
+        <label class="toggle"><input type="checkbox" id="toggleObjections" checked><span class="toggle-slider"></span></label>
+      </div>
+
+      <button class="btn btn-primary" id="generateBtn" onclick="generateScript()">Generate Scripts →</button>
+      <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
+    </div>
+  </div>
+
+  <!-- RIGHT: OUTPUT -->
+  <div class="panel output-panel">
+    <div class="output-toolbar">
+      <div class="output-tabs">
+        <button class="tab-btn active" id="tab-scripts" onclick="switchTab('scripts')">Scripts</button>
+        <button class="tab-btn" id="tab-framework" onclick="switchTab('framework')">Framework Fill</button>
+        <button class="tab-btn" id="tab-research" onclick="switchTab('research')">Research</button>
+      </div>
+      <div class="output-actions">
+        <button class="action-btn" onclick="copyAll()">Copy All</button>
+        <button class="action-btn" onclick="regenerate()">Regenerate</button>
+      </div>
+    </div>
+    <div class="output-body" id="outputBody">
+      <div class="placeholder-state">
+        <div class="placeholder-icon">✍️</div>
+        <div class="placeholder-text">Select a client, fill the details and hit Generate to write your outreach scripts.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- NOTIFICATION -->
+<div class="notif" id="notif"></div>
+
+<script>
+// ─── SERVER CONFIG ───────────────────────────────────────────────────────────
+// Claude calls go through the outreach-bot Edge Function (same Supabase project
+// as niche-bot / offer-bot) so the API key stays server-side.
+const OUTREACH_BOT_URL = 'https://pturxqgrhywyhylxovun.supabase.co/functions/v1/outreach-bot';
+
+// Safe storage wrappers — localStorage throws inside data:/file: URLs.
+function safeStorageGet(key) {
+  try { return localStorage.getItem(key) || ''; } catch { return ''; }
+}
+function safeStorageSet(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* storage disabled */ }
+}
+
+// Admin key: picked up once from ?admin=... then persisted. Shares the same
+// localStorage slot as the offer bot so one key works across both apps.
+let adminKey = '';
+(function initAdminKey() {
+  try {
+    const qk = new URL(location.href).searchParams.get('admin');
+    if (qk) { adminKey = qk; safeStorageSet('offer_admin_key', qk); }
+  } catch { /* ignore */ }
+  if (!adminKey) adminKey = safeStorageGet('offer_admin_key');
+})();
+
+// ─── CLIENT DATA ────────────────────────────────────────────────────────────
+const CLIENTS = {
+  ehealth: {
+    name: "VC-backed eHealth (US)",
+    size: "~$500M B2C revenue",
+    result: "20% ARR uplift potential",
+    mechanism: "Historical deal data pricing model + migration of existing customers to updated price levels",
+    proofLine: "We just helped a $500M eHealth platform identify 20% ARR uplift by repricing their existing customer base. No new customers, no churn spike.",
+    pains: ["pricing not reflecting value", "B2B expansion without clear pricing strategy", "existing customers underpriced"],
+    objections: ["we don't want to lose customers", "our sales team can't handle a pricing change", "we just raised and don't want disruption"],
+    desireOne: "ARR growth", desireTwo: "better margins", desireThree: "stronger multiple at next raise"
+  },
+  insurance: {
+    name: "VC-backed Insurance Platform (UK)",
+    size: "~$70M Series B",
+    result: "17% ARR uplift potential",
+    mechanism: "Competitor interviews + packaging redesign + controlled customer migration",
+    proofLine: "We just helped a $70M Series B insurance platform unlock 17% ARR uplift through optimised packaging and controlled migration.",
+    pains: ["fragmented pricing structure", "packaging not aligned to value", "competitor pricing unknown"],
+    objections: ["we already have a pricing team", "our market is too regulated to change pricing", "migrations are too risky"],
+    desireOne: "ARR", desireTwo: "better margins", desireThree: "stronger multiple if you ever raise or sell"
+  },
+  ux: {
+    name: "PE-backed UX Software (Nordics)",
+    size: "$10–30M ARR",
+    result: "$8M ARR uplift potential",
+    mechanism: "Quantitative willingness-to-pay survey + price level rebuild + enterprise migration",
+    proofLine: "We just helped a $10–30M ARR UX software company find $8M in ARR by repricing their existing enterprise customers. Zero new logos needed.",
+    pains: ["pricing outdated vs product value", "enterprise customers underpriced", "no willingness-to-pay data"],
+    objections: ["our enterprise clients will push back", "we don't want to risk churn", "we've tried pricing changes before"],
+    desireOne: "ARR", desireTwo: "better margins", desireThree: "stronger exit multiple for PE"
+  },
+  infra: {
+    name: "PE-backed Infrastructure Streaming (US)",
+    size: "$20M+ revenue",
+    result: "Prevented flawed pricing rollout",
+    mechanism: "30 buyer interviews + structural weakness identification + full pricing model redesign",
+    proofLine: "We just helped a PE-backed infrastructure platform validate their pricing strategy through 30 buyer interviews — uncovering flaws before a costly rollout.",
+    pains: ["new pricing strategy unvalidated", "product complexity growing faster than monetisation", "risk of losing customers on migration"],
+    objections: ["we already built our new pricing", "we don't have time for research", "our buyers won't talk to you"],
+    desireOne: "protected revenue", desireTwo: "better margins", desireThree: "stronger multiple at PE exit"
+  },
+  finserv: {
+    name: "PE-backed Financial Services Software (APAC)",
+    size: "Multi-product, banking/insurance/lending",
+    result: "~5% TCV uplift identified",
+    mechanism: "40 market interviews + 4-pillar pricing redesign + Excel pricing tool for commercial execution",
+    proofLine: "We helped a PE-backed financial software company identify 5% TCV uplift across four product pillars, backed by 40 market interviews and a dedicated pricing tool.",
+    pains: ["multiple products with inconsistent pricing", "sales team quoting inconsistently", "no scalable pricing metrics"],
+    objections: ["our products are too complex to standardise", "sales won't adopt a new tool", "APAC markets are too different"],
+    desireOne: "TCV growth", desireTwo: "better margins", desireThree: "stronger multiple at PE exit"
+  },
+  flourish: {
+    name: "Flourish Pancakes",
+    size: "DTC food brand, Amazon + Shopify",
+    result: "$25K → $100K/month revenue",
+    mechanism: "Rebuilt Amazon listings + redesigned social content + optimised pricing and bundles + overhauled ad strategy",
+    proofLine: "We just helped Flourish Pancakes go from $25K to $100K a month on Amazon by rebuilding their listings, fixing their ads, and adding a two-pack bundle that significantly boosted profit.",
+    pains: ["Amazon revenue flatlined", "no bundling strategy", "ads running but not converting"],
+    objections: ["we've had bad experiences with agencies", "we don't have budget right now", "we manage Amazon in-house"],
+    desireOne: "monthly revenue", desireTwo: "better margins", desireThree: "stronger multiple if you ever raise or sell"
+  },
+  heladiv: {
+    name: "Heladiv",
+    size: "Restaurant + eCommerce",
+    result: "Doubled sales in 90 days, ACOS dropped",
+    mechanism: "Gradual spend increase as results arrived + PPC strategy + listings optimisation",
+    proofLine: "We helped Heladiv double their Amazon sales in 90 days while lowering ACOS — starting slow, increasing spend only as results came in. No horror stories.",
+    pains: ["eCom plateaued at $10K/month", "no confidence to scale ads", "fear of Amazon after horror stories"],
+    objections: ["we've tried ads before and it didn't work", "we don't understand Amazon", "we're scared of wasting money"],
+    desireOne: "monthly revenue", desireTwo: "better margins", desireThree: "a business worth more if you ever sell"
+  },
+  erp: {
+    name: "Retail ERP Provider (Nordics & Baltics)",
+    size: "Leading Nordic market position",
+    result: "Pricing model rebuilt for AI era",
+    mechanism: "Moved pricing from hours to sized consumption tiers + embedded AI costs + rebuilt client reporting from outputs to outcomes",
+    proofLine: "We helped a leading Nordic ERP provider stop billing by the hour, embed AI costs into fixed pricing tiers, and re-anchor client conversations on outcomes. Now faster delivery means higher margins, not lower ones.",
+    pains: ["AI making delivery faster but reducing revenue", "billing for effort not outcomes", "support sold as metered time"],
+    objections: ["our clients expect hourly billing", "we can't change mid-contract", "our delivery team won't accept this"],
+    desireOne: "profit per engagement", desireTwo: "better margins", desireThree: "stronger multiple if you ever raise or sell"
+  },
+  retailtech: {
+    name: "Retail-Tech Platform (€130M+)",
+    size: "€130M+ recurring revenue, multi-country",
+    result: "AI age-verification feature shipped live in stores",
+    mechanism: "Mapped which processes could absorb innovation + built feedback loops + set governance for iterative delivery",
+    proofLine: "We helped a €130M retail-tech platform ship an AI feature into live stores in a multi-country environment — without disrupting core operations or checkout systems.",
+    pains: ["AI pilots never making it to production", "fear of disrupting core systems", "no governance for innovation"],
+    objections: ["our tech is too complex to change", "we can't risk disrupting live stores", "we don't have the team bandwidth"],
+    desireOne: "ARR from AI features", desireTwo: "better margins", desireThree: "stronger multiple if you ever raise or sell"
+  }
+};
+
+// ─── ANGLE OPTIONS ────────────────────────────────────────────────────────────
+const ANGLES = {
+  saas_pricing: ["Existing customers underpriced", "Pricing hasn't kept up with product", "ARR gap vs willingness to pay", "Pre-raise pricing audit"],
+  saas_arr:     ["CAC rising while ARR plateaus", "Growth only from new logos", "NRR below benchmark", "Revenue from existing base"],
+  saas_cac:     ["CAC climbing every quarter", "Paid acquisition getting expensive", "Retention as growth lever"],
+  amazon_audit: ["Revenue leak audit", "Profit per product unknown", "PPC wasting budget", "Curiosity hook"],
+  amazon_ppc:   ["Flatlined sales with rising ad spend", "ACOS too high", "Listings converting below benchmark", "Wasted spend on non-converting keywords"],
+  amazon_generic: ["Stale listings hurting conversion", "Profit wall at $30K/month", "Ready to scale to $100K", "Stretched internal team"],
+  amazon_shopify: ["Untapped Amazon revenue", "Resellers undercutting brand", "Shopify plateaued, Amazon untouched"],
+  strategy_ai:  ["AI making delivery faster but cheaper", "Billing for effort not outcomes", "ARR capped by headcount"],
+  strategy_innovation: ["AI pilots stuck in lab", "AI spend not showing in profit", "Risk of disrupting core systems"],
+  strategy_delivery: ["Team tripling but shipping slowing", "Leadership firefighting not building", "25% of payroll as extra profit"],
+  strategy_bets: ["Too many priorities, no focus", "Big bets burning profit unvalidated", "Next revenue line stuck in queue"]
+};
+
+let selectedClient = 'ehealth';
+let currentTab = 'scripts';
+let lastGenerated = null;
+
+// ─── CLIENT SELECT ────────────────────────────────────────────────────────────
+function selectClient(id) {
+  document.querySelectorAll('.client-card').forEach(c => c.classList.remove('active'));
+  document.getElementById('card-' + id).classList.add('active');
+  selectedClient = id;
+
+  const c = CLIENTS[id];
+  const rows = document.getElementById('contextRows');
+  rows.innerHTML = `
+    <div class="context-item"><strong>Size:</strong> ${c.size}</div>
+    <div class="context-item"><strong>Result:</strong> ${c.result}</div>
+    <div class="context-item"><strong>Mechanism:</strong> ${c.mechanism}</div>
+    <div class="context-item"><strong>Key pains:</strong> ${c.pains.join(', ')}</div>
+  `;
+}
+
+function updateAngleOptions() {
+  const cat = document.getElementById('scriptCategory').value;
+  const sel = document.getElementById('angle');
+  sel.innerHTML = '';
+  if (!cat || !ANGLES[cat]) {
+    sel.innerHTML = '<option>Select category first...</option>';
+    return;
+  }
+  ANGLES[cat].forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a; opt.textContent = a;
+    sel.appendChild(opt);
+  });
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  ['scripts','framework','research'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+  });
+  if (lastGenerated) renderOutput(lastGenerated);
+}
+
+// ─── GENERATE ────────────────────────────────────────────────────────────────
+async function generateScript() {
+  const fname        = document.getElementById('fname').value.trim();
+  const company      = document.getElementById('company').value.trim();
+  const companyUrl   = document.getElementById('companyUrl').value.trim();
+  const classification = document.getElementById('classification').value.trim();
+  const category     = document.getElementById('scriptCategory').value;
+  const angle        = document.getElementById('angle').value;
+  const numVariants  = document.getElementById('variants').value;
+  const customPain   = document.getElementById('customPain').value.trim();
+  const doResearch   = document.getElementById('toggleResearch').checked;
+  const doFramework  = document.getElementById('toggleFramework').checked;
+  const doObjections = document.getElementById('toggleObjections').checked;
+
+  if (!category || !angle) { showNotif('Please select a category and angle', true); return; }
+  if (!company)             { showNotif('Please enter a company name', true); return; }
+
+  const client = CLIENTS[selectedClient];
+
+  // Show loading
+  document.getElementById('generateBtn').disabled = true;
+  document.getElementById('outputBody').innerHTML = `
+    <div class="loading-state">
+      <div class="loading-spinner"></div>
+      <div class="loading-steps">
+        <div class="step-item active" id="step1">${doResearch ? '🌐 Researching prospect...' : '📋 Loading context...'}</div>
+        <div class="step-item" id="step2">✍️ Writing scripts...</div>
+        <div class="step-item" id="step3">⚡ Adding objection handling...</div>
+        <div class="step-item" id="step4">📦 Packaging output...</div>
+      </div>
+    </div>`;
+
+  if (doResearch) {
+    setResearching(true);
+    await delay(800);
+    setStep(2);
+    await delay(600);
+  } else {
+    await delay(400);
+    setStep(2);
+  }
+
+  setStep(3); await delay(500);
+  setStep(4); await delay(300);
+
+  // Build system prompt
+  const systemPrompt = `You are an expert cold outreach copywriter specialising in B2B SaaS, eCommerce, and consulting services.
+
+You write short, punchy, conversational outreach scripts following a strict framework:
+
+FRAMEWORK:
+HOOK QUESTION → opens with a pain the prospect is feeling right now (answerable in 2 seconds)
+PROOF: We just helped [PROOF CLIENT] ([SIZE]) [STEP 1 - 5 words], [STEP 2 - 5 words], [STEP 3 - 5 words]. [RESULT]. No [OBJECTION 1], no [OBJECTION 2].
+BENEFIT: For you that means more [DESIRE 1], better margins, and a stronger multiple if you ever raise or sell.
+CTA: Would you be open to a short chat about [DESIRE 1]?
+
+RULES:
+- Steps must be plain language a 12-year-old gets (5-7 words max each)
+- No jargon, no dashes mid-sentence, no "genuinely", no corporate speak
+- Total length: 80-100 words
+- Sound like a real person texting, not a marketer writing copy
+- Each variant must have a different hook/angle
+- The "stronger multiple" closer always follows "better margins" — never listed as a third parallel item
+- DESIRE 1 must be specific and loop back in the CTA
+
+CLIENT CASE STUDY TO USE:
+Name: ${client.name}
+Size: ${client.size}
+Result: ${client.result}
+Mechanism: ${client.mechanism}
+Proof line: ${client.proofLine}
+Key pains in this niche: ${client.pains.join(', ')}
+Common objections: ${client.objections.join(', ')}
+
+OUTPUT FORMAT — return valid JSON only, no markdown, no preamble:
+{
+  "research_insights": "2-3 sentences about what you'd look for when researching this prospect type if web research were live",
+  "framework_fill": {
+    "hook_question": "...",
+    "proof_client": "...",
+    "step_1": "...",
+    "step_2": "...",
+    "step_3": "...",
+    "result": "...",
+    "objection_1": "...",
+    "objection_2": "...",
+    "desire_1": "...",
+    "desire_2": "better margins",
+    "multiple_closer": "a stronger multiple if you ever raise or sell",
+    "cta": "..."
+  },
+  "variants": [
+    { "label": "...", "script": "..." }
+  ]
+}`;
+
+  const userPrompt = `Write ${numVariants} outreach script variant(s) for:
+- Prospect: ${fname || '{{first_name}}'} at ${company || '{{company}}'}
+- Classification: ${classification || 'software company'}
+- Category: ${category}
+- Angle/Hook: ${angle}
+- Company URL for context: ${companyUrl || 'not provided'}
+${customPain ? `- Custom pain point: ${customPain}` : ''}
+- Include objection handling: ${doObjections}
+- Web research active: ${doResearch}
+
+Use the client case study provided. Make each variant use a different hook. Return JSON only.`;
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (adminKey) headers['x-admin-key'] = adminKey;
+    const res = await fetch(OUTREACH_BOT_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        action: 'generate',
+        system: systemPrompt,
+        user: userPrompt,
+        max_tokens: 1600
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    const raw = data.text || '';
+
+    let parsed;
+    try {
+      const clean = raw.replace(/```json|```/g, '').trim();
+      parsed = JSON.parse(clean);
+    } catch {
+      parsed = { variants: [{ label: 'Generated Script', script: raw }], framework_fill: {}, research_insights: '' };
+    }
+
+    lastGenerated = { parsed, doResearch, doFramework, companyUrl, fname, company };
+    renderOutput(lastGenerated);
+    setResearching(false);
+
+  } catch (err) {
+    const hint = /401|unauthorized|admin/i.test(err.message || '')
+      ? 'Unauthorized — open the app with ?admin=YOUR_KEY once to save your admin key.'
+      : (err.message || 'Please try again.');
+    document.getElementById('outputBody').innerHTML = `<div class="placeholder-state"><div class="placeholder-icon">⚠️</div><div class="placeholder-text">Error generating scripts. ${hint}</div></div>`;
+    setResearching(false);
+  }
+
+  document.getElementById('generateBtn').disabled = false;
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function renderOutput({ parsed, doResearch, doFramework, companyUrl, fname, company }) {
+  const body = document.getElementById('outputBody');
+
+  if (currentTab === 'scripts') {
+    let html = '';
+
+    if (doResearch && parsed.research_insights) {
+      html += `<div class="research-result">
+        <div class="research-result-title">🌐 Web Research Insights</div>
+        ${parsed.research_insights}${companyUrl ? ` <br><br><strong>URL scanned:</strong> ${companyUrl}` : ''}
+      </div>`;
+    }
+
+    (parsed.variants || []).forEach((v, i) => {
+      const script = v.script
+        .replace(/\{\{first_name\}\}/g, fname || '{{first_name}}')
+        .replace(/\{\{company\}\}/g, company || '{{company}}')
+        .replace(/\{\{company_name\}\}/g, company || '{{company_name}}');
+      html += `
+        <div class="variant-block">
+          <div class="variant-header">
+            <span class="variant-label">${v.label || 'Variant ' + (i+1)}</span>
+            <button class="copy-btn" onclick="copyVariant(this, ${i})">Copy</button>
+          </div>
+          <div class="variant-body" id="variant-${i}">${script}</div>
+        </div>`;
+    });
+
+    body.innerHTML = html || '<div class="placeholder-state"><div class="placeholder-text">No scripts generated.</div></div>';
+
+  } else if (currentTab === 'framework') {
+    const f = parsed.framework_fill || {};
+    if (!Object.keys(f).length) {
+      body.innerHTML = '<div class="placeholder-state"><div class="placeholder-text">Generate scripts first to see the framework breakdown.</div></div>';
+      return;
+    }
+    const rows = [
+      ['HOOK', f.hook_question],
+      ['PROOF CLIENT', f.proof_client],
+      ['STEP 1', f.step_1],
+      ['STEP 2', f.step_2],
+      ['STEP 3', f.step_3],
+      ['RESULT', f.result],
+      ['OBJECTION 1', f.objection_1],
+      ['OBJECTION 2', f.objection_2],
+      ['DESIRE 1', f.desire_1],
+      ['DESIRE 2', f.desire_2],
+      ['MULTIPLE', f.multiple_closer],
+      ['CTA', f.cta],
+    ].filter(r => r[1]);
+
+    body.innerHTML = `
+      <div class="framework-block">
+        <div class="framework-title">📋 Framework Fill — ${CLIENTS[selectedClient]?.name}</div>
+        ${rows.map(([k,v]) => `<div class="framework-row"><span class="framework-key">${k}</span><span class="framework-val">${v}</span></div>`).join('')}
+      </div>`;
+
+  } else if (currentTab === 'research') {
+    body.innerHTML = `
+      <div class="research-result">
+        <div class="research-result-title">🌐 Research Context</div>
+        ${parsed.research_insights || 'No research data available.'}
+      </div>
+      <div class="framework-block">
+        <div class="framework-title">Niche Pain Points — ${CLIENTS[selectedClient]?.name}</div>
+        ${(CLIENTS[selectedClient]?.pains || []).map(p => `<div class="context-item">${p}</div>`).join('')}
+      </div>
+      <div class="framework-block">
+        <div class="framework-title">Common Objections</div>
+        ${(CLIENTS[selectedClient]?.objections || []).map(o => `<div class="context-item">${o}</div>`).join('')}
+      </div>`;
+  }
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+function copyVariant(btn, i) {
+  const text = document.getElementById('variant-' + i)?.innerText;
+  if (text) {
+    navigator.clipboard.writeText(text);
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  }
+}
+
+function copyAll() {
+  const variants = document.querySelectorAll('.variant-body');
+  if (!variants.length) return;
+  const text = Array.from(variants).map((v,i) => `--- Variant ${i+1} ---\n${v.innerText}`).join('\n\n');
+  navigator.clipboard.writeText(text);
+  showNotif('All scripts copied!');
+}
+
+function regenerate() {
+  if (lastGenerated) generateScript();
+}
+
+function clearAll() {
+  document.getElementById('fname').value = '';
+  document.getElementById('company').value = '';
+  document.getElementById('companyUrl').value = '';
+  document.getElementById('classification').value = '';
+  document.getElementById('customPain').value = '';
+  document.getElementById('scriptCategory').value = '';
+  document.getElementById('angle').innerHTML = '<option>Select category first...</option>';
+  lastGenerated = null;
+  document.getElementById('outputBody').innerHTML = `<div class="placeholder-state"><div class="placeholder-icon">✍️</div><div class="placeholder-text">Select a client, fill the details and hit Generate to write your outreach scripts.</div></div>`;
+}
+
+function setStep(n) {
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById('step' + i);
+    if (!el) continue;
+    if (i < n)  { el.classList.remove('active'); el.classList.add('done'); }
+    if (i === n){ el.classList.add('active'); el.classList.remove('done'); }
+    if (i > n)  { el.classList.remove('active','done'); }
+  }
+}
+
+function setResearching(on) {
+  document.getElementById('researchDot').classList.toggle('searching', on);
+  document.getElementById('researchLabel').textContent = on ? 'Researching...' : 'Web Research Ready';
+}
+
+function showNotif(msg, err = false) {
+  const n = document.getElementById('notif');
+  n.textContent = msg;
+  n.style.borderColor = err ? 'var(--red)' : 'var(--green)';
+  n.style.color = err ? 'var(--red)' : 'var(--green)';
+  n.classList.add('show');
+  setTimeout(() => n.classList.remove('show'), 2500);
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Init
+selectClient('ehealth');
+</script>
+</body>
+</html>
