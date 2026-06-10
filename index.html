@@ -1327,7 +1327,7 @@ async function scrapeClientSite() {
     if (r.niche_guess && !document.getElementById('ec-newniche').value.trim()) {
       document.getElementById('ec-newniche').value = r.niche_guess;
     }
-    aiStatus(`✅ Pulled from ${esc(r.url || url)}: ${esc(r.summary || 'data imported')} <br>Review the fields below, then Save.`);
+    aiStatus(`✅ Pulled from ${esc(r.url || url)}: ${esc(r.summary || 'data imported')}${r.fetchNote ? '<br>ℹ️ ' + esc(r.fetchNote) : ''}<br>Review the fields below, then Save.`);
     showNotif('Client site scraped');
   } catch (e) { aiStatus('⚠️ ' + esc(e.message)); showNotif('Scrape failed: ' + e.message, true); }
   aiBusy = false;

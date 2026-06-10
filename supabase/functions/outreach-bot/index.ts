@@ -111,35 +111,61 @@ async function fetchSiteText(rawUrl: string): Promise<{ ok: true; target: string
 }
 
 // ─── Research actions ──────────────────────────────────────────────────────────
-// Prospect research (used at generate time) — cheap, no web search.
+// Prospect research (used at generate time) — cheap direct scrape; falls back
+// to web search when the site is JS-rendered or blocked.
 async function researchProspect(rawUrl: string, classification: string) {
   const page = await fetchSiteText(rawUrl);
-  if (!page.ok) return page;
+  const sparse = !page.ok || page.text.length < 300;
+  const target = page.ok ? page.target : normalizeUrl(rawUrl);
+  const system =
+    `You are a cold outreach researcher. ` +
+    (sparse
+      ? `The prospect's website could not be read directly — use web search (up to 3 searches) on their domain/company to learn about them. `
+      : `You are given the text of a prospect company's website. `) +
+    `Extract what matters for personalizing a cold email. Return valid JSON only, no markdown fences:\n` +
+    `{"summary":"2-3 sentences: what they do, who they sell to, anything notable",` +
+    `"pains":["3-4 likely business pains, specific to them"],` +
+    `"hooks":["3-4 personalization hooks — concrete details a cold email could reference"]}`;
   const res = await claudeMessages({
     model: CLAUDE_HAIKU,
-    max_tokens: 900,
-    system:
-      `You are a cold outreach researcher. You are given the text of a prospect company's website. ` +
-      `Extract what matters for personalizing a cold email. Return valid JSON only, no markdown fences:\n` +
-      `{"summary":"2-3 sentences: what they do, who they sell to, anything notable",` +
-      `"pains":["3-4 likely business pains, specific to them"],` +
-      `"hooks":["3-4 personalization hooks — concrete details from the site a cold email could reference"]}`,
-    messages: [{ role: "user", content: `Prospect type: ${classification || "unknown"}\nWebsite text:\n${page.text}` }],
+    max_tokens: 1200,
+    system,
+    messages: [{
+      role: "user",
+      content: `Prospect type: ${classification || "unknown"}\nWebsite: ${target}\n` +
+        (page.ok ? `Website text:\n${page.text}` : `(site unreadable — research ${new URL(target).hostname} via web search)`),
+    }],
+    tools: sparse ? [webSearchTool(3)] : undefined,
   });
   const parsed = parseJson(textOf(res.content), { summary: textOf(res.content).slice(0, 600), pains: [], hooks: [] });
-  return { ok: true as const, url: page.target, ...parsed };
+  return { ok: true as const, url: target, ...parsed };
+}
+
+function normalizeUrl(rawUrl: string): string {
+  let target = rawUrl.trim();
+  if (!/^https?:\/\//i.test(target)) target = "https://" + target;
+  return target;
 }
 
 // Client onboarding: scrape the agency client's own site into case-study data.
+// JS-rendered sites serve an empty HTML shell — in that case we fall back to
+// pure web-search research (search indexes carry the rendered content).
 async function researchClientSite(rawUrl: string) {
   const page = await fetchSiteText(rawUrl);
-  if (!page.ok) return page;
+  const target = page.ok ? page.target : normalizeUrl(rawUrl);
+  const domain = new URL(target).hostname.replace(/^www\./, "");
+  const sparse = !page.ok || page.text.length < 600;
+  const userContent = page.ok
+    ? `Client website: ${target}\n\nHomepage text:\n${page.text}`
+    : `Client website: ${target}\n\nThe homepage could not be read directly (JS-rendered or blocked). You MUST rely on web searches: try "site:${domain}", "${domain}", the company name, their LinkedIn page, reviews, and directories.`;
   const res = await claudeMessages({
     model: CLAUDE_MODEL,
     max_tokens: 2400,
     system:
-      `You onboard clients for a lead generation agency. The client's website text is provided. ` +
-      `Use up to 3 web searches to find their case studies, testimonials, reviews, or named results if the homepage lacks numbers. ` +
+      `You onboard clients for a lead generation agency. ` +
+      (sparse
+        ? `The client's website could not be read directly, so research them via web search (up to 6 searches): their domain, company name, LinkedIn, reviews, case studies, testimonials. `
+        : `The client's website text is provided. Use up to 3 web searches to find their case studies, testimonials, reviews, or named results if the homepage lacks numbers. `) +
       `Extract the raw material for cold outreach offers. Be accurate — never invent numbers; if a field is unknown leave it as an empty string/array.\n` +
       `Return valid JSON only, no markdown fences:\n` +
       `{"name":"company name","meta":"one-line descriptor (location · size · type)",` +
@@ -153,12 +179,17 @@ async function researchClientSite(rawUrl: string) {
       `"desires":["outcomes their customers want"],` +
       `"objections":["objections their copy preempts"],` +
       `"summary":"2-3 sentence overview of the client"}`,
-    messages: [{ role: "user", content: `Client website: ${page.target}\n\nHomepage text:\n${page.text}` }],
-    tools: [webSearchTool(3)],
+    messages: [{ role: "user", content: userContent }],
+    tools: [webSearchTool(sparse ? 6 : 3)],
   });
   const parsed = parseJson(textOf(res.content), null as Record<string, unknown> | null);
   if (!parsed) return { ok: false as const, error: "Could not parse research output — try again" };
-  return { ok: true as const, url: page.target, ...parsed };
+  return {
+    ok: true as const,
+    url: target,
+    fetchNote: sparse ? "Site is JS-rendered/blocked — researched via web search instead of direct scrape." : "",
+    ...parsed,
+  };
 }
 
 // Niche research: real web search incl. Reddit/forums for pains → angles.
