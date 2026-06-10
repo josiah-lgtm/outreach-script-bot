@@ -547,6 +547,20 @@ const niche = id => config.niches.find(n => n.id === id);
 const client = id => config.clients.find(c => c.id === id);
 const framework = id => config.frameworks.find(f => f.id === id);
 const fwVars = t => Array.from(new Set(Array.from(String(t).matchAll(/\{\{(\w+)\}\}/g), m => m[1])));
+const primaryNicheId = c => (c?.nicheIds || [])[0] || null;
+
+// Migrate older configs: clients used a single nicheId; v3 clients target many.
+function migrateConfig(cfg) {
+  (cfg.clients || []).forEach(c => {
+    if (!Array.isArray(c.nicheIds)) c.nicheIds = c.nicheId ? [c.nicheId] : [];
+    delete c.nicheId;
+    c.website = c.website || '';
+    c.competitorIntel = c.competitorIntel || [];
+    c.frameworkOverrides = c.frameworkOverrides || {};
+    c.caseStudy = c.caseStudy || {};
+  });
+  return cfg;
+}
 
 // ─── CONFIG LOAD / SAVE ────────────────────────────────────────────────────────
 async function loadConfig() {
@@ -616,34 +630,26 @@ function switchAdminTab(tab) {
 // ─── BUILDER RENDER ────────────────────────────────────────────────────────────
 function renderClientList() {
   const el = document.getElementById('clientList');
+  const card = c => `<div class="client-card ${c.id === state.clientId ? 'active' : ''}" onclick="selectClient('${c.id}')">
+    <div class="client-name">${esc(c.name)}</div>
+    <div class="client-meta">${esc(c.meta || '')}${c.nicheIds.length > 1 ? ` · ${c.nicheIds.length} niches` : ''}</div>
+  </div>`;
   let html = '';
   config.niches.forEach(n => {
-    const cs = config.clients.filter(c => c.nicheId === n.id);
+    const cs = config.clients.filter(c => primaryNicheId(c) === n.id);
     if (!cs.length) return;
-    html += `<div class="section-label">${esc(n.name)}</div>`;
-    cs.forEach(c => {
-      html += `<div class="client-card ${c.id === state.clientId ? 'active' : ''}" onclick="selectClient('${c.id}')">
-        <div class="client-name">${esc(c.name)}</div>
-        <div class="client-meta">${esc(c.meta || '')}</div>
-      </div>`;
-    });
+    html += `<div class="section-label">${esc(n.name)}</div>` + cs.map(card).join('');
   });
-  const orphans = config.clients.filter(c => !niche(c.nicheId));
-  if (orphans.length) {
-    html += `<div class="section-label">Other</div>`;
-    orphans.forEach(c => {
-      html += `<div class="client-card ${c.id === state.clientId ? 'active' : ''}" onclick="selectClient('${c.id}')">
-        <div class="client-name">${esc(c.name)}</div><div class="client-meta">${esc(c.meta || '')}</div></div>`;
-    });
-  }
+  const orphans = config.clients.filter(c => !niche(primaryNicheId(c)));
+  if (orphans.length) html += `<div class="section-label">No niche yet</div>` + orphans.map(card).join('');
   el.innerHTML = html || '<div class="hint">No clients yet — add one.</div>';
 }
 
 function selectClient(id) {
   const c = client(id); if (!c) return;
   state.clientId = id;
-  if (c.nicheId !== state.nicheId) {
-    state.nicheId = c.nicheId;
+  if (!c.nicheIds.includes(state.nicheId)) {
+    state.nicheId = primaryNicheId(c) || state.nicheId || config.niches[0]?.id || null;
     const n = niche(state.nicheId);
     state.angles = new Set((n?.angles || []).slice(0, 3));
   }
@@ -667,22 +673,29 @@ function renderBuilder() {
   if (c) {
     const cs = c.caseStudy || {};
     const override = (c.frameworkOverrides || {})[state.nicheId];
+    const intel = c.competitorIntel || [];
     box.innerHTML = `<div class="context-box">
       <div class="context-title">${esc(c.name)} — client view</div>
       <strong>Result:</strong> ${esc(cs.result || '—')}<br>
       <strong>Mechanism:</strong> ${esc(cs.mechanism || '—')}<br>
       <strong>Pains:</strong> ${esc((cs.pains || []).join(', ') || '—')}
+      ${(cs.caseStudies || []).length ? `<br><strong>Case studies:</strong> ${cs.caseStudies.length} on file` : ''}
+      ${intel.length ? `<br><strong>Competitor intel:</strong> ${intel.length} rival${intel.length > 1 ? 's' : ''} tracked` : ''}
       ${override ? '<br><strong style="color:var(--amber)">⚡ Client framework override active for this niche</strong>' : ''}
-      <div style="margin-top:6px"><button class="mini-btn" onclick="adminEdit('clients','${c.id}')">Edit client</button></div>
+      <div style="margin-top:6px"><button class="mini-btn" onclick="adminEdit('clients','${c.id}')">Edit / research client</button></div>
     </div>`;
   } else {
     box.innerHTML = `<div class="context-box">Select a client on the left.</div>`;
   }
 
-  // Niche select
+  // Niche select — the selected client's niches first
   const sel = document.getElementById('nicheSelect');
-  sel.innerHTML = config.niches.map(x =>
-    `<option value="${x.id}" ${x.id === state.nicheId ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
+  const opt = x => `<option value="${x.id}" ${x.id === state.nicheId ? 'selected' : ''}>${esc(x.name)}</option>`;
+  const mine = c ? config.niches.filter(x => c.nicheIds.includes(x.id)) : [];
+  const others = config.niches.filter(x => !mine.includes(x));
+  sel.innerHTML =
+    (mine.length ? `<optgroup label="${esc(c.name)}'s niches">${mine.map(opt).join('')}</optgroup>` : '') +
+    (others.length ? `<optgroup label="${mine.length ? 'Other niches' : 'All niches'}">${others.map(opt).join('')}</optgroup>` : '');
 
   // Angle chips
   const ac = document.getElementById('angleChips');
@@ -784,7 +797,10 @@ async function generate() {
       client: {
         name: c.name,
         caseStudy: c.caseStudy || {},
-        frameworkOverride: (c.frameworkOverrides || {})[state.nicheId] || ''
+        frameworkOverride: (c.frameworkOverrides || {})[state.nicheId] || '',
+        competitorIntel: (c.competitorIntel || []).map(x =>
+          `${x.name}${x.website ? ' (' + x.website + ')' : ''}: offer=${x.offer || '?'}; mechanism=${x.mechanism || '?'}; results=${x.results || '?'}${x.guarantee ? '; guarantee=' + x.guarantee : ''}`
+        ).join('\n')
       },
       niche: { name: n.name, triggerWords: n.triggerWords || [] },
       frameworks: fws.map(f => ({ id: f.id, name: f.name, category: f.category, template: f.template, rules: f.rules })),
@@ -1099,12 +1115,16 @@ function saveNiche(isNew) {
 }
 
 // — Clients tab —
+// Live editor state for the client being edited (survives sub-renders of the
+// niche chips / override boxes / competitor cards without wiping form fields).
+let editClient = null;
+
 function adminClients() {
   let html = `<button class="mini-btn" onclick="adminEdit('clients','__new__')">+ New client</button>`;
   html += config.clients.map(c => `
     <div class="list-row">
       <div><b>${esc(c.name)}</b> <span class="sub">${esc(c.meta || '')}</span>
-        <div class="sub">${esc(niche(c.nicheId)?.name || 'no niche')} · ${Object.keys(c.frameworkOverrides || {}).filter(k => (c.frameworkOverrides[k] || '').trim()).length} framework overrides</div></div>
+        <div class="sub">${(c.nicheIds || []).map(id => esc(niche(id)?.name || '')).filter(Boolean).join(', ') || 'no niche'} · ${(c.competitorIntel || []).length} rivals tracked</div></div>
       <div style="display:flex;gap:6px">
         <button class="mini-btn" onclick="adminEdit('clients','${c.id}')">Edit</button>
         <button class="mini-btn danger" onclick="deleteItem('clients','${c.id}')">Delete</button>
@@ -1114,75 +1134,275 @@ function adminClients() {
   if (state.editing?.type === 'clients') {
     const isNew = state.editing.id === '__new__';
     const c = isNew
-      ? { name: '', meta: '', nicheId: config.niches[0]?.id, caseStudy: { size: '', result: '', mechanism: '', proofLine: '', pains: [], objections: [], desires: [] }, frameworkOverrides: {} }
+      ? { name: '', meta: '', website: '', nicheIds: [], caseStudy: { size: '', result: '', mechanism: '', proofLine: '', offers: [], caseStudies: [], pains: [], objections: [], desires: [] }, frameworkOverrides: {}, competitorIntel: [] }
       : client(state.editing.id);
     if (c) {
       const cs = c.caseStudy || {};
+      editClient = {
+        nicheIds: structuredClone(c.nicheIds || []),
+        overrides: structuredClone(c.frameworkOverrides || {}),
+        competitorIntel: structuredClone(c.competitorIntel || []),
+        candidates: []
+      };
       pendingTags['ec-pains'] = { arr: structuredClone(cs.pains || []), placeholder: 'add pain + Enter' };
       pendingTags['ec-objections'] = { arr: structuredClone(cs.objections || []), placeholder: 'add objection + Enter' };
       pendingTags['ec-desires'] = { arr: structuredClone(cs.desires || []), placeholder: 'add desire + Enter' };
       html += `
       <div class="editor">
         <h3>${isNew ? 'New client' : 'Edit: ' + esc(c.name)}</h3>
+
+        <div class="info-block" style="border-color:var(--accent)">
+          <div class="info-title">🤖 AI onboarding — scrape it, don't type it</div>
+          <div class="form-group"><label class="form-label">Client website</label>
+            <div style="display:flex;gap:8px">
+              <input class="form-input" id="ec-website" value="${esc(c.website || '')}" placeholder="myclient.com">
+              <button class="mini-btn" id="btn-scrape" onclick="scrapeClientSite()" style="white-space:nowrap">🔍 Scrape site</button>
+              <button class="mini-btn" id="btn-competitors" onclick="findCompetitors()" style="white-space:nowrap">🏁 Find competitors</button>
+            </div>
+            <div class="hint">Scrape pulls mechanism, results, proof line, offers and case studies from their site (+ web search). Competitors pulls rival offers for positioning.</div>
+          </div>
+          <div class="form-group"><label class="form-label">Create a niche this client targets</label>
+            <div style="display:flex;gap:8px">
+              <input class="form-input" id="ec-newniche" placeholder="e.g. medspa owners in Texas">
+              <button class="mini-btn" id="btn-niche" onclick="researchNicheCreate()" style="white-space:nowrap">🔍 Research & create</button>
+            </div>
+            <div class="hint">Real web search (Reddit, forums, Google) for the niche's pains → creates the niche with angles + trigger words, and suggests pains/desires/objections below.</div>
+          </div>
+          <div class="hint" id="ec-ai-status"></div>
+          <div id="ec-competitors"></div>
+        </div>
+
         <div class="grid2">
           <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ec-name" value="${esc(c.name)}"></div>
           <div class="form-group"><label class="form-label">Meta (shown under name)</label><input class="form-input" id="ec-meta" value="${esc(c.meta || '')}"></div>
         </div>
+        <div class="form-group"><label class="form-label">Niches this client targets (toggle, or create one above)</label>
+          <div class="chips" id="ec-niches"></div></div>
         <div class="grid2">
-          <div class="form-group"><label class="form-label">Niche</label>
-            <select class="form-select" id="ec-niche">${config.niches.map(n => `<option value="${n.id}" ${n.id === c.nicheId ? 'selected' : ''}>${esc(n.name)}</option>`).join('')}</select></div>
           <div class="form-group"><label class="form-label">Size</label><input class="form-input" id="ec-size" value="${esc(cs.size || '')}"></div>
-        </div>
-        <div class="grid2">
           <div class="form-group"><label class="form-label">Headline result</label><input class="form-input" id="ec-result" value="${esc(cs.result || '')}"></div>
-          <div class="form-group"><label class="form-label">Mechanism (how you did it)</label><input class="form-input" id="ec-mechanism" value="${esc(cs.mechanism || '')}"></div>
         </div>
-        <div class="form-group"><label class="form-label">Proof line (1 sentence, used near-verbatim in scripts)</label>
+        <div class="form-group"><label class="form-label">Mechanism (how they get results)</label><input class="form-input" id="ec-mechanism" value="${esc(cs.mechanism || '')}"></div>
+        <div class="form-group"><label class="form-label">Proof line (1 sendable sentence)</label>
           <textarea class="form-textarea" id="ec-proofline">${esc(cs.proofLine || '')}</textarea></div>
+        <div class="grid2">
+          <div class="form-group"><label class="form-label">Offers (one per line)</label>
+            <textarea class="form-textarea" id="ec-offers">${esc((cs.offers || []).join('\n'))}</textarea></div>
+          <div class="form-group"><label class="form-label">Case studies (one per line)</label>
+            <textarea class="form-textarea" id="ec-casestudies">${esc((cs.caseStudies || []).join('\n'))}</textarea></div>
+        </div>
         <div class="form-group"><label class="form-label">Niche pains</label><div class="tags" id="ec-pains"></div></div>
         <div class="form-group"><label class="form-label">Common objections</label><div class="tags" id="ec-objections"></div></div>
         <div class="form-group"><label class="form-label">Prospect desires</label><div class="tags" id="ec-desires"></div></div>
-        <div class="form-group"><label class="form-label">Client framework overrides — paste this client's own framework/notes per niche (used on top of the global framework when generating for that niche)</label>
-          ${config.niches.map(n => `
-            <div style="margin-bottom:8px">
-              <div class="hint" style="margin-bottom:3px">${esc(n.name)}</div>
-              <textarea class="form-textarea" data-override="${n.id}" placeholder="paste ${esc(c.name || 'client')}'s framework for ${esc(n.name)}…">${esc((c.frameworkOverrides || {})[n.id] || '')}</textarea>
-            </div>`).join('')}
-        </div>
+        <div class="form-group"><label class="form-label">Framework overrides — this client's own framework/notes per targeted niche</label>
+          <div id="ec-overrides"></div></div>
         <div style="display:flex;gap:8px">
           <button class="mini-btn" onclick="saveClient(${isNew})">💾 Save client</button>
-          <button class="mini-btn" onclick="state.editing=null;renderAdmin()">Cancel</button>
+          <button class="mini-btn" onclick="state.editing=null;editClient=null;renderAdmin()">Cancel</button>
         </div>
       </div>`;
+      setTimeout(() => { renderEditNiches(); renderOverrideBoxes(); renderCompetitors(); }, 0);
     }
   }
   return html;
 }
 
+function renderEditNiches() {
+  const el = document.getElementById('ec-niches'); if (!el || !editClient) return;
+  el.innerHTML = config.niches.map(n =>
+    `<div class="chip ${editClient.nicheIds.includes(n.id) ? 'on' : ''}" onclick="toggleEditNiche('${n.id}')">${esc(n.name)}</div>`).join('')
+    || '<div class="hint">No niches exist yet — create one above.</div>';
+}
+
+function toggleEditNiche(id) {
+  const i = editClient.nicheIds.indexOf(id);
+  if (i === -1) editClient.nicheIds.push(id); else editClient.nicheIds.splice(i, 1);
+  captureOverrides(); renderEditNiches(); renderOverrideBoxes();
+}
+
+function captureOverrides() {
+  document.querySelectorAll('#ec-overrides [data-override]').forEach(t => {
+    if (t.value.trim()) editClient.overrides[t.dataset.override] = t.value;
+    else delete editClient.overrides[t.dataset.override];
+  });
+}
+
+function renderOverrideBoxes() {
+  const el = document.getElementById('ec-overrides'); if (!el || !editClient) return;
+  const ns = editClient.nicheIds.map(id => niche(id)).filter(Boolean);
+  el.innerHTML = ns.length ? ns.map(n => `
+    <div style="margin-bottom:8px">
+      <div class="hint" style="margin-bottom:3px">${esc(n.name)}</div>
+      <textarea class="form-textarea" data-override="${n.id}" placeholder="paste the client's framework/notes for ${esc(n.name)}…">${esc(editClient.overrides[n.id] || '')}</textarea>
+    </div>`).join('')
+    : '<div class="hint">Pick at least one niche to add per-niche overrides.</div>';
+}
+
+function renderCompetitors() {
+  const el = document.getElementById('ec-competitors'); if (!el || !editClient) return;
+  const tracked = editClient.competitorIntel;
+  const cands = editClient.candidates.filter(x => !tracked.some(t => t.name === x.name));
+  let html = '';
+  if (tracked.length) {
+    html += `<div class="info-title" style="margin-top:10px">Tracked competitor intel (${tracked.length}) — feeds positioning in every generate</div>`;
+    html += tracked.map((x, i) => `
+      <div class="list-row" style="margin-bottom:5px"><div><b>${esc(x.name)}</b> <span class="sub">${esc(x.website || '')}</span>
+        <div class="sub">${esc(x.offer || '')}${x.guarantee ? ' · ' + esc(x.guarantee) : ''}</div></div>
+        <button class="mini-btn danger" onclick="editClient.competitorIntel.splice(${i},1);renderCompetitors()">Remove</button></div>`).join('');
+  }
+  if (cands.length) {
+    html += `<div class="info-title" style="margin-top:10px">Found competitors — add the relevant ones</div>`;
+    html += cands.map((x, i) => `
+      <div class="list-row" style="margin-bottom:5px"><div><b>${esc(x.name)}</b> <span class="sub">${esc(x.website || '')}</span>
+        <div class="sub">offer: ${esc(x.offer || '?')} · mechanism: ${esc(x.mechanism || '?')}</div>
+        <div class="sub">results: ${esc(x.results || '?')}${x.guarantee ? ' · guarantee: ' + esc(x.guarantee) : ''}</div></div>
+        <button class="mini-btn" onclick='addCompetitor(${JSON.stringify(JSON.stringify(x))})'>+ Track</button></div>`).join('');
+  }
+  el.innerHTML = html;
+}
+
+function addCompetitor(jsonStr) {
+  const x = JSON.parse(jsonStr);
+  if (!editClient.competitorIntel.some(t => t.name === x.name)) editClient.competitorIntel.push(x);
+  renderCompetitors();
+}
+
+// — AI onboarding actions —
+let aiBusy = false;
+function aiStatus(msg) {
+  const el = document.getElementById('ec-ai-status');
+  if (el) el.innerHTML = msg;
+}
+function mergeTags(containerId, items) {
+  const el = document.getElementById(containerId);
+  if (!el || !Array.isArray(items)) return;
+  items.forEach(v => { const s = String(v).trim(); if (s && !el.__arr.includes(s)) el.__arr.push(s); });
+  renderTags(containerId, el.__arr, el.__placeholder);
+}
+function fillIfEmpty(id, value) {
+  const el = document.getElementById(id);
+  if (el && value && !el.value.trim()) el.value = String(value);
+}
+function appendLines(id, items) {
+  const el = document.getElementById(id);
+  if (!el || !Array.isArray(items) || !items.length) return;
+  const existing = el.value.split('\n').map(s => s.trim()).filter(Boolean);
+  items.forEach(v => { const s = String(v).trim(); if (s && !existing.includes(s)) existing.push(s); });
+  el.value = existing.join('\n');
+}
+
+async function scrapeClientSite() {
+  if (aiBusy) return;
+  const url = document.getElementById('ec-website').value.trim();
+  if (!url) return showNotif('Enter the client website first', true);
+  if (!adminKey) return showNotif('No admin key — open the app once with ?admin=YOUR_KEY', true);
+  aiBusy = true; aiStatus('🔍 Scraping client site + searching for case studies… (~20-40s)');
+  try {
+    const r = await api({ action: 'research_client_site', url });
+    fillIfEmpty('ec-name', r.name);
+    fillIfEmpty('ec-meta', r.meta);
+    fillIfEmpty('ec-size', r.size);
+    fillIfEmpty('ec-result', r.result);
+    fillIfEmpty('ec-mechanism', r.mechanism);
+    fillIfEmpty('ec-proofline', r.proofLine);
+    appendLines('ec-offers', r.offers);
+    appendLines('ec-casestudies', r.caseStudies);
+    mergeTags('ec-pains', r.pains);
+    mergeTags('ec-desires', r.desires);
+    mergeTags('ec-objections', r.objections);
+    if (r.niche_guess && !document.getElementById('ec-newniche').value.trim()) {
+      document.getElementById('ec-newniche').value = r.niche_guess;
+    }
+    aiStatus(`✅ Pulled from ${esc(r.url || url)}: ${esc(r.summary || 'data imported')} <br>Review the fields below, then Save.`);
+    showNotif('Client site scraped');
+  } catch (e) { aiStatus('⚠️ ' + esc(e.message)); showNotif('Scrape failed: ' + e.message, true); }
+  aiBusy = false;
+}
+
+async function researchNicheCreate() {
+  if (aiBusy) return;
+  const name = document.getElementById('ec-newniche').value.trim();
+  if (!name) return showNotif('Type the niche first', true);
+  if (!adminKey) return showNotif('No admin key — open the app once with ?admin=YOUR_KEY', true);
+  aiBusy = true; aiStatus('🔍 Researching "' + esc(name) + '" — real web search incl. Reddit/forums… (~30-60s)');
+  try {
+    const ctx = [document.getElementById('ec-name').value, document.getElementById('ec-mechanism').value, document.getElementById('ec-proofline').value]
+      .map(s => s.trim()).filter(Boolean).join(' — ');
+    const r = await api({ action: 'research_niche', niche: name, clientContext: ctx });
+    // Reuse an existing niche with the same name instead of duplicating it —
+    // refresh its angles/trigger words with the new research.
+    let obj = config.niches.find(n => n.name.trim().toLowerCase() === name.toLowerCase());
+    if (obj) {
+      obj.angles = Array.from(new Set([...(obj.angles || []), ...(r.angles || [])]));
+      obj.triggerWords = Array.from(new Set([...(obj.triggerWords || []), ...(r.triggerWords || [])]));
+    } else {
+      obj = { id: uid('niche'), name, angles: r.angles || [], triggerWords: r.triggerWords || [] };
+      config.niches.push(obj);
+    }
+    if (!editClient.nicheIds.includes(obj.id)) editClient.nicheIds.push(obj.id);
+    mergeTags('ec-pains', r.pains);
+    mergeTags('ec-desires', r.desires);
+    mergeTags('ec-objections', r.objections);
+    persistConfig();
+    captureOverrides(); renderEditNiches(); renderOverrideBoxes();
+    document.getElementById('ec-newniche').value = '';
+    aiStatus(`✅ Niche "${esc(name)}" created: ${(r.angles || []).length} angles, ${(r.triggerWords || []).length} trigger words.<br>${esc(r.insights || '')}`);
+    showNotif('Niche created from research');
+  } catch (e) { aiStatus('⚠️ ' + esc(e.message)); showNotif('Niche research failed: ' + e.message, true); }
+  aiBusy = false;
+}
+
+async function findCompetitors() {
+  if (aiBusy) return;
+  const clientName = document.getElementById('ec-name').value.trim();
+  const clientUrl = document.getElementById('ec-website').value.trim();
+  if (!clientName && !clientUrl) return showNotif('Enter the client name or website first', true);
+  if (!adminKey) return showNotif('No admin key — open the app once with ?admin=YOUR_KEY', true);
+  aiBusy = true; aiStatus('🏁 Searching for competitors and their offers… (~30-60s)');
+  try {
+    const nicheName = niche(editClient.nicheIds[0])?.name || document.getElementById('ec-newniche').value.trim();
+    const r = await api({ action: 'research_competitors', clientName, clientUrl, niche: nicheName });
+    editClient.candidates = r.competitors || [];
+    renderCompetitors();
+    aiStatus(`✅ Found ${(r.competitors || []).length} competitors. ${esc(r.insights || '')}<br>Click “+ Track” on the relevant ones — tracked intel is used to position this client in every script.`);
+    showNotif('Competitors found');
+  } catch (e) { aiStatus('⚠️ ' + esc(e.message)); showNotif('Competitor research failed: ' + e.message, true); }
+  aiBusy = false;
+}
+
 function saveClient(isNew) {
   const name = document.getElementById('ec-name').value.trim();
   if (!name) return showNotif('Name required', true);
-  const overrides = {};
-  document.querySelectorAll('[data-override]').forEach(t => { if (t.value.trim()) overrides[t.dataset.override] = t.value.trim(); });
+  captureOverrides();
+  const lines = id => document.getElementById(id).value.split('\n').map(s => s.trim()).filter(Boolean);
   const obj = {
     id: isNew ? uid('client') : state.editing.id,
     name,
     meta: document.getElementById('ec-meta').value.trim(),
-    nicheId: document.getElementById('ec-niche').value,
+    website: document.getElementById('ec-website').value.trim(),
+    nicheIds: editClient.nicheIds,
     caseStudy: {
       size: document.getElementById('ec-size').value.trim(),
       result: document.getElementById('ec-result').value.trim(),
       mechanism: document.getElementById('ec-mechanism').value.trim(),
       proofLine: document.getElementById('ec-proofline').value.trim(),
+      offers: lines('ec-offers'),
+      caseStudies: lines('ec-casestudies'),
       pains: document.getElementById('ec-pains').__arr,
       objections: document.getElementById('ec-objections').__arr,
       desires: document.getElementById('ec-desires').__arr
     },
-    frameworkOverrides: overrides
+    frameworkOverrides: editClient.overrides,
+    competitorIntel: editClient.competitorIntel
   };
-  if (isNew) { config.clients.push(obj); state.clientId = obj.id; state.nicheId = obj.nicheId; }
+  if (isNew) { config.clients.push(obj); state.clientId = obj.id; }
   else config.clients = config.clients.map(c => c.id === obj.id ? obj : c);
-  state.editing = null; persistConfig(); renderAdmin(); renderClientList(); renderBuilder(); showNotif('Client saved');
+  if (!obj.nicheIds.includes(state.nicheId) && obj.nicheIds.length) {
+    state.nicheId = primaryNicheId(obj);
+    state.angles = new Set((niche(state.nicheId)?.angles || []).slice(0, 3));
+  }
+  state.editing = null; editClient = null;
+  persistConfig(); renderAdmin(); renderClientList(); renderBuilder(); showNotif('Client saved');
 }
 
 // — Settings tab —
@@ -1224,7 +1444,7 @@ function importConfig(input) {
     try {
       const parsed = JSON.parse(reader.result);
       if (!parsed.frameworks || !parsed.niches || !parsed.clients) throw new Error('not a valid config file');
-      config = parsed; persistConfig(); initSelections(); renderEverything(); showNotif('Config imported');
+      config = migrateConfig(parsed); persistConfig(); initSelections(); renderEverything(); showNotif('Config imported');
     } catch (e) { showNotif('Import failed: ' + e.message, true); }
   };
   reader.readAsText(file);
@@ -1232,7 +1452,7 @@ function importConfig(input) {
 
 function resetConfig() {
   if (!confirm('Reset all frameworks, niches and clients to the built-in defaults? Your current config will be overwritten.')) return;
-  config = structuredClone(DEFAULT_CONFIG);
+  config = migrateConfig(structuredClone(DEFAULT_CONFIG));
   persistConfig(); initSelections(); renderEverything(); showNotif('Reset to defaults');
 }
 
@@ -1242,7 +1462,10 @@ function deleteItem(type, id) {
   config[type] = config[type].filter(x => x.id !== id);
   if (type === 'frameworks') state.frameworks.delete(id);
   if (type === 'clients' && state.clientId === id) state.clientId = config.clients[0]?.id ?? null;
-  if (type === 'niches' && state.nicheId === id) { state.nicheId = config.niches[0]?.id ?? null; state.angles = new Set(); }
+  if (type === 'niches') {
+    config.clients.forEach(c => { c.nicheIds = (c.nicheIds || []).filter(x => x !== id); });
+    if (state.nicheId === id) { state.nicheId = config.niches[0]?.id ?? null; state.angles = new Set(); }
+  }
   state.editing = null; persistConfig(); renderAdmin(); renderClientList(); renderBuilder(); showNotif('Deleted');
 }
 
@@ -1258,7 +1481,7 @@ function showNotif(msg, err = false) {
 
 function initSelections() {
   state.clientId = config.clients[0]?.id ?? null;
-  state.nicheId = client(state.clientId)?.nicheId ?? config.niches[0]?.id ?? null;
+  state.nicheId = primaryNicheId(client(state.clientId)) ?? config.niches[0]?.id ?? null;
   state.angles = new Set((niche(state.nicheId)?.angles || []).slice(0, 3));
   state.frameworks = new Set(config.frameworks.slice(0, 2).map(f => f.id));
 }
@@ -1270,6 +1493,7 @@ function renderEverything() {
 
 async function loadConfigAndRender() {
   await loadConfig();
+  migrateConfig(config);
   setConfigPill(configSource === 'server' ? 'server' : 'local');
   initSelections();
   renderEverything();

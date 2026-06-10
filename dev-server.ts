@@ -46,6 +46,51 @@ async function handle(req: Request): Promise<Response> {
       await new Promise((r) => setTimeout(r, 200));
       return json({ ok: true }, cors);
     }
+    if (body.action === "research_client_site") {
+      await new Promise((r) => setTimeout(r, 1200));
+      return json({
+        ok: true,
+        url: "https://" + String(body.url).replace(/^https?:\/\//, ""),
+        name: "Acme Growth Agency",
+        meta: "US · 12-person lead gen agency",
+        niche_guess: "B2B SaaS founders",
+        size: "~$2M/yr agency",
+        result: "Added $480K pipeline for a B2B SaaS client in 6 months",
+        mechanism: "Cold email infrastructure + triple-touch follow-up + reply management",
+        proofLine: "We just helped a B2B SaaS client add $480K in pipeline in 6 months with done-for-you cold email.",
+        offers: ["DFY cold email — $3.5K/mo retainer", "Pay-per-show pilot — $250/booked call"],
+        caseStudies: ["SaaSCo: $480K pipeline in 6 months", "Shopify agency: 22 booked calls in 45 days"],
+        pains: ["feast-or-famine pipeline", "founder-led sales not scaling"],
+        desires: ["predictable booked calls", "pipeline without hiring SDRs"],
+        objections: ["tried agencies before", "worried about domain reputation"],
+        summary: "(mock) Acme is a 12-person lead gen agency selling DFY cold email to B2B companies.",
+      }, cors);
+    }
+    if (body.action === "research_niche") {
+      await new Promise((r) => setTimeout(r, 1500));
+      return json({
+        ok: true,
+        niche: body.niche,
+        insights: "(mock) The niche is squeezed by rising CAC; owners complain on Reddit about churn-and-burn agencies and leads going cold.",
+        pains: ["CAC doubled since 2024", "agencies overpromise and ghost", "in-house team maxed out", "lead quality worse every quarter", "no time to follow up leads", "tool stack costs ballooning"],
+        angles: ["CAC doubled, results flat", "Agency-burned and skeptical", "Leads going cold in the CRM", "Stack costs eating margin", "Follow-up falling through cracks"],
+        triggerWords: ["CAC", "LTV", "show rate", "no-show", "speed-to-lead", "pipeline velocity", "ICP", "reply rate"],
+        desires: ["cheaper booked calls", "predictable monthly pipeline", "less time chasing leads"],
+        objections: ["we tried cold email before", "our niche is different", "no budget this quarter"],
+      }, cors);
+    }
+    if (body.action === "research_competitors") {
+      await new Promise((r) => setTimeout(r, 1500));
+      return json({
+        ok: true,
+        insights: "(mock) Rivals all lead with volume promises; none offers a show-rate guarantee — that's the gap.",
+        competitors: [
+          { name: "LeadFlow Co", website: "leadflow.example", offer: "20 calls/mo retainer $4K", mechanism: "AI SDR + LinkedIn touches", results: "Claims 350+ clients served", guarantee: "" },
+          { name: "PipelinePros", website: "pipelinepros.example", offer: "Pay-per-show $250/call", mechanism: "Cold call + email combo", results: "Case study: 40 calls for fintech in 60 days", guarantee: "Pay only for shows" },
+          { name: "OutboundLab", website: "outboundlab.example", offer: "$2.9K/mo + setup", mechanism: "Clay-powered personalization at scale", results: "", guarantee: "30-day opt-out" },
+        ],
+      }, cors);
+    }
     if (body.action === "research") {
       await new Promise((r) => setTimeout(r, 1000));
       return json({
