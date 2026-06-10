@@ -260,6 +260,7 @@ interface GenerateBody {
     caseStudy: Record<string, unknown>;
     frameworkOverride?: string;
     competitorIntel?: string;
+    avoid?: string[];
   };
   niche: { name: string; triggerWords?: string[] };
   frameworks: Framework[];
@@ -287,6 +288,10 @@ function buildSystemPrompt(body: GenerateBody, fw: Framework): string {
   const competitorBlock = body.client.competitorIntel?.trim()
     ? `\nCOMPETITOR INTEL (what rivals in this niche promise — position our client distinctly, never copy their claims):\n${body.client.competitorIntel.trim().slice(0, 2000)}\n`
     : "";
+  const avoidBlock = (body.client.avoid ?? []).filter((a) => String(a).trim()).length
+    ? `\nHARD EXCLUSIONS — the client forbids these. NEVER mention, imply, or allude to any of them in any script:\n` +
+      (body.client.avoid ?? []).filter((a) => String(a).trim()).map((a) => `- ${a}`).join("\n") + "\n"
+    : "";
 
   return `You are a world-class cold email copywriter. You write short, punchy, conversational scripts that get replies, never marketing copy.
 
@@ -305,7 +310,7 @@ ${csLines}
 
 NICHE: ${body.niche.name}
 NICHE TRIGGER WORDS (work 1-3 in naturally where they genuinely fit; never force them): ${tw || "(none)"}
-${researchBlock}${overrideBlock}${competitorBlock}
+${researchBlock}${overrideBlock}${competitorBlock}${avoidBlock}
 OUTPUT FORMAT — return valid JSON only, no markdown, no preamble:
 {
   "framework_fill": { "<variable_name>": "<value used in the first script>", ... },
@@ -437,6 +442,33 @@ Deno.serve(async (req) => {
         if (!nicheName) return json({ ok: false, error: "niche required" }, 400);
         const result = await researchNiche(nicheName, String(body.clientContext ?? ""));
         return json(result, result.ok ? 200 : 422);
+      }
+
+      case "extract_framework": {
+        const scripts = Array.isArray(body.scripts) ? (body.scripts as unknown[]).map(String).filter((s) => s.trim()) : [];
+        if (!scripts.length) return json({ ok: false, error: "scripts required" }, 400);
+        const res = await claudeMessages({
+          model: CLAUDE_MODEL,
+          max_tokens: 1600,
+          system:
+            `You reverse-engineer winning cold outreach scripts into reusable frameworks for a lead generation agency.\n` +
+            `Given one or more scripts that got replies, extract the underlying repeatable structure:\n` +
+            `- Keep the load-bearing structure and phrasing patterns that make it work.\n` +
+            `- Replace the situation-specific parts (pain, proof, names, numbers, CTA target) with descriptive snake_case {{variables}}.\n` +
+            `- Write rules that capture why it wins: length, tone, rhythm, what each part must do.\n` +
+            `Return valid JSON only, no markdown fences:\n` +
+            `{"name":"short memorable framework name","category":"what it is (Proof-led / Pain-led / Curiosity-led / Ultra-short / ...)",` +
+            `"template":"the structure with {{variables}}","rules":"the rules that make it win",` +
+            `"analysis":"2-3 sentences on why this script structure works"}`,
+          messages: [{
+            role: "user",
+            content: scripts.map((s, i) => `SCRIPT ${i + 1}:\n${s}`).join("\n\n---\n\n") +
+              (body.context ? `\n\nContext: ${body.context}` : ""),
+          }],
+        });
+        const parsed = parseJson(textOf(res.content), null as Record<string, unknown> | null);
+        if (!parsed) return json({ ok: false, error: "could not parse framework extraction — try again" }, 422);
+        return json({ ok: true, ...parsed });
       }
 
       case "research_competitors": {

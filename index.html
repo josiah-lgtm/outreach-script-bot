@@ -287,6 +287,69 @@
   }
   .hint { font-size: 11px; color: var(--muted); line-height: 1.5; margin-top: 4px; }
 
+  /* BUILDER v2 — client hero, numbered steps, segmented control, sticky footer */
+  .client-hero {
+    background: linear-gradient(135deg, rgba(37,99,235,.14), rgba(37,99,235,.03));
+    border: 1px solid rgba(37,99,235,.35); border-radius: 10px;
+    padding: 14px; margin-bottom: 18px;
+  }
+  .client-hero-top { display: flex; align-items: center; gap: 11px; }
+  .avatar {
+    width: 36px; height: 36px; border-radius: 9px; background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px; color: #fff; flex-shrink: 0; letter-spacing: .5px;
+  }
+  .client-hero-name { font-size: 15px; font-weight: 700; line-height: 1.2; }
+  .client-hero-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .client-hero-result { font-size: 12px; color: var(--subtle); margin-top: 10px; line-height: 1.5; }
+  .client-hero-result b { color: var(--text); font-weight: 600; }
+  .hero-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .badge2 {
+    font-size: 10px; font-weight: 500; padding: 3px 9px; border-radius: 20px;
+    background: var(--bg3); border: 1px solid var(--border); color: var(--subtle);
+  }
+  .badge2.warn { color: var(--amber); border-color: rgba(245,158,11,.4); }
+  .badge2.danger { color: var(--red); border-color: rgba(239,68,68,.4); }
+
+  .step { margin-bottom: 20px; }
+  .step-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 9px; }
+  .step-title {
+    font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase;
+    color: var(--subtle); display: flex; gap: 8px; align-items: center;
+  }
+  .step-num {
+    width: 18px; height: 18px; border-radius: 50%; background: var(--bg3);
+    border: 1px solid var(--border); display: inline-flex; align-items: center;
+    justify-content: center; font-size: 10px; color: var(--accent2); font-weight: 700;
+  }
+  .step-count { font-size: 11px; color: var(--accent2); font-weight: 600; }
+
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+  .seg button {
+    padding: 7px 18px; background: var(--bg2); color: var(--muted); border: none;
+    font: 600 12px 'Inter', sans-serif; cursor: pointer; border-right: 1px solid var(--border);
+    transition: .12s;
+  }
+  .seg button:last-child { border-right: none; }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .seg button:hover:not(.on) { color: var(--text); }
+
+  details.personalize { border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); margin-bottom: 6px; }
+  details.personalize summary {
+    padding: 11px 13px; cursor: pointer; font-size: 12px; color: var(--subtle);
+    font-weight: 600; list-style: none; display: flex; justify-content: space-between; align-items: center;
+  }
+  details.personalize summary::-webkit-details-marker { display: none; }
+  details.personalize summary::after { content: '▾'; color: var(--muted); transition: .2s; }
+  details.personalize[open] summary::after { transform: rotate(180deg); }
+  details.personalize .inner { padding: 2px 13px 13px; }
+
+  .build-footer {
+    position: sticky; bottom: -14px;
+    background: linear-gradient(transparent, var(--bg) 28%);
+    margin: 8px -14px -14px; padding: 18px 14px 14px;
+  }
+
   .notif {
     position: fixed; bottom: 20px; right: 20px; background: var(--bg3);
     border: 1px solid var(--green); color: var(--green); padding: 10px 16px;
@@ -321,69 +384,75 @@
   <!-- CENTRE: BUILDER -->
   <div class="panel" id="panelBuild">
     <div class="panel-header">Build</div>
-    <div class="panel-body">
-      <div id="contextBox"></div>
+    <div class="panel-body" style="display:flex;flex-direction:column">
+      <div style="flex:1">
+        <div id="clientHero"></div>
 
-      <div class="grid2">
-        <div class="form-group">
-          <label class="form-label">First Name</label>
-          <input class="form-input" id="fname" placeholder="Sarah" />
+        <div class="step">
+          <div class="step-head"><span class="step-title"><span class="step-num">1</span>Niche</span></div>
+          <select class="form-select" id="nicheSelect" onchange="onNicheChange()"></select>
         </div>
-        <div class="form-group">
-          <label class="form-label">Company</label>
-          <input class="form-input" id="company" placeholder="Acme Corp" />
+
+        <div class="step">
+          <div class="step-head"><span class="step-title"><span class="step-num">2</span>Angles</span><span class="step-count" id="angleCount"></span></div>
+          <div class="chips" id="angleChips"></div>
         </div>
-      </div>
-      <div class="grid2">
-        <div class="form-group">
-          <label class="form-label">Website (for research)</label>
-          <input class="form-input" id="companyUrl" placeholder="acmecorp.com" />
+
+        <div class="step">
+          <div class="step-head"><span class="step-title"><span class="step-num">3</span>Frameworks</span><span class="step-count" id="fwCount"></span></div>
+          <div class="chips" id="fwChips"></div>
         </div>
-        <div class="form-group">
-          <label class="form-label">What are they?</label>
-          <input class="form-input" id="classification" placeholder="DTC skincare brand" />
+
+        <div class="step">
+          <div class="step-head"><span class="step-title"><span class="step-num">4</span>Variants per combo</span></div>
+          <div class="seg" id="variantSeg">
+            <button class="on" onclick="setVariants(1, this)">1</button>
+            <button onclick="setVariants(2, this)">2</button>
+            <button onclick="setVariants(3, this)">3</button>
+          </div>
         </div>
+
+        <details class="personalize">
+          <summary>Personalize for one prospect — optional</summary>
+          <div class="inner">
+            <div class="hint" style="margin-bottom:10px">Leave this closed and scripts use <b>{{first_name}}</b> and <b>{{company}}</b> merge tags, ready for your sequencer at scale. Fill it in only to preview scripts for one real prospect — add their website and the bot researches them.</div>
+            <div class="grid2">
+              <div class="form-group">
+                <label class="form-label">First Name</label>
+                <input class="form-input" id="fname" placeholder="{{first_name}}" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Company</label>
+                <input class="form-input" id="company" placeholder="{{company}}" />
+              </div>
+            </div>
+            <div class="grid2">
+              <div class="form-group">
+                <label class="form-label">Their website (for research)</label>
+                <input class="form-input" id="companyUrl" placeholder="prospect.com" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">What are they?</label>
+                <input class="form-input" id="classification" placeholder="DTC skincare brand" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Custom pain (optional)</label>
+              <input class="form-input" id="customPain" placeholder="e.g. just raised Series B" />
+            </div>
+            <div class="toggle-row">
+              <span class="toggle-label">🌐 Research their site before writing</span>
+              <label class="toggle"><input type="checkbox" id="toggleResearch" checked><span class="toggle-slider"></span></label>
+            </div>
+            <button class="mini-btn" onclick="clearProspect()">Clear prospect fields</button>
+          </div>
+        </details>
       </div>
 
-      <div class="form-group">
-        <label class="form-label">Niche</label>
-        <select class="form-select" id="nicheSelect" onchange="onNicheChange()"></select>
+      <div class="build-footer">
+        <div class="matrix-line" id="matrixLine"></div>
+        <button class="btn btn-primary" id="generateBtn" onclick="generate()">Generate Matrix →</button>
       </div>
-
-      <div class="form-group">
-        <label class="form-label">Angles <span style="color:var(--accent2)" id="angleCount"></span></label>
-        <div class="chips" id="angleChips"></div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Frameworks <span style="color:var(--accent2)" id="fwCount"></span></label>
-        <div class="chips" id="fwChips"></div>
-      </div>
-
-      <div class="grid2">
-        <div class="form-group">
-          <label class="form-label">Variants per combo</label>
-          <select class="form-select" id="variantsPer" onchange="updateMatrix()">
-            <option value="1" selected>1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Custom pain (optional)</label>
-          <input class="form-input" id="customPain" placeholder="e.g. just raised Series B" />
-        </div>
-      </div>
-
-      <div class="toggle-row">
-        <span class="toggle-label">🌐 Web research prospect (real fetch of their site)</span>
-        <label class="toggle"><input type="checkbox" id="toggleResearch" checked><span class="toggle-slider"></span></label>
-      </div>
-
-      <div class="matrix-line" id="matrixLine"></div>
-
-      <button class="btn btn-primary" id="generateBtn" onclick="generate()">Generate Matrix →</button>
-      <button class="btn btn-secondary" onclick="clearProspect()">Clear prospect</button>
     </div>
   </div>
 
@@ -409,6 +478,7 @@
       <div class="admin-wrap">
         <div class="admin-tabs">
           <button class="tab-btn active" id="atab-frameworks" onclick="switchAdminTab('frameworks')">Frameworks</button>
+          <button class="tab-btn" id="atab-winning" onclick="switchAdminTab('winning')">🏆 Winning Scripts</button>
           <button class="tab-btn" id="atab-niches" onclick="switchAdminTab('niches')">Niches & Angles</button>
           <button class="tab-btn" id="atab-clients" onclick="switchAdminTab('clients')">Clients</button>
           <button class="tab-btn" id="atab-settings" onclick="switchAdminTab('settings')">Settings</button>
@@ -548,6 +618,7 @@ let state = {
   nicheId: null,
   angles: new Set(),
   frameworks: new Set(),
+  variantsPer: 1,
   tab: 'scripts',
   adminTab: 'frameworks',
   editing: null,        // {type, id} | {type, id:'__new__'}
@@ -572,9 +643,16 @@ function migrateConfig(cfg) {
     c.competitorIntel = c.competitorIntel || [];
     c.frameworkOverrides = c.frameworkOverrides || {};
     c.caseStudy = c.caseStudy || {};
+    c.avoid = c.avoid || [];
   });
+  (cfg.frameworks || []).forEach(f => { f.nicheIds = f.nicheIds || []; });
+  cfg.winningScripts = cfg.winningScripts || [];
   return cfg;
 }
+
+// Frameworks visible for a niche: global ones (no scope) + ones scoped to it.
+const frameworksForNiche = nicheId =>
+  config.frameworks.filter(f => !(f.nicheIds || []).length || (f.nicheIds || []).includes(nicheId));
 
 // ─── CONFIG LOAD / SAVE ────────────────────────────────────────────────────────
 async function loadConfig() {
@@ -682,24 +760,32 @@ function renderBuilder() {
   const c = client(state.clientId);
   const n = niche(state.nicheId);
 
-  // Context box — the selected client's view
-  const box = document.getElementById('contextBox');
+  // Client hero — the selected client's profile at a glance
+  const hero = document.getElementById('clientHero');
   if (c) {
     const cs = c.caseStudy || {};
     const override = (c.frameworkOverrides || {})[state.nicheId];
-    const intel = c.competitorIntel || [];
-    box.innerHTML = `<div class="context-box">
-      <div class="context-title">${esc(c.name)} — client view</div>
-      <strong>Result:</strong> ${esc(cs.result || '—')}<br>
-      <strong>Mechanism:</strong> ${esc(cs.mechanism || '—')}<br>
-      <strong>Pains:</strong> ${esc((cs.pains || []).join(', ') || '—')}
-      ${(cs.caseStudies || []).length ? `<br><strong>Case studies:</strong> ${cs.caseStudies.length} on file` : ''}
-      ${intel.length ? `<br><strong>Competitor intel:</strong> ${intel.length} rival${intel.length > 1 ? 's' : ''} tracked` : ''}
-      ${override ? '<br><strong style="color:var(--amber)">⚡ Client framework override active for this niche</strong>' : ''}
-      <div style="margin-top:6px"><button class="mini-btn" onclick="adminEdit('clients','${c.id}')">Edit / research client</button></div>
+    const initials = c.name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    hero.innerHTML = `<div class="client-hero">
+      <div class="client-hero-top">
+        <div class="avatar">${esc(initials)}</div>
+        <div style="flex:1;min-width:0">
+          <div class="client-hero-name">${esc(c.name)}</div>
+          <div class="client-hero-meta">${esc(c.meta || '')}</div>
+        </div>
+        <button class="mini-btn" onclick="adminEdit('clients','${c.id}')">✏️ Edit profile</button>
+      </div>
+      ${cs.result ? `<div class="client-hero-result"><b>${esc(cs.result)}</b>${cs.mechanism ? ' — ' + esc(cs.mechanism) : ''}</div>` : ''}
+      <div class="hero-badges">
+        ${(c.nicheIds || []).map(id => `<span class="badge2">${esc(niche(id)?.name || '')}</span>`).join('')}
+        ${(cs.caseStudies || []).length ? `<span class="badge2">📂 ${cs.caseStudies.length} case studies</span>` : ''}
+        ${(c.competitorIntel || []).length ? `<span class="badge2">🏁 ${c.competitorIntel.length} rivals tracked</span>` : ''}
+        ${(c.avoid || []).length ? `<span class="badge2 danger">🚫 ${c.avoid.length} exclusions</span>` : ''}
+        ${override ? `<span class="badge2 warn">⚡ framework override</span>` : ''}
+      </div>
     </div>`;
   } else {
-    box.innerHTML = `<div class="context-box">Select a client on the left.</div>`;
+    hero.innerHTML = `<div class="client-hero"><div class="client-hero-meta">Select a client on the left, or add one.</div></div>`;
   }
 
   // Niche select — the selected client's niches first
@@ -717,12 +803,20 @@ function renderBuilder() {
     `<div class="chip ${state.angles.has(a) ? 'on' : ''}" onclick="toggleAngle(this)" data-a="${esc(a)}">${esc(a)}</div>`).join('')
     || '<div class="hint">This niche has no angles yet — add them in Admin → Niches.</div>';
 
-  // Framework chips
+  // Framework chips — global frameworks + ones scoped to this niche
+  const visible = frameworksForNiche(state.nicheId);
+  state.frameworks.forEach(id => { if (!visible.some(f => f.id === id)) state.frameworks.delete(id); });
   const fc = document.getElementById('fwChips');
-  fc.innerHTML = config.frameworks.map(f =>
-    `<div class="chip ${state.frameworks.has(f.id) ? 'on' : ''}" onclick="toggleFw(this)" data-f="${f.id}">${esc(f.name)}<span class="cat">${esc(f.category)}</span></div>`).join('')
-    || '<div class="hint">No frameworks — add them in Admin → Frameworks.</div>';
+  fc.innerHTML = visible.map(f =>
+    `<div class="chip ${state.frameworks.has(f.id) ? 'on' : ''}" onclick="toggleFw(this)" data-f="${f.id}">${esc(f.name)}<span class="cat">${(f.nicheIds || []).length ? '🎯 ' : ''}${esc(f.category)}</span></div>`).join('')
+    || '<div class="hint">No frameworks for this niche — add them in Admin → Frameworks, or extract one from a winning script.</div>';
 
+  updateMatrix();
+}
+
+function setVariants(n, btn) {
+  state.variantsPer = n;
+  document.querySelectorAll('#variantSeg button').forEach(b => b.classList.toggle('on', b === btn));
   updateMatrix();
 }
 
@@ -738,7 +832,7 @@ function toggleFw(el) {
 }
 
 function updateMatrix() {
-  const v = Number(document.getElementById('variantsPer').value);
+  const v = state.variantsPer || 1;
   const total = state.frameworks.size * state.angles.size * v;
   document.getElementById('angleCount').textContent = state.angles.size ? `(${state.angles.size} selected)` : '';
   document.getElementById('fwCount').textContent = state.frameworks.size ? `(${state.frameworks.size} selected)` : '';
@@ -776,7 +870,7 @@ async function generate() {
   const classification = document.getElementById('classification').value.trim();
   const customPain = document.getElementById('customPain').value.trim();
   const doResearch = document.getElementById('toggleResearch').checked && !!url;
-  const variantsPer = Number(document.getElementById('variantsPer').value);
+  const variantsPer = state.variantsPer || 1;
   const fws = config.frameworks.filter(f => state.frameworks.has(f.id));
   const angles = Array.from(state.angles);
   const total = fws.length * angles.length * variantsPer;
@@ -812,6 +906,7 @@ async function generate() {
         name: c.name,
         caseStudy: c.caseStudy || {},
         frameworkOverride: (c.frameworkOverrides || {})[state.nicheId] || '',
+        avoid: c.avoid || [],
         competitorIntel: (c.competitorIntel || []).map(x =>
           `${x.name}${x.website ? ' (' + x.website + ')' : ''}: offer=${x.offer || '?'}; mechanism=${x.mechanism || '?'}; results=${x.results || '?'}${x.guarantee ? '; guarantee=' + x.guarantee : ''}`
         ).join('\n')
@@ -950,7 +1045,7 @@ function adminEdit(type, id) {
 }
 
 function renderAdmin() {
-  ['frameworks', 'niches', 'clients', 'settings'].forEach(t =>
+  ['frameworks', 'winning', 'niches', 'clients', 'settings'].forEach(t =>
     document.getElementById('atab-' + t).classList.toggle('active', t === state.adminTab));
   const body = document.getElementById('adminBody');
 
@@ -980,6 +1075,7 @@ function setAdminKey() {
 function adminTabHtml() {
   const t = state.adminTab;
   if (t === 'frameworks') return adminFrameworks();
+  if (t === 'winning') return adminWinning();
   if (t === 'niches') return adminNiches();
   if (t === 'clients') return adminClients();
   return adminSettings();
@@ -997,7 +1093,7 @@ function adminFrameworks() {
   let html = `<button class="mini-btn" onclick="adminEdit('frameworks','__new__')">+ New framework</button>`;
   html += config.frameworks.map(f => `
     <div class="list-row">
-      <div><b>${esc(f.name)}</b> <span class="sub">${esc(f.category)}</span>
+      <div><b>${esc(f.name)}</b> <span class="sub">${esc(f.category)} · ${(f.nicheIds || []).length ? (f.nicheIds || []).map(id => esc(niche(id)?.name || '')).join(', ') : '🌐 all niches'}</span>
         <div class="sub">${fwVars(f.template).map(v => `<span class="var-chip">{{${esc(v)}}}</span>`).join('')}</div>
       </div>
       <div style="display:flex;gap:6px">
@@ -1023,6 +1119,9 @@ function adminFrameworks() {
       </div>
       <div class="form-group"><label class="form-label">Rules (language, length, tone for this framework)</label>
         <textarea class="form-textarea" id="ef-rules">${esc(f.rules || '')}</textarea></div>
+      <div class="form-group"><label class="form-label">Scope — leave all off for 🌐 generic (every niche), or pick specific niches</label>
+        <div class="chips" id="ef-scope">${config.niches.map(n =>
+          `<div class="chip ${(f.nicheIds || []).includes(n.id) ? 'on' : ''}" data-scope="${n.id}" onclick="this.classList.toggle('on')">${esc(n.name)}</div>`).join('')}</div></div>
       <div style="display:flex;gap:8px">
         <button class="mini-btn" onclick="saveFramework(${isNew})">💾 Save framework</button>
         <button class="mini-btn" onclick="state.editing=null;renderAdmin()">Cancel</button>
@@ -1046,11 +1145,131 @@ function saveFramework(isNew) {
     name,
     category: document.getElementById('ef-cat').value.trim() || 'Uncategorized',
     template,
-    rules: document.getElementById('ef-rules').value.trim()
+    rules: document.getElementById('ef-rules').value.trim(),
+    nicheIds: Array.from(document.querySelectorAll('#ef-scope .chip.on')).map(el => el.dataset.scope)
   };
   if (isNew) config.frameworks.push(obj);
   else config.frameworks = config.frameworks.map(f => f.id === obj.id ? obj : f);
   state.editing = null; persistConfig(); renderAdmin(); showNotif('Framework saved');
+}
+
+// — Winning Scripts tab —
+// Paste scripts that got replies; AI reverse-engineers them into frameworks.
+let extracted = null; // pending AI-extracted framework awaiting approval
+
+function scopeName(scope) {
+  return scope === 'global' ? '🌐 Generic (all niches)' : (niche(scope)?.name || 'unknown niche');
+}
+
+function adminWinning() {
+  let html = `
+    <div class="info-block" style="border-color:var(--accent)">
+      <div class="info-title">🏆 Add a winning script</div>
+      <div class="hint" style="margin-bottom:8px">Paste a script that got replies. Mark it generic (works across the board) or tie it to a niche. Then let AI extract the reusable framework behind it.</div>
+      <div class="grid2">
+        <div class="form-group"><label class="form-label">Name (what campaign/client it won in)</label>
+          <input class="form-input" id="ws-name" placeholder="e.g. SaaS audit opener — 12% reply"></div>
+        <div class="form-group"><label class="form-label">Scope</label>
+          <select class="form-select" id="ws-scope">
+            <option value="global">🌐 Generic — works across the board</option>
+            ${config.niches.map(n => `<option value="${n.id}">${esc(n.name)}</option>`).join('')}
+          </select></div>
+      </div>
+      <div class="form-group"><label class="form-label">The script</label>
+        <textarea class="form-textarea" id="ws-script" style="min-height:110px;font-family:'Courier Prime',monospace" placeholder="Paste the winning script exactly as it was sent…"></textarea></div>
+      <button class="mini-btn" onclick="addWinningScript()">💾 Save winning script</button>
+    </div>`;
+
+  html += config.winningScripts.map(w => `
+    <div class="list-row">
+      <div style="min-width:0"><b>${esc(w.name || 'Untitled script')}</b> <span class="sub">${esc(scopeName(w.scope))}</span>
+        <div class="sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:480px">${esc(w.script.slice(0, 110))}…</div></div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="mini-btn" onclick="extractFrameworkFrom('${w.id}', this)">🤖 Extract framework</button>
+        <button class="mini-btn danger" onclick="deleteWinningScript('${w.id}')">Delete</button>
+      </div>
+    </div>`).join('') || '<div class="hint" style="margin-top:10px">No winning scripts saved yet.</div>';
+
+  if (extracted) {
+    html += `
+    <div class="editor">
+      <h3>🤖 Extracted framework — review, edit, approve</h3>
+      ${extracted.analysis ? `<div class="hint" style="margin-bottom:10px">Why it wins: ${esc(extracted.analysis)}</div>` : ''}
+      <div class="grid2">
+        <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ex-name" value="${esc(extracted.name || '')}"></div>
+        <div class="form-group"><label class="form-label">Category</label><input class="form-input" id="ex-cat" value="${esc(extracted.category || '')}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Template (with {{variables}})</label>
+        <textarea class="form-textarea" id="ex-template" style="min-height:130px;font-family:'Courier Prime',monospace">${esc(extracted.template || '')}</textarea></div>
+      <div class="form-group"><label class="form-label">Rules</label>
+        <textarea class="form-textarea" id="ex-rules">${esc(extracted.rules || '')}</textarea></div>
+      <div class="hint" style="margin-bottom:8px">Scope: <b>${esc(scopeName(extracted.scope))}</b> (inherited from the winning script — change the script's scope to change this)</div>
+      <div style="display:flex;gap:8px">
+        <button class="mini-btn" onclick="acceptExtracted()">✅ Add to frameworks</button>
+        <button class="mini-btn" onclick="extracted=null;renderAdmin()">Discard</button>
+      </div>
+    </div>`;
+  }
+  return html;
+}
+
+function addWinningScript() {
+  const script = document.getElementById('ws-script').value.trim();
+  if (!script) return showNotif('Paste the script first', true);
+  config.winningScripts.push({
+    id: uid('ws'),
+    name: document.getElementById('ws-name').value.trim(),
+    scope: document.getElementById('ws-scope').value,
+    script
+  });
+  persistConfig(); renderAdmin(); showNotif('Winning script saved');
+}
+
+function deleteWinningScript(id) {
+  if (!confirm('Delete this winning script?')) return;
+  config.winningScripts = config.winningScripts.filter(w => w.id !== id);
+  persistConfig(); renderAdmin(); showNotif('Deleted');
+}
+
+async function extractFrameworkFrom(id, btn) {
+  if (aiBusy) return;
+  const w = config.winningScripts.find(x => x.id === id);
+  if (!w) return;
+  if (!adminKey) return showNotif('No admin key — open the app once with ?admin=YOUR_KEY', true);
+  aiBusy = true;
+  if (btn) { btn.textContent = '🤖 Extracting…'; btn.disabled = true; }
+  try {
+    const r = await api({
+      action: 'extract_framework',
+      scripts: [w.script],
+      context: `${w.name ? 'This script won in: ' + w.name + '. ' : ''}Scope: ${scopeName(w.scope)}`
+    });
+    extracted = { ...r, scope: w.scope };
+    renderAdmin();
+    showNotif('Framework extracted — review it below');
+  } catch (e) {
+    showNotif('Extraction failed: ' + e.message, true);
+    if (btn) { btn.textContent = '🤖 Extract framework'; btn.disabled = false; }
+  }
+  aiBusy = false;
+}
+
+function acceptExtracted() {
+  const name = document.getElementById('ex-name').value.trim();
+  const template = document.getElementById('ex-template').value;
+  if (!name || !template.trim()) return showNotif('Name and template required', true);
+  config.frameworks.push({
+    id: uid('fw'),
+    name,
+    category: document.getElementById('ex-cat').value.trim() || 'Winning script',
+    template,
+    rules: document.getElementById('ex-rules').value.trim(),
+    nicheIds: extracted.scope === 'global' ? [] : [extracted.scope]
+  });
+  extracted = null;
+  persistConfig(); renderBuilder();
+  state.adminTab = 'frameworks'; renderAdmin();
+  showNotif('Framework added 🎉');
 }
 
 // — Niches tab —
@@ -1161,6 +1380,7 @@ function adminClients() {
       pendingTags['ec-pains'] = { arr: structuredClone(cs.pains || []), placeholder: 'add pain + Enter' };
       pendingTags['ec-objections'] = { arr: structuredClone(cs.objections || []), placeholder: 'add objection + Enter' };
       pendingTags['ec-desires'] = { arr: structuredClone(cs.desires || []), placeholder: 'add desire + Enter' };
+      pendingTags['ec-avoid'] = { arr: structuredClone(c.avoid || []), placeholder: 'add exclusion + Enter' };
       html += `
       <div class="editor">
         <h3>${isNew ? 'New client' : 'Edit: ' + esc(c.name)}</h3>
@@ -1208,6 +1428,9 @@ function adminClients() {
         <div class="form-group"><label class="form-label">Niche pains</label><div class="tags" id="ec-pains"></div></div>
         <div class="form-group"><label class="form-label">Common objections</label><div class="tags" id="ec-objections"></div></div>
         <div class="form-group"><label class="form-label">Prospect desires</label><div class="tags" id="ec-desires"></div></div>
+        <div class="form-group"><label class="form-label" style="color:var(--red)">🚫 Do NOT mention — things this client never wants in scripts</label>
+          <div class="tags" id="ec-avoid"></div>
+          <div class="hint">e.g. a past client's name, pricing, a guarantee they dropped, competitor names, words they hate. Scripts are hard-blocked from using these.</div></div>
         <div class="form-group"><label class="form-label">Framework overrides — this client's own framework/notes per targeted niche</label>
           <div id="ec-overrides"></div></div>
         <div style="display:flex;gap:8px">
@@ -1407,7 +1630,8 @@ function saveClient(isNew) {
       desires: document.getElementById('ec-desires').__arr
     },
     frameworkOverrides: editClient.overrides,
-    competitorIntel: editClient.competitorIntel
+    competitorIntel: editClient.competitorIntel,
+    avoid: document.getElementById('ec-avoid').__arr
   };
   if (isNew) { config.clients.push(obj); state.clientId = obj.id; }
   else config.clients = config.clients.map(c => c.id === obj.id ? obj : c);

@@ -91,6 +91,17 @@ async function handle(req: Request): Promise<Response> {
         ],
       }, cors);
     }
+    if (body.action === "extract_framework") {
+      await new Promise((r) => setTimeout(r, 1200));
+      return json({
+        ok: true,
+        name: "Permission Opener",
+        category: "Curiosity-led",
+        template: "{{casual_permission_line}}\n\n{{one_line_what_we_do}} — {{specific_result_with_number}}.\n\n{{low_friction_cta}}",
+        rules: "Under 50 words. The permission line lowers defenses. Result must contain a real number. CTA asks for interest, never a meeting.",
+        analysis: "(mock) This wins because it asks permission before pitching, which flips the dynamic — the prospect opts in rather than being sold to.",
+      }, cors);
+    }
     if (body.action === "research") {
       await new Promise((r) => setTimeout(r, 1000));
       return json({
