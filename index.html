@@ -431,13 +431,27 @@ const OUTREACH_BOT_URL = 'https://pturxqgrhywyhylxovun.supabase.co/functions/v1/
 function safeStorageGet(key) { try { return localStorage.getItem(key) || ''; } catch { return ''; } }
 function safeStorageSet(key, value) { try { localStorage.setItem(key, value); } catch {} }
 
+// Strip everything that sneaks in via copy-paste: quotes, whitespace,
+// zero-width characters, an accidental "ADMIN_KEY=" prefix.
+const cleanKey = s => String(s || '')
+  .replace(/^ADMIN_KEY=/i, '')
+  .replace(/["'\u200B-\u200D\uFEFF\u00A0]/g, '')
+  .replace(/\s+/g, '');
+
 let adminKey = '';
+let keyFromLink = false;
 (function initAdminKey() {
   try {
-    const qk = new URL(location.href).searchParams.get('admin');
-    if (qk) { adminKey = qk; safeStorageSet('offer_admin_key', qk); }
+    const u = new URL(location.href);
+    const qk = cleanKey(u.searchParams.get('admin'));
+    if (qk) {
+      adminKey = qk; safeStorageSet('offer_admin_key', qk); keyFromLink = true;
+      // Drop the key from the address bar so it isn't bookmarked/shared by accident.
+      u.searchParams.delete('admin');
+      history.replaceState(null, '', u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : ''));
+    }
   } catch {}
-  if (!adminKey) adminKey = safeStorageGet('offer_admin_key');
+  if (!adminKey) adminKey = cleanKey(safeStorageGet('offer_admin_key'));
 })();
 
 async function api(body) {
@@ -957,7 +971,7 @@ function renderAdmin() {
 }
 
 function setAdminKey() {
-  const v = document.getElementById('adminKeyInput').value.trim();
+  const v = cleanKey(document.getElementById('adminKeyInput').value);
   if (!v) return;
   adminKey = v; safeStorageSet('offer_admin_key', v);
   showNotif('Admin key saved'); loadConfigAndRender();
@@ -1437,7 +1451,7 @@ function adminSettings() {
 }
 
 function replaceAdminKey() {
-  const v = document.getElementById('es-adminkey').value.trim();
+  const v = cleanKey(document.getElementById('es-adminkey').value);
   if (!v) return showNotif('Paste the key first', true);
   adminKey = v; safeStorageSet('offer_admin_key', v);
   showNotif('Admin key replaced'); loadConfigAndRender();
@@ -1529,6 +1543,15 @@ async function loadConfigAndRender() {
   setConfigPill(configSource === 'server' ? 'server' : 'local');
   initSelections();
   renderEverything();
+  if (keyFromLink) {
+    keyFromLink = false;
+    try {
+      await api({ action: 'get_config' });
+      showNotif('✅ Admin key loaded from link — server accepted it');
+    } catch (e) {
+      showNotif('❌ Key from link rejected: ' + e.message, true);
+    }
+  }
 }
 
 loadConfigAndRender();
