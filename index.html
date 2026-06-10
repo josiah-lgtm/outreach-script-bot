@@ -1409,6 +1409,17 @@ function saveClient(isNew) {
 function adminSettings() {
   return `
     <div class="info-block">
+      <div class="info-title">Admin key</div>
+      ${adminKey ? `Current key in this browser: <b>${esc(adminKey.slice(0, 4))}…${esc(adminKey.slice(-4))}</b> (${adminKey.length} chars)` : 'No key saved in this browser yet.'}
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <input class="form-input" id="es-adminkey" placeholder="paste your admin key" style="max-width:340px">
+        <button class="mini-btn" onclick="replaceAdminKey()">Replace key</button>
+        <button class="mini-btn" onclick="testAdminKey()">Test key</button>
+      </div>
+      <div class="hint">If actions fail with “unauthorized”, the key saved here doesn't match the server. Paste the correct key and hit Replace, or open the app once with ?admin=YOUR_KEY in the URL.</div>
+      <div class="hint" id="es-keystatus"></div>
+    </div>
+    <div class="info-block">
       <div class="info-title">Global style rules (the language every framework obeys)</div>
       <textarea class="form-textarea" id="es-rules" style="min-height:110px">${esc(config.settings?.globalRules || '')}</textarea>
       <div style="margin-top:8px"><button class="mini-btn" onclick="saveSettings()">💾 Save rules</button></div>
@@ -1423,6 +1434,27 @@ function adminSettings() {
         <input type="file" id="importFile" accept=".json" style="display:none" onchange="importConfig(this)">
       </div>
     </div>`;
+}
+
+function replaceAdminKey() {
+  const v = document.getElementById('es-adminkey').value.trim();
+  if (!v) return showNotif('Paste the key first', true);
+  adminKey = v; safeStorageSet('offer_admin_key', v);
+  showNotif('Admin key replaced'); loadConfigAndRender();
+  setTimeout(() => { state.adminTab = 'settings'; if (state.screen === 'admin') renderAdmin(); testAdminKey(); }, 100);
+}
+
+async function testAdminKey() {
+  const el = document.getElementById('es-keystatus');
+  if (el) el.textContent = 'Testing key against the server…';
+  try {
+    await api({ action: 'get_config' });
+    if (el) el.innerHTML = '✅ Key works — the server accepted it.';
+    showNotif('Admin key works');
+  } catch (e) {
+    if (el) el.innerHTML = '❌ Server rejected this key: ' + esc(e.message);
+    showNotif('Key rejected: ' + e.message, true);
+  }
 }
 
 function saveSettings() {
