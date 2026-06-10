@@ -1,8 +1,22 @@
 # Outreach Script Bot
 
-AI-powered cold outreach script generator. Pick a client case study, fill in the
-prospect details, and Claude writes 1–3 short outreach script variants following
-a strict hook → proof → benefit → CTA framework.
+AI-powered cold outreach script generator built for testing volume. Pick a
+client case study, choose N frameworks × M angles, and Claude writes the whole
+matrix in one go — every script labeled `framework × angle × variant` for A/B
+tracking, with CSV export for your sequencer.
+
+Features:
+- **Frameworks** are first-class and categorized (Proof-led, Pain-led,
+  Curiosity-led, Ultra-short) with visible `{{variables}}` — add or edit them in
+  the Admin portal.
+- **Niches** own the angles (the diagnostics) and key trigger words.
+- **Clients** each have their own view: case study, pains, objections, desires,
+  and per-niche pasted framework overrides.
+- **Real web research**: the server fetches the prospect's site and extracts
+  pains + personalization hooks before writing.
+- **Admin portal** (⚙ Admin): edit global style rules, frameworks, niches and
+  clients; config is stored server-side (Supabase Storage) and synced, with a
+  localStorage fallback.
 
 **Live site:** served by GitHub Pages from this repo (`index.html`).
 
@@ -43,6 +57,7 @@ site and the Supabase-hosted copy stay interchangeable.
 
 ## Local development
 
-From the `niche-bot-web` project this originated in, a mock dev server exists
-(`outreach-dev-server.ts`, port 8788). Or just open `index.html` — the UI loads,
-and generate calls hit the production Edge Function (admin key required).
+```bash
+deno run --allow-net --allow-read --allow-env dev-server.ts
+# open http://localhost:8788/ — all server actions are mocked
+```

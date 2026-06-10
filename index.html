@@ -37,1146 +37,1245 @@
   .header {
     background: var(--bg2);
     border-bottom: 1px solid var(--border);
-    padding: 0 24px;
-    height: 56px;
+    padding: 0 20px;
+    height: 54px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-shrink: 0;
   }
-  .header-left { display: flex; align-items: center; gap: 12px; }
-  .logo {
-    font-family: 'Courier Prime', monospace;
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--text);
-    letter-spacing: -0.5px;
-  }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .logo { font-family: 'Courier Prime', monospace; font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
   .logo span { color: var(--accent2); }
-  .badge {
-    background: var(--accent);
-    color: #fff;
-    font-size: 10px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 20px;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
+  .nav-btn {
+    padding: 6px 14px; border-radius: 6px; border: 1px solid transparent;
+    background: transparent; color: var(--muted);
+    font: 600 12px 'Inter', sans-serif; cursor: pointer; transition: .15s;
   }
+  .nav-btn.active { background: var(--accent); color: #fff; }
+  .nav-btn:hover:not(.active) { color: var(--text); background: var(--bg3); }
   .header-right { display: flex; align-items: center; gap: 8px; }
-  .research-indicator {
+  .pill {
     display: flex; align-items: center; gap: 6px;
-    background: var(--bg3);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 5px 10px;
-    font-size: 12px;
-    color: var(--muted);
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 10px; font-size: 11px; color: var(--muted);
   }
-  .research-dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: var(--green);
-  }
-  .research-dot.searching {
-    animation: pulse 1s infinite;
-    background: var(--amber);
-  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+  .dot.warn { background: var(--amber); }
+  .dot.searching { animation: pulse 1s infinite; background: var(--amber); }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
-  /* MAIN LAYOUT */
-  .main {
-    display: grid;
-    grid-template-columns: 280px 1fr 1fr;
-    flex: 1;
-    overflow: hidden;
-  }
-
-  /* PANEL BASE */
-  .panel {
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
+  /* LAYOUT */
+  .main { display: grid; grid-template-columns: 250px 1fr 1.1fr; flex: 1; overflow: hidden; }
+  .main.admin-mode { grid-template-columns: 1fr; }
+  .panel { border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
   .panel:last-child { border-right: none; }
   .panel-header {
-    padding: 14px 18px;
-    border-bottom: 1px solid var(--border);
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--muted);
-    letter-spacing: 0.8px;
-    text-transform: uppercase;
-    flex-shrink: 0;
-    background: var(--bg2);
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    font-size: 11px; font-weight: 600; color: var(--muted);
+    letter-spacing: 0.8px; text-transform: uppercase; flex-shrink: 0; background: var(--bg2);
+    display: flex; align-items: center; justify-content: space-between;
   }
-  .panel-body { flex: 1; overflow-y: auto; padding: 16px; }
+  .panel-body { flex: 1; overflow-y: auto; padding: 14px; }
   .panel-body::-webkit-scrollbar { width: 4px; }
-  .panel-body::-webkit-scrollbar-track { background: transparent; }
   .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-  /* LEFT — CLIENT SIDEBAR */
-  .client-card {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px;
-    margin-bottom: 8px;
-    cursor: pointer;
-    transition: border-color .15s, background .15s;
-    background: var(--bg2);
-  }
-  .client-card:hover { border-color: var(--accent); background: var(--bg3); }
-  .client-card.active { border-color: var(--accent); background: var(--bg3); }
-  .client-name {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text);
-    margin-bottom: 3px;
-  }
-  .client-meta {
-    font-size: 11px;
-    color: var(--muted);
-    margin-bottom: 6px;
-  }
-  .client-tags { display: flex; flex-wrap: wrap; gap: 4px; }
-  .tag {
-    font-size: 10px;
-    padding: 2px 7px;
-    border-radius: 4px;
-    font-weight: 500;
-  }
-  .tag-blue  { background: rgba(37,99,235,.15); color: var(--accent2); }
-  .tag-green { background: rgba(16,185,129,.15); color: var(--green); }
-  .tag-amber { background: rgba(245,158,11,.15); color: var(--amber); }
-  .tag-red   { background: rgba(239,68,68,.15);  color: var(--red); }
-
+  /* CLIENTS */
   .section-label {
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--muted);
-    letter-spacing: 0.7px;
-    text-transform: uppercase;
-    margin: 16px 0 8px;
+    font-size: 10px; font-weight: 600; color: var(--muted);
+    letter-spacing: 0.7px; text-transform: uppercase; margin: 14px 0 7px;
   }
   .section-label:first-child { margin-top: 0; }
+  .client-card {
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+    margin-bottom: 7px; cursor: pointer; transition: .15s; background: var(--bg2);
+  }
+  .client-card:hover, .client-card.active { border-color: var(--accent); background: var(--bg3); }
+  .client-name { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .client-meta { font-size: 11px; color: var(--muted); }
+  .mini-btn {
+    padding: 3px 9px; border-radius: 5px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); font: 500 11px 'Inter', sans-serif;
+    cursor: pointer; transition: .15s;
+  }
+  .mini-btn:hover { border-color: var(--accent); color: var(--text); }
+  .mini-btn.danger:hover { border-color: var(--red); color: var(--red); }
 
-  /* CENTRE — BUILDER */
-  .form-group { margin-bottom: 14px; }
+  /* FORMS */
+  .form-group { margin-bottom: 12px; }
   .form-label {
-    display: block;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--muted);
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    margin-bottom: 6px;
+    display: block; font-size: 10px; font-weight: 600; color: var(--muted);
+    letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 5px;
   }
   .form-input, .form-select, .form-textarea {
-    width: 100%;
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--text);
-    font-family: 'Inter', sans-serif;
-    font-size: 13px;
-    padding: 8px 11px;
-    outline: none;
-    transition: border-color .15s;
+    width: 100%; background: var(--bg2); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-family: 'Inter', sans-serif; font-size: 13px;
+    padding: 8px 11px; outline: none; transition: border-color .15s;
   }
-  .form-input:focus, .form-select:focus, .form-textarea:focus {
-    border-color: var(--accent);
-  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
   .form-select option { background: var(--bg3); }
-  .form-textarea { resize: vertical; min-height: 70px; }
+  .form-textarea { resize: vertical; min-height: 60px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
+  .context-box {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px 12px; margin-bottom: 12px; font-size: 12px; color: var(--subtle); line-height: 1.55;
+  }
+  .context-box strong { color: var(--text); }
+  .context-title {
+    font-size: 10px; font-weight: 600; color: var(--accent2);
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;
+  }
+
+  /* CHIPS */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    padding: 5px 11px; border-radius: 16px; border: 1px solid var(--border);
+    background: var(--bg2); color: var(--subtle); font-size: 12px; cursor: pointer; transition: .12s;
+    user-select: none;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip .cat { opacity: .65; font-size: 10px; margin-left: 5px; }
+
+  .matrix-line {
+    background: rgba(37,99,235,.08); border: 1px solid rgba(37,99,235,.25); border-radius: 6px;
+    padding: 8px 12px; margin: 12px 0; font-size: 12px; color: var(--accent2); font-weight: 600;
+    text-align: center;
+  }
+
+  .btn {
+    width: 100%; padding: 11px 16px; border-radius: 6px; border: none;
+    font: 600 13px 'Inter', sans-serif; cursor: pointer; transition: .15s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--subtle); margin-top: 8px; }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--text); }
+
+  /* TOGGLE */
   .toggle-row {
-    display: flex; align-items: center;
-    justify-content: space-between;
-    padding: 9px 11px;
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    margin-bottom: 8px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 11px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 6px; margin-bottom: 8px;
   }
   .toggle-label { font-size: 12px; color: var(--subtle); }
-  .toggle {
-    position: relative; width: 34px; height: 18px;
-    cursor: pointer;
-  }
+  .toggle { position: relative; width: 34px; height: 18px; cursor: pointer; }
   .toggle input { opacity: 0; width: 0; height: 0; }
-  .toggle-slider {
-    position: absolute; inset: 0;
-    background: var(--border);
-    border-radius: 18px;
-    transition: .2s;
-  }
+  .toggle-slider { position: absolute; inset: 0; background: var(--border); border-radius: 18px; transition: .2s; }
   .toggle-slider::before {
-    content: '';
-    position: absolute;
-    width: 12px; height: 12px;
-    left: 3px; bottom: 3px;
-    background: #fff;
-    border-radius: 50%;
-    transition: .2s;
+    content: ''; position: absolute; width: 12px; height: 12px; left: 3px; bottom: 3px;
+    background: #fff; border-radius: 50%; transition: .2s;
   }
   .toggle input:checked + .toggle-slider { background: var(--accent); }
   .toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
 
-  .context-box {
-    background: var(--bg3);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 10px 12px;
-    margin-bottom: 14px;
-  }
-  .context-title {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--accent2);
-    margin-bottom: 6px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .context-item {
-    font-size: 12px;
-    color: var(--subtle);
-    line-height: 1.6;
-    padding: 2px 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .context-item:last-child { border-bottom: none; }
-  .context-item strong { color: var(--text); }
-
-  .btn {
-    width: 100%;
-    padding: 11px 16px;
-    border-radius: 6px;
-    border: none;
-    font-family: 'Inter', sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: .15s;
-  }
-  .btn-primary {
-    background: var(--accent);
-    color: #fff;
-  }
-  .btn-primary:hover { background: var(--accent2); }
-  .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
-  .btn-secondary {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--subtle);
-    margin-top: 8px;
-  }
-  .btn-secondary:hover { border-color: var(--accent); color: var(--text); }
-
-  /* RIGHT — OUTPUT */
-  .output-panel { background: var(--bg); }
+  /* OUTPUT */
   .output-toolbar {
-    padding: 10px 18px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-shrink: 0;
-    background: var(--bg2);
+    padding: 9px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; background: var(--bg2);
   }
   .output-tabs { display: flex; gap: 4px; }
   .tab-btn {
-    padding: 5px 12px;
-    border-radius: 5px;
-    border: none;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    background: transparent;
-    color: var(--muted);
-    transition: .15s;
-    font-family: 'Inter', sans-serif;
+    padding: 5px 12px; border-radius: 5px; border: none; font: 500 12px 'Inter', sans-serif;
+    cursor: pointer; background: transparent; color: var(--muted); transition: .15s;
   }
   .tab-btn.active { background: var(--accent); color: #fff; }
   .tab-btn:hover:not(.active) { color: var(--text); background: var(--bg3); }
   .output-actions { display: flex; gap: 6px; }
-  .action-btn {
-    padding: 5px 10px;
-    border-radius: 5px;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--muted);
-    font-size: 11px;
-    font-weight: 500;
-    cursor: pointer;
-    font-family: 'Inter', sans-serif;
-    transition: .15s;
-  }
-  .action-btn:hover { border-color: var(--accent); color: var(--text); }
-
   .output-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-    font-family: 'Courier Prime', monospace;
-    font-size: 14px;
-    line-height: 1.8;
-    color: var(--text);
+    flex: 1; overflow-y: auto; padding: 16px;
+    font-family: 'Courier Prime', monospace; font-size: 13.5px; line-height: 1.75;
   }
   .output-body::-webkit-scrollbar { width: 4px; }
   .output-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
   .placeholder-state {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    color: var(--muted);
-    text-align: center;
+    height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; color: var(--muted); text-align: center;
   }
-  .placeholder-icon { font-size: 40px; opacity: .4; }
-  .placeholder-text { font-size: 13px; font-family: 'Inter', sans-serif; max-width: 220px; line-height: 1.6; }
+  .placeholder-icon { font-size: 38px; opacity: .4; }
+  .placeholder-text { font-size: 13px; font-family: 'Inter', sans-serif; max-width: 240px; line-height: 1.6; }
 
-  .script-output { white-space: pre-wrap; }
-  .cursor {
-    display: inline-block;
-    width: 2px; height: 16px;
-    background: var(--accent2);
-    vertical-align: middle;
-    animation: blink .8s infinite;
+  .fw-group { margin-bottom: 22px; }
+  .fw-group-header {
+    font: 700 12px 'Inter', sans-serif; color: var(--text);
+    padding: 7px 12px; background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center;
   }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-
-  .variant-block {
-    margin-bottom: 28px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-  }
+  .fw-group-header .cat { color: var(--muted); font-weight: 500; font-size: 11px; }
+  .variant-block { border: 1px solid var(--border); border-top: none; overflow: hidden; }
+  .variant-block:last-child { border-radius: 0 0 8px 8px; }
   .variant-header {
-    padding: 8px 14px;
-    background: var(--bg3);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    padding: 6px 12px; background: var(--bg2); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
   }
   .variant-label {
-    font-family: 'Inter', sans-serif;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--accent2);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font: 600 11px 'Inter', sans-serif; color: var(--accent2);
+    text-transform: uppercase; letter-spacing: 0.4px;
   }
   .copy-btn {
-    font-family: 'Inter', sans-serif;
-    font-size: 10px;
-    padding: 3px 8px;
-    border-radius: 4px;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-    transition: .15s;
+    font: 500 10px 'Inter', sans-serif; padding: 3px 8px; border-radius: 4px;
+    border: 1px solid var(--border); background: transparent; color: var(--muted);
+    cursor: pointer; transition: .15s;
   }
   .copy-btn:hover { border-color: var(--accent); color: var(--text); }
   .copy-btn.copied { border-color: var(--green); color: var(--green); }
-  .variant-body { padding: 16px; white-space: pre-wrap; }
+  .variant-body { padding: 13px 14px; white-space: pre-wrap; }
 
-  .framework-block {
-    background: var(--bg3);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px;
-    margin-bottom: 14px;
-    font-family: 'Inter', sans-serif;
-    font-size: 12px;
+  .info-block {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+    padding: 13px; margin-bottom: 13px; font-family: 'Inter', sans-serif; font-size: 12px;
+    color: var(--subtle); line-height: 1.6;
   }
-  .framework-title {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--accent2);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 8px;
+  .info-title {
+    font-size: 11px; font-weight: 700; color: var(--accent2);
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 7px;
   }
-  .framework-row {
-    display: grid;
-    grid-template-columns: 100px 1fr;
-    gap: 6px;
-    padding: 4px 0;
-    border-bottom: 1px solid var(--border);
-    align-items: start;
+  .kv-row {
+    display: grid; grid-template-columns: 130px 1fr; gap: 6px; padding: 4px 0;
+    border-bottom: 1px solid var(--border); align-items: start;
   }
-  .framework-row:last-child { border-bottom: none; }
-  .framework-key { color: var(--muted); font-weight: 500; }
-  .framework-val { color: var(--text); }
+  .kv-row:last-child { border-bottom: none; }
+  .kv-key { color: var(--muted); font-weight: 500; font-size: 11px; word-break: break-word; }
+  .kv-val { color: var(--text); }
 
   .loading-state {
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    gap: 14px; height: 100%;
-    font-family: 'Inter', sans-serif;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; height: 100%; font-family: 'Inter', sans-serif;
   }
   .loading-spinner {
-    width: 32px; height: 32px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin .8s linear infinite;
+    width: 32px; height: 32px; border: 2px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin .8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-step { font-size: 12px; color: var(--muted); }
   .loading-steps { display: flex; flex-direction: column; gap: 6px; text-align: center; }
-  .step-item {
-    font-size: 11px; color: var(--border);
-    transition: color .3s;
-  }
+  .step-item { font-size: 11px; color: var(--border); transition: color .3s; }
   .step-item.active { color: var(--accent2); }
   .step-item.done { color: var(--green); }
 
-  .research-result {
-    background: rgba(37,99,235,.06);
-    border: 1px solid rgba(37,99,235,.2);
-    border-radius: 6px;
-    padding: 10px 12px;
-    margin-bottom: 16px;
-    font-family: 'Inter', sans-serif;
-    font-size: 11px;
-    color: var(--subtle);
-    line-height: 1.6;
+  /* ADMIN */
+  .admin-wrap { max-width: 860px; margin: 0 auto; width: 100%; }
+  .admin-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .list-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--bg2);
+    padding: 10px 14px; margin-bottom: 7px; font-size: 13px;
   }
-  .research-result-title {
-    font-weight: 600;
-    color: var(--accent2);
-    margin-bottom: 4px;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+  .list-row .sub { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .editor {
+    border: 1px solid var(--accent); border-radius: 8px; background: var(--bg2);
+    padding: 16px; margin: 10px 0 18px;
   }
+  .editor h3 { font-size: 13px; margin-bottom: 12px; color: var(--accent2); }
+  .tags { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+  .tag-item {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(37,99,235,.14); color: var(--accent2);
+    font-size: 11px; padding: 3px 8px; border-radius: 4px;
+  }
+  .tag-item b { cursor: pointer; opacity: .7; font-weight: 700; }
+  .tag-item b:hover { opacity: 1; color: var(--red); }
+  .tag-input {
+    background: var(--bg3); border: 1px dashed var(--border); border-radius: 4px;
+    color: var(--text); font-size: 11px; padding: 3px 8px; outline: none; width: 150px;
+  }
+  .var-chip {
+    display: inline-block; background: rgba(245,158,11,.13); color: var(--amber);
+    font: 600 11px 'Courier Prime', monospace; padding: 2px 7px; border-radius: 4px; margin: 2px 3px 2px 0;
+  }
+  .hint { font-size: 11px; color: var(--muted); line-height: 1.5; margin-top: 4px; }
 
   .notif {
-    position: fixed;
-    bottom: 20px; right: 20px;
-    background: var(--bg3);
-    border: 1px solid var(--green);
-    color: var(--green);
-    padding: 10px 16px;
-    border-radius: 8px;
-    font-size: 12px;
-    font-weight: 500;
-    opacity: 0;
-    transform: translateY(8px);
-    transition: .25s;
-    pointer-events: none;
-    z-index: 999;
+    position: fixed; bottom: 20px; right: 20px; background: var(--bg3);
+    border: 1px solid var(--green); color: var(--green); padding: 10px 16px;
+    border-radius: 8px; font-size: 12px; font-weight: 500; opacity: 0;
+    transform: translateY(8px); transition: .25s; pointer-events: none; z-index: 999;
   }
   .notif.show { opacity: 1; transform: translateY(0); }
 </style>
 </head>
 <body>
 
-<!-- HEADER -->
 <header class="header">
   <div class="header-left">
     <div class="logo">script<span>.</span>bot</div>
-    <div class="badge">AI Powered</div>
+    <button class="nav-btn active" id="nav-builder" onclick="showScreen('builder')">Builder</button>
+    <button class="nav-btn" id="nav-admin" onclick="showScreen('admin')">⚙ Admin</button>
   </div>
   <div class="header-right">
-    <div class="research-indicator" id="researchIndicator">
-      <div class="research-dot" id="researchDot"></div>
-      <span id="researchLabel">Web Research Ready</span>
-    </div>
+    <div class="pill" id="configPill"><div class="dot warn" id="configDot"></div><span id="configLabel">Loading…</span></div>
+    <div class="pill"><div class="dot" id="researchDot"></div><span id="researchLabel">Research</span></div>
   </div>
 </header>
 
-<!-- MAIN -->
-<div class="main">
+<div class="main" id="main">
 
-  <!-- LEFT: CLIENT SELECTOR -->
-  <div class="panel">
-    <div class="panel-header">Clients & Case Studies</div>
-    <div class="panel-body">
-
-      <div class="section-label">Pricing Strategy</div>
-
-      <div class="client-card active" onclick="selectClient('ehealth')" id="card-ehealth">
-        <div class="client-name">VC-backed eHealth</div>
-        <div class="client-meta">US · ~$500M B2C Revenue</div>
-        <div class="client-tags">
-          <span class="tag tag-green">20% ARR Uplift</span>
-          <span class="tag tag-blue">SaaS</span>
-        </div>
-      </div>
-
-      <div class="client-card" onclick="selectClient('insurance')" id="card-insurance">
-        <div class="client-name">Insurance Pricing Platform</div>
-        <div class="client-meta">UK · ~$70M Series B</div>
-        <div class="client-tags">
-          <span class="tag tag-green">17% ARR Uplift</span>
-          <span class="tag tag-blue">SaaS</span>
-        </div>
-      </div>
-
-      <div class="client-card" onclick="selectClient('ux')" id="card-ux">
-        <div class="client-name">PE-backed UX Software</div>
-        <div class="client-meta">Nordics · $10–30M ARR</div>
-        <div class="client-tags">
-          <span class="tag tag-green">$8M ARR Uplift</span>
-          <span class="tag tag-amber">PE-owned</span>
-        </div>
-      </div>
-
-      <div class="client-card" onclick="selectClient('infra')" id="card-infra">
-        <div class="client-name">Infrastructure Streaming</div>
-        <div class="client-meta">US · $20M+ Revenue</div>
-        <div class="client-tags">
-          <span class="tag tag-red">Prevented Bad Rollout</span>
-          <span class="tag tag-amber">PE-owned</span>
-        </div>
-      </div>
-
-      <div class="client-card" onclick="selectClient('finserv')" id="card-finserv">
-        <div class="client-name">Financial Services Software</div>
-        <div class="client-meta">APAC · Multi-product</div>
-        <div class="client-tags">
-          <span class="tag tag-green">5% TCV Uplift</span>
-          <span class="tag tag-amber">PE-owned</span>
-        </div>
-      </div>
-
-      <div class="section-label">Amazon / eCommerce</div>
-
-      <div class="client-card" onclick="selectClient('flourish')" id="card-flourish">
-        <div class="client-name">Flourish Pancakes</div>
-        <div class="client-meta">DTC Food · Amazon + Shopify</div>
-        <div class="client-tags">
-          <span class="tag tag-green">$25K → $100K/mo</span>
-          <span class="tag tag-blue">Amazon</span>
-        </div>
-      </div>
-
-      <div class="client-card" onclick="selectClient('heladiv')" id="card-heladiv">
-        <div class="client-name">Heladiv</div>
-        <div class="client-meta">Restaurant + eCom</div>
-        <div class="client-tags">
-          <span class="tag tag-green">2x Sales in 90 Days</span>
-          <span class="tag tag-blue">Amazon</span>
-        </div>
-      </div>
-
-      <div class="section-label">Consulting / Strategy</div>
-
-      <div class="client-card" onclick="selectClient('erp')" id="card-erp">
-        <div class="client-name">Retail ERP Provider</div>
-        <div class="client-meta">Nordics & Baltics</div>
-        <div class="client-tags">
-          <span class="tag tag-blue">AI Pricing</span>
-          <span class="tag tag-amber">Strategy</span>
-        </div>
-      </div>
-
-      <div class="client-card" onclick="selectClient('retailtech')" id="card-retailtech">
-        <div class="client-name">Retail-Tech Platform</div>
-        <div class="client-meta">€130M+ Recurring Revenue</div>
-        <div class="client-tags">
-          <span class="tag tag-blue">AI Innovation</span>
-          <span class="tag tag-green">Pilot Shipped</span>
-        </div>
-      </div>
-
-    </div>
+  <!-- LEFT: CLIENTS -->
+  <div class="panel" id="panelClients">
+    <div class="panel-header">Clients <button class="mini-btn" onclick="adminEdit('clients','__new__')">+ Add</button></div>
+    <div class="panel-body" id="clientList"></div>
   </div>
 
   <!-- CENTRE: BUILDER -->
-  <div class="panel">
-    <div class="panel-header">Script Builder</div>
-    <div class="panel-body" id="builderPanel">
+  <div class="panel" id="panelBuild">
+    <div class="panel-header">Build</div>
+    <div class="panel-body">
+      <div id="contextBox"></div>
 
-      <!-- Client context box (populated on select) -->
-      <div class="context-box" id="clientContext">
-        <div class="context-title">Selected Client Context</div>
-        <div id="contextRows"></div>
+      <div class="grid2">
+        <div class="form-group">
+          <label class="form-label">First Name</label>
+          <input class="form-input" id="fname" placeholder="Sarah" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Company</label>
+          <input class="form-input" id="company" placeholder="Acme Corp" />
+        </div>
       </div>
-
-      <!-- Prospect details -->
-      <div class="form-group">
-        <label class="form-label">Prospect First Name</label>
-        <input class="form-input" id="fname" placeholder="e.g. Sarah" />
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Prospect Company</label>
-        <input class="form-input" id="company" placeholder="e.g. Acme Corp" />
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Prospect Company URL (for research)</label>
-        <input class="form-input" id="companyUrl" placeholder="e.g. acmecorp.com" />
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Industry / Classification</label>
-        <input class="form-input" id="classification" placeholder="e.g. DTC skincare brand" />
+      <div class="grid2">
+        <div class="form-group">
+          <label class="form-label">Website (for research)</label>
+          <input class="form-input" id="companyUrl" placeholder="acmecorp.com" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">What are they?</label>
+          <input class="form-input" id="classification" placeholder="DTC skincare brand" />
+        </div>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Script Category</label>
-        <select class="form-select" id="scriptCategory" onchange="updateAngleOptions()">
-          <option value="">Select category...</option>
-          <optgroup label="SaaS Pricing">
-            <option value="saas_pricing">Full Pricing Strategy</option>
-            <option value="saas_arr">ARR Growth Angle</option>
-            <option value="saas_cac">CAC Reduction Angle</option>
-          </optgroup>
-          <optgroup label="Amazon / eCommerce">
-            <option value="amazon_audit">Audit Offer</option>
-            <option value="amazon_ppc">PPC & Listing CRO</option>
-            <option value="amazon_generic">Generic Winning Script</option>
-            <option value="amazon_shopify">Shopify → Amazon Launch</option>
-          </optgroup>
-          <optgroup label="Strategy & Consulting">
-            <option value="strategy_ai">AI Pricing Strategy</option>
-            <option value="strategy_innovation">AI Innovation</option>
-            <option value="strategy_delivery">Delivery Scaling</option>
-            <option value="strategy_bets">Big Bets & Focus</option>
-          </optgroup>
-        </select>
+        <label class="form-label">Niche</label>
+        <select class="form-select" id="nicheSelect" onchange="onNicheChange()"></select>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Angle / Hook</label>
-        <select class="form-select" id="angle">
-          <option value="">Select category first...</option>
-        </select>
+        <label class="form-label">Angles <span style="color:var(--accent2)" id="angleCount"></span></label>
+        <div class="chips" id="angleChips"></div>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Number of Variants</label>
-        <select class="form-select" id="variants">
-          <option value="1">1 variant</option>
-          <option value="2">2 variants</option>
-          <option value="3" selected>3 variants</option>
-        </select>
+        <label class="form-label">Frameworks <span style="color:var(--accent2)" id="fwCount"></span></label>
+        <div class="chips" id="fwChips"></div>
       </div>
 
-      <div class="form-group">
-        <label class="form-label">Custom Pain Point (optional)</label>
-        <textarea class="form-textarea" id="customPain" placeholder="e.g. They recently raised a Series B and are under pressure to hit growth targets..."></textarea>
+      <div class="grid2">
+        <div class="form-group">
+          <label class="form-label">Variants per combo</label>
+          <select class="form-select" id="variantsPer" onchange="updateMatrix()">
+            <option value="1" selected>1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Custom pain (optional)</label>
+          <input class="form-input" id="customPain" placeholder="e.g. just raised Series B" />
+        </div>
       </div>
 
-      <!-- Toggles -->
       <div class="toggle-row">
-        <span class="toggle-label">🌐 Web research prospect</span>
+        <span class="toggle-label">🌐 Web research prospect (real fetch of their site)</span>
         <label class="toggle"><input type="checkbox" id="toggleResearch" checked><span class="toggle-slider"></span></label>
       </div>
-      <div class="toggle-row">
-        <span class="toggle-label">📋 Show framework fill</span>
-        <label class="toggle"><input type="checkbox" id="toggleFramework" checked><span class="toggle-slider"></span></label>
-      </div>
-      <div class="toggle-row">
-        <span class="toggle-label">⚡ Include objection handling</span>
-        <label class="toggle"><input type="checkbox" id="toggleObjections" checked><span class="toggle-slider"></span></label>
-      </div>
 
-      <button class="btn btn-primary" id="generateBtn" onclick="generateScript()">Generate Scripts →</button>
-      <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
+      <div class="matrix-line" id="matrixLine"></div>
+
+      <button class="btn btn-primary" id="generateBtn" onclick="generate()">Generate Matrix →</button>
+      <button class="btn btn-secondary" onclick="clearProspect()">Clear prospect</button>
     </div>
   </div>
 
   <!-- RIGHT: OUTPUT -->
-  <div class="panel output-panel">
+  <div class="panel" id="panelOutput">
     <div class="output-toolbar">
       <div class="output-tabs">
         <button class="tab-btn active" id="tab-scripts" onclick="switchTab('scripts')">Scripts</button>
-        <button class="tab-btn" id="tab-framework" onclick="switchTab('framework')">Framework Fill</button>
+        <button class="tab-btn" id="tab-frameworks" onclick="switchTab('frameworks')">Framework Fill</button>
         <button class="tab-btn" id="tab-research" onclick="switchTab('research')">Research</button>
       </div>
       <div class="output-actions">
-        <button class="action-btn" onclick="copyAll()">Copy All</button>
-        <button class="action-btn" onclick="regenerate()">Regenerate</button>
+        <button class="mini-btn" onclick="copyAll()">Copy All</button>
+        <button class="mini-btn" onclick="exportCsv()">Export CSV</button>
       </div>
     </div>
-    <div class="output-body" id="outputBody">
-      <div class="placeholder-state">
-        <div class="placeholder-icon">✍️</div>
-        <div class="placeholder-text">Select a client, fill the details and hit Generate to write your outreach scripts.</div>
+    <div class="output-body" id="outputBody"></div>
+  </div>
+
+  <!-- ADMIN (replaces all three panels) -->
+  <div class="panel" id="panelAdmin" style="display:none">
+    <div class="panel-body">
+      <div class="admin-wrap">
+        <div class="admin-tabs">
+          <button class="tab-btn active" id="atab-frameworks" onclick="switchAdminTab('frameworks')">Frameworks</button>
+          <button class="tab-btn" id="atab-niches" onclick="switchAdminTab('niches')">Niches & Angles</button>
+          <button class="tab-btn" id="atab-clients" onclick="switchAdminTab('clients')">Clients</button>
+          <button class="tab-btn" id="atab-settings" onclick="switchAdminTab('settings')">Settings</button>
+        </div>
+        <div id="adminBody"></div>
       </div>
     </div>
   </div>
 
 </div>
 
-<!-- NOTIFICATION -->
 <div class="notif" id="notif"></div>
 
 <script>
-// ─── SERVER CONFIG ───────────────────────────────────────────────────────────
-// Claude calls go through the outreach-bot Edge Function (same Supabase project
-// as niche-bot / offer-bot) so the API key stays server-side.
+// ─── SERVER CONFIG ─────────────────────────────────────────────────────────────
+// All Claude calls + config storage go through the Edge Function; the API key
+// never reaches the browser.
 const OUTREACH_BOT_URL = 'https://pturxqgrhywyhylxovun.supabase.co/functions/v1/outreach-bot';
 
-// Safe storage wrappers — localStorage throws inside data:/file: URLs.
-function safeStorageGet(key) {
-  try { return localStorage.getItem(key) || ''; } catch { return ''; }
-}
-function safeStorageSet(key, value) {
-  try { localStorage.setItem(key, value); } catch { /* storage disabled */ }
-}
+function safeStorageGet(key) { try { return localStorage.getItem(key) || ''; } catch { return ''; } }
+function safeStorageSet(key, value) { try { localStorage.setItem(key, value); } catch {} }
 
-// Admin key: picked up once from ?admin=... then persisted. Shares the same
-// localStorage slot as the offer bot so one key works across both apps.
 let adminKey = '';
 (function initAdminKey() {
   try {
     const qk = new URL(location.href).searchParams.get('admin');
     if (qk) { adminKey = qk; safeStorageSet('offer_admin_key', qk); }
-  } catch { /* ignore */ }
+  } catch {}
   if (!adminKey) adminKey = safeStorageGet('offer_admin_key');
 })();
 
-// ─── CLIENT DATA ────────────────────────────────────────────────────────────
-const CLIENTS = {
-  ehealth: {
-    name: "VC-backed eHealth (US)",
-    size: "~$500M B2C revenue",
-    result: "20% ARR uplift potential",
-    mechanism: "Historical deal data pricing model + migration of existing customers to updated price levels",
-    proofLine: "We just helped a $500M eHealth platform identify 20% ARR uplift by repricing their existing customer base. No new customers, no churn spike.",
-    pains: ["pricing not reflecting value", "B2B expansion without clear pricing strategy", "existing customers underpriced"],
-    objections: ["we don't want to lose customers", "our sales team can't handle a pricing change", "we just raised and don't want disruption"],
-    desireOne: "ARR growth", desireTwo: "better margins", desireThree: "stronger multiple at next raise"
-  },
-  insurance: {
-    name: "VC-backed Insurance Platform (UK)",
-    size: "~$70M Series B",
-    result: "17% ARR uplift potential",
-    mechanism: "Competitor interviews + packaging redesign + controlled customer migration",
-    proofLine: "We just helped a $70M Series B insurance platform unlock 17% ARR uplift through optimised packaging and controlled migration.",
-    pains: ["fragmented pricing structure", "packaging not aligned to value", "competitor pricing unknown"],
-    objections: ["we already have a pricing team", "our market is too regulated to change pricing", "migrations are too risky"],
-    desireOne: "ARR", desireTwo: "better margins", desireThree: "stronger multiple if you ever raise or sell"
-  },
-  ux: {
-    name: "PE-backed UX Software (Nordics)",
-    size: "$10–30M ARR",
-    result: "$8M ARR uplift potential",
-    mechanism: "Quantitative willingness-to-pay survey + price level rebuild + enterprise migration",
-    proofLine: "We just helped a $10–30M ARR UX software company find $8M in ARR by repricing their existing enterprise customers. Zero new logos needed.",
-    pains: ["pricing outdated vs product value", "enterprise customers underpriced", "no willingness-to-pay data"],
-    objections: ["our enterprise clients will push back", "we don't want to risk churn", "we've tried pricing changes before"],
-    desireOne: "ARR", desireTwo: "better margins", desireThree: "stronger exit multiple for PE"
-  },
-  infra: {
-    name: "PE-backed Infrastructure Streaming (US)",
-    size: "$20M+ revenue",
-    result: "Prevented flawed pricing rollout",
-    mechanism: "30 buyer interviews + structural weakness identification + full pricing model redesign",
-    proofLine: "We just helped a PE-backed infrastructure platform validate their pricing strategy through 30 buyer interviews — uncovering flaws before a costly rollout.",
-    pains: ["new pricing strategy unvalidated", "product complexity growing faster than monetisation", "risk of losing customers on migration"],
-    objections: ["we already built our new pricing", "we don't have time for research", "our buyers won't talk to you"],
-    desireOne: "protected revenue", desireTwo: "better margins", desireThree: "stronger multiple at PE exit"
-  },
-  finserv: {
-    name: "PE-backed Financial Services Software (APAC)",
-    size: "Multi-product, banking/insurance/lending",
-    result: "~5% TCV uplift identified",
-    mechanism: "40 market interviews + 4-pillar pricing redesign + Excel pricing tool for commercial execution",
-    proofLine: "We helped a PE-backed financial software company identify 5% TCV uplift across four product pillars, backed by 40 market interviews and a dedicated pricing tool.",
-    pains: ["multiple products with inconsistent pricing", "sales team quoting inconsistently", "no scalable pricing metrics"],
-    objections: ["our products are too complex to standardise", "sales won't adopt a new tool", "APAC markets are too different"],
-    desireOne: "TCV growth", desireTwo: "better margins", desireThree: "stronger multiple at PE exit"
-  },
-  flourish: {
-    name: "Flourish Pancakes",
-    size: "DTC food brand, Amazon + Shopify",
-    result: "$25K → $100K/month revenue",
-    mechanism: "Rebuilt Amazon listings + redesigned social content + optimised pricing and bundles + overhauled ad strategy",
-    proofLine: "We just helped Flourish Pancakes go from $25K to $100K a month on Amazon by rebuilding their listings, fixing their ads, and adding a two-pack bundle that significantly boosted profit.",
-    pains: ["Amazon revenue flatlined", "no bundling strategy", "ads running but not converting"],
-    objections: ["we've had bad experiences with agencies", "we don't have budget right now", "we manage Amazon in-house"],
-    desireOne: "monthly revenue", desireTwo: "better margins", desireThree: "stronger multiple if you ever raise or sell"
-  },
-  heladiv: {
-    name: "Heladiv",
-    size: "Restaurant + eCommerce",
-    result: "Doubled sales in 90 days, ACOS dropped",
-    mechanism: "Gradual spend increase as results arrived + PPC strategy + listings optimisation",
-    proofLine: "We helped Heladiv double their Amazon sales in 90 days while lowering ACOS — starting slow, increasing spend only as results came in. No horror stories.",
-    pains: ["eCom plateaued at $10K/month", "no confidence to scale ads", "fear of Amazon after horror stories"],
-    objections: ["we've tried ads before and it didn't work", "we don't understand Amazon", "we're scared of wasting money"],
-    desireOne: "monthly revenue", desireTwo: "better margins", desireThree: "a business worth more if you ever sell"
-  },
-  erp: {
-    name: "Retail ERP Provider (Nordics & Baltics)",
-    size: "Leading Nordic market position",
-    result: "Pricing model rebuilt for AI era",
-    mechanism: "Moved pricing from hours to sized consumption tiers + embedded AI costs + rebuilt client reporting from outputs to outcomes",
-    proofLine: "We helped a leading Nordic ERP provider stop billing by the hour, embed AI costs into fixed pricing tiers, and re-anchor client conversations on outcomes. Now faster delivery means higher margins, not lower ones.",
-    pains: ["AI making delivery faster but reducing revenue", "billing for effort not outcomes", "support sold as metered time"],
-    objections: ["our clients expect hourly billing", "we can't change mid-contract", "our delivery team won't accept this"],
-    desireOne: "profit per engagement", desireTwo: "better margins", desireThree: "stronger multiple if you ever raise or sell"
-  },
-  retailtech: {
-    name: "Retail-Tech Platform (€130M+)",
-    size: "€130M+ recurring revenue, multi-country",
-    result: "AI age-verification feature shipped live in stores",
-    mechanism: "Mapped which processes could absorb innovation + built feedback loops + set governance for iterative delivery",
-    proofLine: "We helped a €130M retail-tech platform ship an AI feature into live stores in a multi-country environment — without disrupting core operations or checkout systems.",
-    pains: ["AI pilots never making it to production", "fear of disrupting core systems", "no governance for innovation"],
-    objections: ["our tech is too complex to change", "we can't risk disrupting live stores", "we don't have the team bandwidth"],
-    desireOne: "ARR from AI features", desireTwo: "better margins", desireThree: "stronger multiple if you ever raise or sell"
-  }
-};
-
-// ─── ANGLE OPTIONS ────────────────────────────────────────────────────────────
-const ANGLES = {
-  saas_pricing: ["Existing customers underpriced", "Pricing hasn't kept up with product", "ARR gap vs willingness to pay", "Pre-raise pricing audit"],
-  saas_arr:     ["CAC rising while ARR plateaus", "Growth only from new logos", "NRR below benchmark", "Revenue from existing base"],
-  saas_cac:     ["CAC climbing every quarter", "Paid acquisition getting expensive", "Retention as growth lever"],
-  amazon_audit: ["Revenue leak audit", "Profit per product unknown", "PPC wasting budget", "Curiosity hook"],
-  amazon_ppc:   ["Flatlined sales with rising ad spend", "ACOS too high", "Listings converting below benchmark", "Wasted spend on non-converting keywords"],
-  amazon_generic: ["Stale listings hurting conversion", "Profit wall at $30K/month", "Ready to scale to $100K", "Stretched internal team"],
-  amazon_shopify: ["Untapped Amazon revenue", "Resellers undercutting brand", "Shopify plateaued, Amazon untouched"],
-  strategy_ai:  ["AI making delivery faster but cheaper", "Billing for effort not outcomes", "ARR capped by headcount"],
-  strategy_innovation: ["AI pilots stuck in lab", "AI spend not showing in profit", "Risk of disrupting core systems"],
-  strategy_delivery: ["Team tripling but shipping slowing", "Leadership firefighting not building", "25% of payroll as extra profit"],
-  strategy_bets: ["Too many priorities, no focus", "Big bets burning profit unvalidated", "Next revenue line stuck in queue"]
-};
-
-let selectedClient = 'ehealth';
-let currentTab = 'scripts';
-let lastGenerated = null;
-
-// ─── CLIENT SELECT ────────────────────────────────────────────────────────────
-function selectClient(id) {
-  document.querySelectorAll('.client-card').forEach(c => c.classList.remove('active'));
-  document.getElementById('card-' + id).classList.add('active');
-  selectedClient = id;
-
-  const c = CLIENTS[id];
-  const rows = document.getElementById('contextRows');
-  rows.innerHTML = `
-    <div class="context-item"><strong>Size:</strong> ${c.size}</div>
-    <div class="context-item"><strong>Result:</strong> ${c.result}</div>
-    <div class="context-item"><strong>Mechanism:</strong> ${c.mechanism}</div>
-    <div class="context-item"><strong>Key pains:</strong> ${c.pains.join(', ')}</div>
-  `;
+async function api(body) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (adminKey) headers['x-admin-key'] = adminKey;
+  const res = await fetch(OUTREACH_BOT_URL, { method: 'POST', headers, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({ ok: false, error: 'bad response' }));
+  if (!res.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + res.status));
+  return data;
 }
 
-function updateAngleOptions() {
-  const cat = document.getElementById('scriptCategory').value;
-  const sel = document.getElementById('angle');
-  sel.innerHTML = '';
-  if (!cat || !ANGLES[cat]) {
-    sel.innerHTML = '<option>Select category first...</option>';
-    return;
+// ─── DEFAULT CONFIG ────────────────────────────────────────────────────────────
+const DEFAULT_CONFIG = {
+  version: 2,
+  settings: {
+    globalRules: "No jargon, no dashes mid-sentence, no 'genuinely', no corporate speak. Plain language a 12-year-old gets. Sound like a real person texting, not a marketer writing copy. Every script must be sendable exactly as written. Hooks must be answerable in 2 seconds."
+  },
+  frameworks: [
+    {
+      id: 'proof-bridge', name: 'Proof Bridge', category: 'Proof-led',
+      template: "{{hook_question}}\n\nWe just helped {{proof_client}} ({{size}}) {{step_1}}, {{step_2}}, {{step_3}}. {{result}}. No {{objection_1}}, no {{objection_2}}.\n\nFor you that means more {{desire_1}}, better margins, and a stronger multiple if you ever raise or sell.\n\n{{cta}}",
+      rules: "Steps are 5-7 words each, plain language. 80-100 words total. desire_1 must be specific and loop back into the CTA. The 'stronger multiple' closer always follows 'better margins'."
+    },
+    {
+      id: 'pas', name: 'Pain-Agitate-Solve', category: 'Pain-led',
+      template: "{{pain_observation}}\n\n{{agitate_cost}}\n\nWe fixed exactly this for {{proof_client}} — {{result}}.\n\n{{cta}}",
+      rules: "Agitate with a number or a concrete consequence, never adjectives. 75 words max. CTA is one short question."
+    },
+    {
+      id: 'trigger-question', name: 'Trigger Question', category: 'Curiosity-led',
+      template: "{{personalized_trigger_line}}\n\n{{curiosity_question}}\n\n{{one_line_proof}}\n\n{{soft_cta}}",
+      rules: "Trigger line must reference something real about the prospect (use research if provided). 60 words max. CTA is interest-based ('worth a look?'), never a meeting ask."
+    },
+    {
+      id: 'three-liner', name: '3-Liner', category: 'Ultra-short',
+      template: "{{one_line_pain_question}}\n{{one_line_proof}}\n{{one_line_cta}}",
+      rules: "Exactly 3 lines. 35 words max total. No greeting, no sign-off. Reads like a text message."
+    }
+  ],
+  niches: [
+    {
+      id: 'saas', name: 'SaaS Pricing',
+      angles: ['Existing customers underpriced', "Pricing hasn't kept up with product", 'ARR gap vs willingness to pay', 'Pre-raise pricing audit', 'CAC rising while ARR plateaus', 'NRR below benchmark', 'Growth only from new logos'],
+      triggerWords: ['ARR', 'NRR', 'CAC', 'churn', 'willingness to pay', 'price migration', 'packaging', 'exit multiple']
+    },
+    {
+      id: 'amazon', name: 'Amazon / eCommerce',
+      angles: ['Revenue leak audit', 'Flatlined sales with rising ad spend', 'ACOS too high', 'Listings converting below benchmark', 'Wasted PPC spend', 'Profit wall at $30K/month', 'Shopify strong, Amazon untouched', 'Resellers undercutting brand'],
+      triggerWords: ['ACOS', 'TACoS', 'PPC', 'listing CRO', 'buy box', 'review velocity', 'bundles', 'Subscribe & Save']
+    },
+    {
+      id: 'strategy', name: 'Strategy & Consulting',
+      angles: ['AI making delivery faster but cheaper', 'Billing for effort not outcomes', 'AI pilots stuck in the lab', 'ARR capped by headcount', 'Too many priorities, no focus', 'Leadership firefighting not building'],
+      triggerWords: ['outcome-based pricing', 'consumption tiers', 'delivery margin', 'governance', 'pilot to production', 'utilization']
+    }
+  ],
+  clients: [
+    { id: 'ehealth', name: 'VC-backed eHealth', meta: 'US · ~$500M B2C Revenue', nicheId: 'saas',
+      caseStudy: { size: '~$500M B2C revenue', result: '20% ARR uplift potential', mechanism: 'Historical deal data pricing model + migration of existing customers to updated price levels', proofLine: 'We just helped a $500M eHealth platform identify 20% ARR uplift by repricing their existing customer base. No new customers, no churn spike.', pains: ['pricing not reflecting value', 'B2B expansion without clear pricing strategy', 'existing customers underpriced'], objections: ["we don't want to lose customers", "our sales team can't handle a pricing change", "we just raised and don't want disruption"], desires: ['ARR growth', 'better margins', 'stronger multiple at next raise'] },
+      frameworkOverrides: {} },
+    { id: 'insurance', name: 'Insurance Pricing Platform', meta: 'UK · ~$70M Series B', nicheId: 'saas',
+      caseStudy: { size: '~$70M Series B', result: '17% ARR uplift potential', mechanism: 'Competitor interviews + packaging redesign + controlled customer migration', proofLine: 'We just helped a $70M Series B insurance platform unlock 17% ARR uplift through optimised packaging and controlled migration.', pains: ['fragmented pricing structure', 'packaging not aligned to value', 'competitor pricing unknown'], objections: ['we already have a pricing team', 'our market is too regulated to change pricing', 'migrations are too risky'], desires: ['ARR', 'better margins', 'stronger multiple if you ever raise or sell'] },
+      frameworkOverrides: {} },
+    { id: 'ux', name: 'PE-backed UX Software', meta: 'Nordics · $10–30M ARR', nicheId: 'saas',
+      caseStudy: { size: '$10–30M ARR', result: '$8M ARR uplift potential', mechanism: 'Quantitative willingness-to-pay survey + price level rebuild + enterprise migration', proofLine: 'We just helped a $10–30M ARR UX software company find $8M in ARR by repricing their existing enterprise customers. Zero new logos needed.', pains: ['pricing outdated vs product value', 'enterprise customers underpriced', 'no willingness-to-pay data'], objections: ['our enterprise clients will push back', "we don't want to risk churn", "we've tried pricing changes before"], desires: ['ARR', 'better margins', 'stronger exit multiple for PE'] },
+      frameworkOverrides: {} },
+    { id: 'infra', name: 'Infrastructure Streaming', meta: 'US · $20M+ Revenue', nicheId: 'saas',
+      caseStudy: { size: '$20M+ revenue', result: 'Prevented flawed pricing rollout', mechanism: '30 buyer interviews + structural weakness identification + full pricing model redesign', proofLine: 'We just helped a PE-backed infrastructure platform validate their pricing strategy through 30 buyer interviews — uncovering flaws before a costly rollout.', pains: ['new pricing strategy unvalidated', 'product complexity growing faster than monetisation', 'risk of losing customers on migration'], objections: ['we already built our new pricing', "we don't have time for research", "our buyers won't talk to you"], desires: ['protected revenue', 'better margins', 'stronger multiple at PE exit'] },
+      frameworkOverrides: {} },
+    { id: 'finserv', name: 'Financial Services Software', meta: 'APAC · Multi-product', nicheId: 'saas',
+      caseStudy: { size: 'Multi-product, banking/insurance/lending', result: '~5% TCV uplift identified', mechanism: '40 market interviews + 4-pillar pricing redesign + Excel pricing tool for commercial execution', proofLine: 'We helped a PE-backed financial software company identify 5% TCV uplift across four product pillars, backed by 40 market interviews and a dedicated pricing tool.', pains: ['multiple products with inconsistent pricing', 'sales team quoting inconsistently', 'no scalable pricing metrics'], objections: ['our products are too complex to standardise', "sales won't adopt a new tool", 'APAC markets are too different'], desires: ['TCV growth', 'better margins', 'stronger multiple at PE exit'] },
+      frameworkOverrides: {} },
+    { id: 'flourish', name: 'Flourish Pancakes', meta: 'DTC Food · Amazon + Shopify', nicheId: 'amazon',
+      caseStudy: { size: 'DTC food brand, Amazon + Shopify', result: '$25K → $100K/month revenue', mechanism: 'Rebuilt Amazon listings + redesigned social content + optimised pricing and bundles + overhauled ad strategy', proofLine: 'We just helped Flourish Pancakes go from $25K to $100K a month on Amazon by rebuilding their listings, fixing their ads, and adding a two-pack bundle that significantly boosted profit.', pains: ['Amazon revenue flatlined', 'no bundling strategy', 'ads running but not converting'], objections: ["we've had bad experiences with agencies", "we don't have budget right now", 'we manage Amazon in-house'], desires: ['monthly revenue', 'better margins', 'stronger multiple if you ever raise or sell'] },
+      frameworkOverrides: {} },
+    { id: 'heladiv', name: 'Heladiv', meta: 'Restaurant + eCom', nicheId: 'amazon',
+      caseStudy: { size: 'Restaurant + eCommerce', result: 'Doubled sales in 90 days, ACOS dropped', mechanism: 'Gradual spend increase as results arrived + PPC strategy + listings optimisation', proofLine: 'We helped Heladiv double their Amazon sales in 90 days while lowering ACOS — starting slow, increasing spend only as results came in. No horror stories.', pains: ['eCom plateaued at $10K/month', 'no confidence to scale ads', 'fear of Amazon after horror stories'], objections: ["we've tried ads before and it didn't work", "we don't understand Amazon", "we're scared of wasting money"], desires: ['monthly revenue', 'better margins', 'a business worth more if you ever sell'] },
+      frameworkOverrides: {} },
+    { id: 'erp', name: 'Retail ERP Provider', meta: 'Nordics & Baltics', nicheId: 'strategy',
+      caseStudy: { size: 'Leading Nordic market position', result: 'Pricing model rebuilt for AI era', mechanism: 'Moved pricing from hours to sized consumption tiers + embedded AI costs + rebuilt client reporting from outputs to outcomes', proofLine: 'We helped a leading Nordic ERP provider stop billing by the hour, embed AI costs into fixed pricing tiers, and re-anchor client conversations on outcomes. Now faster delivery means higher margins, not lower ones.', pains: ['AI making delivery faster but reducing revenue', 'billing for effort not outcomes', 'support sold as metered time'], objections: ['our clients expect hourly billing', "we can't change mid-contract", "our delivery team won't accept this"], desires: ['profit per engagement', 'better margins', 'stronger multiple if you ever raise or sell'] },
+      frameworkOverrides: {} },
+    { id: 'retailtech', name: 'Retail-Tech Platform', meta: '€130M+ Recurring Revenue', nicheId: 'strategy',
+      caseStudy: { size: '€130M+ recurring revenue, multi-country', result: 'AI age-verification feature shipped live in stores', mechanism: 'Mapped which processes could absorb innovation + built feedback loops + set governance for iterative delivery', proofLine: 'We helped a €130M retail-tech platform ship an AI feature into live stores in a multi-country environment — without disrupting core operations or checkout systems.', pains: ['AI pilots never making it to production', 'fear of disrupting core systems', 'no governance for innovation'], objections: ['our tech is too complex to change', "we can't risk disrupting live stores", "we don't have the team bandwidth"], desires: ['ARR from AI features', 'better margins', 'stronger multiple if you ever raise or sell'] },
+      frameworkOverrides: {} }
+  ]
+};
+
+// ─── STATE ─────────────────────────────────────────────────────────────────────
+let config = null;
+let configSource = 'defaults'; // 'server' | 'local' | 'defaults'
+let state = {
+  screen: 'builder',
+  clientId: null,
+  nicheId: null,
+  angles: new Set(),
+  frameworks: new Set(),
+  tab: 'scripts',
+  adminTab: 'frameworks',
+  editing: null,        // {type, id} | {type, id:'__new__'}
+  research: null,
+  results: null,
+};
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = p => p + '-' + Math.random().toString(36).slice(2, 8);
+const niche = id => config.niches.find(n => n.id === id);
+const client = id => config.clients.find(c => c.id === id);
+const framework = id => config.frameworks.find(f => f.id === id);
+const fwVars = t => Array.from(new Set(Array.from(String(t).matchAll(/\{\{(\w+)\}\}/g), m => m[1])));
+
+// ─── CONFIG LOAD / SAVE ────────────────────────────────────────────────────────
+async function loadConfig() {
+  const local = safeStorageGet('outreach_config_v2');
+  if (adminKey) {
+    try {
+      const data = await api({ action: 'get_config' });
+      if (data.config && data.config.frameworks) {
+        config = data.config; configSource = 'server';
+        safeStorageSet('outreach_config_v2', JSON.stringify(config));
+        return;
+      }
+    } catch (e) { console.warn('server config load failed:', e.message); }
   }
-  ANGLES[cat].forEach(a => {
-    const opt = document.createElement('option');
-    opt.value = a; opt.textContent = a;
-    sel.appendChild(opt);
-  });
+  if (local) {
+    try { config = JSON.parse(local); configSource = 'local'; return; } catch {}
+  }
+  config = structuredClone(DEFAULT_CONFIG); configSource = 'defaults';
+}
+
+let saveTimer = null;
+function persistConfig() {
+  safeStorageSet('outreach_config_v2', JSON.stringify(config));
+  setConfigPill('saving');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    if (!adminKey) { setConfigPill('local'); return; }
+    try { await api({ action: 'save_config', config }); configSource = 'server'; setConfigPill('server'); }
+    catch (e) { console.warn('server save failed:', e.message); setConfigPill('local'); }
+  }, 600);
+}
+
+function setConfigPill(mode) {
+  const dot = document.getElementById('configDot');
+  const label = document.getElementById('configLabel');
+  if (mode === 'server')      { dot.className = 'dot';      label.textContent = 'Saved to server'; }
+  else if (mode === 'saving') { dot.className = 'dot warn'; label.textContent = 'Saving…'; }
+  else                        { dot.className = 'dot warn'; label.textContent = 'Saved locally only'; }
+}
+
+// ─── SCREENS / TABS ────────────────────────────────────────────────────────────
+function showScreen(s) {
+  state.screen = s;
+  document.getElementById('nav-builder').classList.toggle('active', s === 'builder');
+  document.getElementById('nav-admin').classList.toggle('active', s === 'admin');
+  const adminMode = s === 'admin';
+  document.getElementById('panelClients').style.display = adminMode ? 'none' : 'flex';
+  document.getElementById('panelBuild').style.display   = adminMode ? 'none' : 'flex';
+  document.getElementById('panelOutput').style.display  = adminMode ? 'none' : 'flex';
+  document.getElementById('panelAdmin').style.display   = adminMode ? 'flex' : 'none';
+  document.getElementById('main').classList.toggle('admin-mode', adminMode);
+  if (adminMode) renderAdmin();
 }
 
 function switchTab(tab) {
-  currentTab = tab;
-  ['scripts','framework','research'].forEach(t => {
-    document.getElementById('tab-' + t).classList.toggle('active', t === tab);
-  });
-  if (lastGenerated) renderOutput(lastGenerated);
+  state.tab = tab;
+  ['scripts', 'frameworks', 'research'].forEach(t =>
+    document.getElementById('tab-' + t).classList.toggle('active', t === tab));
+  renderOutput();
 }
 
-// ─── GENERATE ────────────────────────────────────────────────────────────────
-async function generateScript() {
-  const fname        = document.getElementById('fname').value.trim();
-  const company      = document.getElementById('company').value.trim();
-  const companyUrl   = document.getElementById('companyUrl').value.trim();
+function switchAdminTab(tab) {
+  state.adminTab = tab; state.editing = null;
+  renderAdmin();
+}
+
+// ─── BUILDER RENDER ────────────────────────────────────────────────────────────
+function renderClientList() {
+  const el = document.getElementById('clientList');
+  let html = '';
+  config.niches.forEach(n => {
+    const cs = config.clients.filter(c => c.nicheId === n.id);
+    if (!cs.length) return;
+    html += `<div class="section-label">${esc(n.name)}</div>`;
+    cs.forEach(c => {
+      html += `<div class="client-card ${c.id === state.clientId ? 'active' : ''}" onclick="selectClient('${c.id}')">
+        <div class="client-name">${esc(c.name)}</div>
+        <div class="client-meta">${esc(c.meta || '')}</div>
+      </div>`;
+    });
+  });
+  const orphans = config.clients.filter(c => !niche(c.nicheId));
+  if (orphans.length) {
+    html += `<div class="section-label">Other</div>`;
+    orphans.forEach(c => {
+      html += `<div class="client-card ${c.id === state.clientId ? 'active' : ''}" onclick="selectClient('${c.id}')">
+        <div class="client-name">${esc(c.name)}</div><div class="client-meta">${esc(c.meta || '')}</div></div>`;
+    });
+  }
+  el.innerHTML = html || '<div class="hint">No clients yet — add one.</div>';
+}
+
+function selectClient(id) {
+  const c = client(id); if (!c) return;
+  state.clientId = id;
+  if (c.nicheId !== state.nicheId) {
+    state.nicheId = c.nicheId;
+    const n = niche(state.nicheId);
+    state.angles = new Set((n?.angles || []).slice(0, 3));
+  }
+  if (!state.frameworks.size) state.frameworks = new Set(config.frameworks.slice(0, 2).map(f => f.id));
+  renderClientList(); renderBuilder();
+}
+
+function onNicheChange() {
+  state.nicheId = document.getElementById('nicheSelect').value;
+  const n = niche(state.nicheId);
+  state.angles = new Set((n?.angles || []).slice(0, 3));
+  renderBuilder();
+}
+
+function renderBuilder() {
+  const c = client(state.clientId);
+  const n = niche(state.nicheId);
+
+  // Context box — the selected client's view
+  const box = document.getElementById('contextBox');
+  if (c) {
+    const cs = c.caseStudy || {};
+    const override = (c.frameworkOverrides || {})[state.nicheId];
+    box.innerHTML = `<div class="context-box">
+      <div class="context-title">${esc(c.name)} — client view</div>
+      <strong>Result:</strong> ${esc(cs.result || '—')}<br>
+      <strong>Mechanism:</strong> ${esc(cs.mechanism || '—')}<br>
+      <strong>Pains:</strong> ${esc((cs.pains || []).join(', ') || '—')}
+      ${override ? '<br><strong style="color:var(--amber)">⚡ Client framework override active for this niche</strong>' : ''}
+      <div style="margin-top:6px"><button class="mini-btn" onclick="adminEdit('clients','${c.id}')">Edit client</button></div>
+    </div>`;
+  } else {
+    box.innerHTML = `<div class="context-box">Select a client on the left.</div>`;
+  }
+
+  // Niche select
+  const sel = document.getElementById('nicheSelect');
+  sel.innerHTML = config.niches.map(x =>
+    `<option value="${x.id}" ${x.id === state.nicheId ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
+
+  // Angle chips
+  const ac = document.getElementById('angleChips');
+  ac.innerHTML = (n?.angles || []).map(a =>
+    `<div class="chip ${state.angles.has(a) ? 'on' : ''}" onclick="toggleAngle(this)" data-a="${esc(a)}">${esc(a)}</div>`).join('')
+    || '<div class="hint">This niche has no angles yet — add them in Admin → Niches.</div>';
+
+  // Framework chips
+  const fc = document.getElementById('fwChips');
+  fc.innerHTML = config.frameworks.map(f =>
+    `<div class="chip ${state.frameworks.has(f.id) ? 'on' : ''}" onclick="toggleFw(this)" data-f="${f.id}">${esc(f.name)}<span class="cat">${esc(f.category)}</span></div>`).join('')
+    || '<div class="hint">No frameworks — add them in Admin → Frameworks.</div>';
+
+  updateMatrix();
+}
+
+function toggleAngle(el) {
+  const a = el.dataset.a;
+  state.angles.has(a) ? state.angles.delete(a) : state.angles.add(a);
+  el.classList.toggle('on'); updateMatrix();
+}
+function toggleFw(el) {
+  const f = el.dataset.f;
+  state.frameworks.has(f) ? state.frameworks.delete(f) : state.frameworks.add(f);
+  el.classList.toggle('on'); updateMatrix();
+}
+
+function updateMatrix() {
+  const v = Number(document.getElementById('variantsPer').value);
+  const total = state.frameworks.size * state.angles.size * v;
+  document.getElementById('angleCount').textContent = state.angles.size ? `(${state.angles.size} selected)` : '';
+  document.getElementById('fwCount').textContent = state.frameworks.size ? `(${state.frameworks.size} selected)` : '';
+  document.getElementById('matrixLine').textContent =
+    `${state.frameworks.size} frameworks × ${state.angles.size} angles × ${v} = ${total} scripts per generate`;
+}
+
+function clearProspect() {
+  ['fname', 'company', 'companyUrl', 'classification', 'customPain'].forEach(id => document.getElementById(id).value = '');
+  state.research = null; state.results = null;
+  renderOutput();
+}
+
+// ─── GENERATE ──────────────────────────────────────────────────────────────────
+function setStep(n) {
+  for (let i = 1; i <= 3; i++) {
+    const el = document.getElementById('gstep' + i); if (!el) continue;
+    el.classList.toggle('done', i < n);
+    el.classList.toggle('active', i === n);
+  }
+}
+
+async function generate() {
+  const c = client(state.clientId);
+  const n = niche(state.nicheId);
+  if (!c) return showNotif('Select a client first', true);
+  if (!n) return showNotif('Select a niche first', true);
+  if (!state.angles.size) return showNotif('Pick at least one angle', true);
+  if (!state.frameworks.size) return showNotif('Pick at least one framework', true);
+  if (!adminKey) return showNotif('No admin key — open the app once with ?admin=YOUR_KEY', true);
+
+  const fname = document.getElementById('fname').value.trim();
+  const company = document.getElementById('company').value.trim();
+  const url = document.getElementById('companyUrl').value.trim();
   const classification = document.getElementById('classification').value.trim();
-  const category     = document.getElementById('scriptCategory').value;
-  const angle        = document.getElementById('angle').value;
-  const numVariants  = document.getElementById('variants').value;
-  const customPain   = document.getElementById('customPain').value.trim();
-  const doResearch   = document.getElementById('toggleResearch').checked;
-  const doFramework  = document.getElementById('toggleFramework').checked;
-  const doObjections = document.getElementById('toggleObjections').checked;
+  const customPain = document.getElementById('customPain').value.trim();
+  const doResearch = document.getElementById('toggleResearch').checked && !!url;
+  const variantsPer = Number(document.getElementById('variantsPer').value);
+  const fws = config.frameworks.filter(f => state.frameworks.has(f.id));
+  const angles = Array.from(state.angles);
+  const total = fws.length * angles.length * variantsPer;
 
-  if (!category || !angle) { showNotif('Please select a category and angle', true); return; }
-  if (!company)             { showNotif('Please enter a company name', true); return; }
-
-  const client = CLIENTS[selectedClient];
-
-  // Show loading
   document.getElementById('generateBtn').disabled = true;
   document.getElementById('outputBody').innerHTML = `
     <div class="loading-state">
       <div class="loading-spinner"></div>
       <div class="loading-steps">
-        <div class="step-item active" id="step1">${doResearch ? '🌐 Researching prospect...' : '📋 Loading context...'}</div>
-        <div class="step-item" id="step2">✍️ Writing scripts...</div>
-        <div class="step-item" id="step3">⚡ Adding objection handling...</div>
-        <div class="step-item" id="step4">📦 Packaging output...</div>
+        <div class="step-item ${doResearch ? 'active' : 'done'}" id="gstep1">🌐 ${doResearch ? 'Researching ' + esc(url) + '…' : 'Research skipped'}</div>
+        <div class="step-item" id="gstep2">✍️ Writing ${total} scripts across ${fws.length} framework${fws.length > 1 ? 's' : ''}…</div>
+        <div class="step-item" id="gstep3">📦 Packaging matrix…</div>
       </div>
     </div>`;
 
-  if (doResearch) {
-    setResearching(true);
-    await delay(800);
-    setStep(2);
-    await delay(600);
-  } else {
-    await delay(400);
-    setStep(2);
-  }
-
-  setStep(3); await delay(500);
-  setStep(4); await delay(300);
-
-  // Build system prompt
-  const systemPrompt = `You are an expert cold outreach copywriter specialising in B2B SaaS, eCommerce, and consulting services.
-
-You write short, punchy, conversational outreach scripts following a strict framework:
-
-FRAMEWORK:
-HOOK QUESTION → opens with a pain the prospect is feeling right now (answerable in 2 seconds)
-PROOF: We just helped [PROOF CLIENT] ([SIZE]) [STEP 1 - 5 words], [STEP 2 - 5 words], [STEP 3 - 5 words]. [RESULT]. No [OBJECTION 1], no [OBJECTION 2].
-BENEFIT: For you that means more [DESIRE 1], better margins, and a stronger multiple if you ever raise or sell.
-CTA: Would you be open to a short chat about [DESIRE 1]?
-
-RULES:
-- Steps must be plain language a 12-year-old gets (5-7 words max each)
-- No jargon, no dashes mid-sentence, no "genuinely", no corporate speak
-- Total length: 80-100 words
-- Sound like a real person texting, not a marketer writing copy
-- Each variant must have a different hook/angle
-- The "stronger multiple" closer always follows "better margins" — never listed as a third parallel item
-- DESIRE 1 must be specific and loop back in the CTA
-
-CLIENT CASE STUDY TO USE:
-Name: ${client.name}
-Size: ${client.size}
-Result: ${client.result}
-Mechanism: ${client.mechanism}
-Proof line: ${client.proofLine}
-Key pains in this niche: ${client.pains.join(', ')}
-Common objections: ${client.objections.join(', ')}
-
-OUTPUT FORMAT — return valid JSON only, no markdown, no preamble:
-{
-  "research_insights": "2-3 sentences about what you'd look for when researching this prospect type if web research were live",
-  "framework_fill": {
-    "hook_question": "...",
-    "proof_client": "...",
-    "step_1": "...",
-    "step_2": "...",
-    "step_3": "...",
-    "result": "...",
-    "objection_1": "...",
-    "objection_2": "...",
-    "desire_1": "...",
-    "desire_2": "better margins",
-    "multiple_closer": "a stronger multiple if you ever raise or sell",
-    "cta": "..."
-  },
-  "variants": [
-    { "label": "...", "script": "..." }
-  ]
-}`;
-
-  const userPrompt = `Write ${numVariants} outreach script variant(s) for:
-- Prospect: ${fname || '{{first_name}}'} at ${company || '{{company}}'}
-- Classification: ${classification || 'software company'}
-- Category: ${category}
-- Angle/Hook: ${angle}
-- Company URL for context: ${companyUrl || 'not provided'}
-${customPain ? `- Custom pain point: ${customPain}` : ''}
-- Include objection handling: ${doObjections}
-- Web research active: ${doResearch}
-
-Use the client case study provided. Make each variant use a different hook. Return JSON only.`;
-
   try {
-    const headers = { 'Content-Type': 'application/json' };
-    if (adminKey) headers['x-admin-key'] = adminKey;
-    const res = await fetch(OUTREACH_BOT_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        action: 'generate',
-        system: systemPrompt,
-        user: userPrompt,
-        max_tokens: 1600
-      })
+    if (doResearch) {
+      document.getElementById('researchDot').classList.add('searching');
+      try {
+        state.research = await api({ action: 'research', url, classification });
+      } catch (e) {
+        state.research = { ok: false, error: e.message };
+        showNotif('Research failed: ' + e.message + ' — generating without it', true);
+      }
+      document.getElementById('researchDot').classList.remove('searching');
+    }
+    setStep(2);
+
+    const data = await api({
+      action: 'generate',
+      prospect: { fname, company, url, classification, customPain },
+      client: {
+        name: c.name,
+        caseStudy: c.caseStudy || {},
+        frameworkOverride: (c.frameworkOverrides || {})[state.nicheId] || ''
+      },
+      niche: { name: n.name, triggerWords: n.triggerWords || [] },
+      frameworks: fws.map(f => ({ id: f.id, name: f.name, category: f.category, template: f.template, rules: f.rules })),
+      angles,
+      variantsPerAngle: variantsPer,
+      globalRules: config.settings?.globalRules || '',
+      research: state.research?.ok ? state.research : undefined
     });
 
-    const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || ('HTTP ' + res.status));
-    const raw = data.text || '';
-
-    let parsed;
-    try {
-      const clean = raw.replace(/```json|```/g, '').trim();
-      parsed = JSON.parse(clean);
-    } catch {
-      parsed = { variants: [{ label: 'Generated Script', script: raw }], framework_fill: {}, research_insights: '' };
-    }
-
-    lastGenerated = { parsed, doResearch, doFramework, companyUrl, fname, company };
-    renderOutput(lastGenerated);
-    setResearching(false);
-
+    setStep(3);
+    state.results = data.results;
+    switchTab('scripts');
+    const scriptCount = data.results.reduce((s, r) => s + (r.variants?.length || 0), 0);
+    showNotif(`${scriptCount} scripts generated`);
   } catch (err) {
-    const hint = /401|unauthorized|admin/i.test(err.message || '')
-      ? 'Unauthorized — open the app with ?admin=YOUR_KEY once to save your admin key.'
-      : (err.message || 'Please try again.');
-    document.getElementById('outputBody').innerHTML = `<div class="placeholder-state"><div class="placeholder-icon">⚠️</div><div class="placeholder-text">Error generating scripts. ${hint}</div></div>`;
-    setResearching(false);
+    const hint = /401|unauthorized|admin/i.test(err.message)
+      ? 'Unauthorized — open the app with ?admin=YOUR_KEY once.' : esc(err.message);
+    document.getElementById('outputBody').innerHTML =
+      `<div class="placeholder-state"><div class="placeholder-icon">⚠️</div><div class="placeholder-text">Error: ${hint}</div></div>`;
   }
-
   document.getElementById('generateBtn').disabled = false;
 }
 
-// ─── RENDER ───────────────────────────────────────────────────────────────────
-function renderOutput({ parsed, doResearch, doFramework, companyUrl, fname, company }) {
-  const body = document.getElementById('outputBody');
-
-  if (currentTab === 'scripts') {
-    let html = '';
-
-    if (doResearch && parsed.research_insights) {
-      html += `<div class="research-result">
-        <div class="research-result-title">🌐 Web Research Insights</div>
-        ${parsed.research_insights}${companyUrl ? ` <br><br><strong>URL scanned:</strong> ${companyUrl}` : ''}
-      </div>`;
-    }
-
-    (parsed.variants || []).forEach((v, i) => {
-      const script = v.script
-        .replace(/\{\{first_name\}\}/g, fname || '{{first_name}}')
-        .replace(/\{\{company\}\}/g, company || '{{company}}')
-        .replace(/\{\{company_name\}\}/g, company || '{{company_name}}');
-      html += `
-        <div class="variant-block">
-          <div class="variant-header">
-            <span class="variant-label">${v.label || 'Variant ' + (i+1)}</span>
-            <button class="copy-btn" onclick="copyVariant(this, ${i})">Copy</button>
-          </div>
-          <div class="variant-body" id="variant-${i}">${script}</div>
-        </div>`;
-    });
-
-    body.innerHTML = html || '<div class="placeholder-state"><div class="placeholder-text">No scripts generated.</div></div>';
-
-  } else if (currentTab === 'framework') {
-    const f = parsed.framework_fill || {};
-    if (!Object.keys(f).length) {
-      body.innerHTML = '<div class="placeholder-state"><div class="placeholder-text">Generate scripts first to see the framework breakdown.</div></div>';
-      return;
-    }
-    const rows = [
-      ['HOOK', f.hook_question],
-      ['PROOF CLIENT', f.proof_client],
-      ['STEP 1', f.step_1],
-      ['STEP 2', f.step_2],
-      ['STEP 3', f.step_3],
-      ['RESULT', f.result],
-      ['OBJECTION 1', f.objection_1],
-      ['OBJECTION 2', f.objection_2],
-      ['DESIRE 1', f.desire_1],
-      ['DESIRE 2', f.desire_2],
-      ['MULTIPLE', f.multiple_closer],
-      ['CTA', f.cta],
-    ].filter(r => r[1]);
-
-    body.innerHTML = `
-      <div class="framework-block">
-        <div class="framework-title">📋 Framework Fill — ${CLIENTS[selectedClient]?.name}</div>
-        ${rows.map(([k,v]) => `<div class="framework-row"><span class="framework-key">${k}</span><span class="framework-val">${v}</span></div>`).join('')}
-      </div>`;
-
-  } else if (currentTab === 'research') {
-    body.innerHTML = `
-      <div class="research-result">
-        <div class="research-result-title">🌐 Research Context</div>
-        ${parsed.research_insights || 'No research data available.'}
-      </div>
-      <div class="framework-block">
-        <div class="framework-title">Niche Pain Points — ${CLIENTS[selectedClient]?.name}</div>
-        ${(CLIENTS[selectedClient]?.pains || []).map(p => `<div class="context-item">${p}</div>`).join('')}
-      </div>
-      <div class="framework-block">
-        <div class="framework-title">Common Objections</div>
-        ${(CLIENTS[selectedClient]?.objections || []).map(o => `<div class="context-item">${o}</div>`).join('')}
-      </div>`;
-  }
+// ─── OUTPUT RENDER ─────────────────────────────────────────────────────────────
+function substitute(script) {
+  const fname = document.getElementById('fname').value.trim();
+  const company = document.getElementById('company').value.trim();
+  return String(script)
+    .replace(/\{\{first_name\}\}/g, fname || '{{first_name}}')
+    .replace(/\{\{company(_name)?\}\}/g, company || '{{company}}');
 }
 
-// ─── UTILS ────────────────────────────────────────────────────────────────────
-function copyVariant(btn, i) {
-  const text = document.getElementById('variant-' + i)?.innerText;
-  if (text) {
-    navigator.clipboard.writeText(text);
-    btn.textContent = 'Copied!';
-    btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+function flatScripts() {
+  const out = [];
+  (state.results || []).forEach(r => (r.variants || []).forEach((v, i) =>
+    out.push({ framework: r.framework, category: r.category, angle: v.angle || '', label: v.label || '', n: i + 1, script: substitute(v.script || '') })));
+  return out;
+}
+
+function renderOutput() {
+  const body = document.getElementById('outputBody');
+
+  if (state.tab === 'research') {
+    const r = state.research;
+    if (!r) { body.innerHTML = '<div class="placeholder-state"><div class="placeholder-text">No research yet. Enter a website, keep the research toggle on, and Generate.</div></div>'; return; }
+    if (!r.ok) { body.innerHTML = `<div class="info-block"><div class="info-title">🌐 Research failed</div>${esc(r.error)}</div>`; return; }
+    body.innerHTML = `
+      <div class="info-block"><div class="info-title">🌐 ${esc(r.url || 'Research')}</div>${esc(r.summary || '')}</div>
+      <div class="info-block"><div class="info-title">Likely pains</div>${(r.pains || []).map(p => `<div class="kv-row"><span class="kv-key">pain</span><span class="kv-val">${esc(p)}</span></div>`).join('') || '—'}</div>
+      <div class="info-block"><div class="info-title">Personalization hooks</div>${(r.hooks || []).map(h => `<div class="kv-row"><span class="kv-key">hook</span><span class="kv-val">${esc(h)}</span></div>`).join('') || '—'}</div>`;
+    return;
   }
+
+  if (state.tab === 'frameworks') {
+    if (!state.results) {
+      // Show framework templates with variables even before generating
+      body.innerHTML = config.frameworks.map(f => `
+        <div class="info-block">
+          <div class="info-title">${esc(f.name)} · ${esc(f.category)}</div>
+          <div style="white-space:pre-wrap;font-family:'Courier Prime',monospace;color:var(--text);margin-bottom:8px">${esc(f.template)}</div>
+          <div>${fwVars(f.template).map(v => `<span class="var-chip">{{${esc(v)}}}</span>`).join('')}</div>
+        </div>`).join('');
+      return;
+    }
+    body.innerHTML = state.results.map(r => {
+      if (r.error) return `<div class="info-block"><div class="info-title">${esc(r.framework)}</div>⚠️ ${esc(r.error)}</div>`;
+      const rows = Object.entries(r.fills || {});
+      return `<div class="info-block">
+        <div class="info-title">📋 ${esc(r.framework)} · ${esc(r.category)}</div>
+        ${rows.map(([k, v]) => `<div class="kv-row"><span class="kv-key">${esc(k)}</span><span class="kv-val">${esc(v)}</span></div>`).join('') || 'No fill returned.'}
+      </div>`;
+    }).join('');
+    return;
+  }
+
+  // scripts tab
+  if (!state.results) {
+    body.innerHTML = `<div class="placeholder-state"><div class="placeholder-icon">✍️</div><div class="placeholder-text">Pick a client, choose angles × frameworks, hit Generate. Every script comes labeled for A/B testing.</div></div>`;
+    return;
+  }
+  let idx = 0;
+  body.innerHTML = state.results.map(r => {
+    if (r.error) return `<div class="info-block"><div class="info-title">${esc(r.framework)}</div>⚠️ ${esc(r.error)}</div>`;
+    return `<div class="fw-group">
+      <div class="fw-group-header"><span>${esc(r.framework)}</span><span class="cat">${esc(r.category)} · ${(r.variants || []).length} scripts</span></div>
+      ${(r.variants || []).map(v => {
+        const i = idx++;
+        return `<div class="variant-block">
+          <div class="variant-header">
+            <span class="variant-label">${esc(v.angle || '')}${v.label ? ' · ' + esc(v.label) : ''}</span>
+            <button class="copy-btn" onclick="copyScript(this, ${i})">Copy</button>
+          </div>
+          <div class="variant-body" data-script="${i}">${esc(substitute(v.script || ''))}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join('');
+}
+
+function copyScript(btn, i) {
+  const el = document.querySelector(`[data-script="${i}"]`);
+  if (!el) return;
+  navigator.clipboard.writeText(el.innerText);
+  btn.textContent = 'Copied!'; btn.classList.add('copied');
+  setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
 }
 
 function copyAll() {
-  const variants = document.querySelectorAll('.variant-body');
-  if (!variants.length) return;
-  const text = Array.from(variants).map((v,i) => `--- Variant ${i+1} ---\n${v.innerText}`).join('\n\n');
-  navigator.clipboard.writeText(text);
-  showNotif('All scripts copied!');
+  const all = flatScripts();
+  if (!all.length) return showNotif('Nothing to copy yet', true);
+  navigator.clipboard.writeText(all.map(s => `--- [${s.framework} | ${s.angle} | v${s.n}] ---\n${s.script}`).join('\n\n'));
+  showNotif(`${all.length} scripts copied`);
 }
 
-function regenerate() {
-  if (lastGenerated) generateScript();
+function exportCsv() {
+  const all = flatScripts();
+  if (!all.length) return showNotif('Nothing to export yet', true);
+  const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const csv = ['framework,category,angle,label,variant,script',
+    ...all.map(s => [s.framework, s.category, s.angle, s.label, s.n, s.script].map(q).join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'outreach-scripts.csv';
+  a.click(); URL.revokeObjectURL(a.href);
+  showNotif(`${all.length} scripts exported`);
 }
 
-function clearAll() {
-  document.getElementById('fname').value = '';
-  document.getElementById('company').value = '';
-  document.getElementById('companyUrl').value = '';
-  document.getElementById('classification').value = '';
-  document.getElementById('customPain').value = '';
-  document.getElementById('scriptCategory').value = '';
-  document.getElementById('angle').innerHTML = '<option>Select category first...</option>';
-  lastGenerated = null;
-  document.getElementById('outputBody').innerHTML = `<div class="placeholder-state"><div class="placeholder-icon">✍️</div><div class="placeholder-text">Select a client, fill the details and hit Generate to write your outreach scripts.</div></div>`;
+// ─── ADMIN ─────────────────────────────────────────────────────────────────────
+function adminEdit(type, id) {
+  state.adminTab = type;
+  state.editing = { type, id };
+  showScreen('admin');
 }
 
-function setStep(n) {
-  for (let i = 1; i <= 4; i++) {
-    const el = document.getElementById('step' + i);
-    if (!el) continue;
-    if (i < n)  { el.classList.remove('active'); el.classList.add('done'); }
-    if (i === n){ el.classList.add('active'); el.classList.remove('done'); }
-    if (i > n)  { el.classList.remove('active','done'); }
+function renderAdmin() {
+  ['frameworks', 'niches', 'clients', 'settings'].forEach(t =>
+    document.getElementById('atab-' + t).classList.toggle('active', t === state.adminTab));
+  const body = document.getElementById('adminBody');
+
+  let keyBlock = '';
+  if (!adminKey) {
+    keyBlock = `
+      <div class="info-block">
+        <div class="info-title">Admin key required for server sync + generation</div>
+        Changes save to this browser either way; enter your admin key to sync to the server and generate scripts:
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <input class="form-input" id="adminKeyInput" placeholder="admin key" style="max-width:340px" />
+          <button class="mini-btn" onclick="setAdminKey()">Save key</button>
+        </div>
+      </div>`;
   }
+  body.innerHTML = keyBlock + adminTabHtml();
+  wireAdminTags();
 }
 
-function setResearching(on) {
-  document.getElementById('researchDot').classList.toggle('searching', on);
-  document.getElementById('researchLabel').textContent = on ? 'Researching...' : 'Web Research Ready';
+function setAdminKey() {
+  const v = document.getElementById('adminKeyInput').value.trim();
+  if (!v) return;
+  adminKey = v; safeStorageSet('offer_admin_key', v);
+  showNotif('Admin key saved'); loadConfigAndRender();
 }
 
+function adminTabHtml() {
+  const t = state.adminTab;
+  if (t === 'frameworks') return adminFrameworks();
+  if (t === 'niches') return adminNiches();
+  if (t === 'clients') return adminClients();
+  return adminSettings();
+}
+
+// Tag editors needing post-render wiring (stored as {containerId: array})
+let pendingTags = {};
+function wireAdminTags() {
+  Object.entries(pendingTags).forEach(([id, { arr, placeholder }]) => renderTags(id, arr, placeholder));
+  pendingTags = {};
+}
+
+// — Frameworks tab —
+function adminFrameworks() {
+  let html = `<button class="mini-btn" onclick="adminEdit('frameworks','__new__')">+ New framework</button>`;
+  html += config.frameworks.map(f => `
+    <div class="list-row">
+      <div><b>${esc(f.name)}</b> <span class="sub">${esc(f.category)}</span>
+        <div class="sub">${fwVars(f.template).map(v => `<span class="var-chip">{{${esc(v)}}}</span>`).join('')}</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="mini-btn" onclick="adminEdit('frameworks','${f.id}')">Edit</button>
+        <button class="mini-btn danger" onclick="deleteItem('frameworks','${f.id}')">Delete</button>
+      </div>
+    </div>`).join('');
+
+  if (state.editing?.type === 'frameworks') {
+    const isNew = state.editing.id === '__new__';
+    const f = isNew ? { name: '', category: '', template: '', rules: '' } : framework(state.editing.id);
+    if (f) html += `
+    <div class="editor">
+      <h3>${isNew ? 'New framework' : 'Edit: ' + esc(f.name)}</h3>
+      <div class="grid2">
+        <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ef-name" value="${esc(f.name)}"></div>
+        <div class="form-group"><label class="form-label">Category (what it is)</label><input class="form-input" id="ef-cat" value="${esc(f.category)}" placeholder="Proof-led / Pain-led / Curiosity-led / Ultra-short…" list="cat-list">
+          <datalist id="cat-list">${[...new Set(config.frameworks.map(x => x.category))].map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
+      </div>
+      <div class="form-group"><label class="form-label">Template — use {{variables}} for the parts Claude fills</label>
+        <textarea class="form-textarea" id="ef-template" style="min-height:140px;font-family:'Courier Prime',monospace" oninput="previewVars()">${esc(f.template)}</textarea>
+        <div class="hint" id="ef-vars">${fwVars(f.template).map(v => `<span class="var-chip">{{${esc(v)}}}</span>`).join('')}</div>
+      </div>
+      <div class="form-group"><label class="form-label">Rules (language, length, tone for this framework)</label>
+        <textarea class="form-textarea" id="ef-rules">${esc(f.rules || '')}</textarea></div>
+      <div style="display:flex;gap:8px">
+        <button class="mini-btn" onclick="saveFramework(${isNew})">💾 Save framework</button>
+        <button class="mini-btn" onclick="state.editing=null;renderAdmin()">Cancel</button>
+      </div>
+    </div>`;
+  }
+  return html;
+}
+
+function previewVars() {
+  const t = document.getElementById('ef-template').value;
+  document.getElementById('ef-vars').innerHTML = fwVars(t).map(v => `<span class="var-chip">{{${esc(v)}}}</span>`).join('') || 'No {{variables}} yet';
+}
+
+function saveFramework(isNew) {
+  const name = document.getElementById('ef-name').value.trim();
+  const template = document.getElementById('ef-template').value;
+  if (!name || !template.trim()) return showNotif('Name and template required', true);
+  const obj = {
+    id: isNew ? uid('fw') : state.editing.id,
+    name,
+    category: document.getElementById('ef-cat').value.trim() || 'Uncategorized',
+    template,
+    rules: document.getElementById('ef-rules').value.trim()
+  };
+  if (isNew) config.frameworks.push(obj);
+  else config.frameworks = config.frameworks.map(f => f.id === obj.id ? obj : f);
+  state.editing = null; persistConfig(); renderAdmin(); showNotif('Framework saved');
+}
+
+// — Niches tab —
+function adminNiches() {
+  let html = `<button class="mini-btn" onclick="adminEdit('niches','__new__')">+ New niche</button>`;
+  html += config.niches.map(n => `
+    <div class="list-row">
+      <div><b>${esc(n.name)}</b>
+        <div class="sub">${(n.angles || []).length} angles · ${(n.triggerWords || []).length} trigger words</div></div>
+      <div style="display:flex;gap:6px">
+        <button class="mini-btn" onclick="adminEdit('niches','${n.id}')">Edit</button>
+        <button class="mini-btn danger" onclick="deleteItem('niches','${n.id}')">Delete</button>
+      </div>
+    </div>`).join('');
+
+  if (state.editing?.type === 'niches') {
+    const isNew = state.editing.id === '__new__';
+    const n = isNew ? { name: '', angles: [], triggerWords: [] } : niche(state.editing.id);
+    if (n) {
+      const angles = structuredClone(n.angles || []);
+      const triggers = structuredClone(n.triggerWords || []);
+      pendingTags['en-angles'] = { arr: angles, placeholder: 'add angle + Enter' };
+      pendingTags['en-triggers'] = { arr: triggers, placeholder: 'add trigger word + Enter' };
+      html += `
+      <div class="editor">
+        <h3>${isNew ? 'New niche' : 'Edit: ' + esc(n.name)}</h3>
+        <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="en-name" value="${esc(n.name)}"></div>
+        <div class="form-group"><label class="form-label">Angles (the niche diagnostics — each becomes a testable hook)</label>
+          <div class="tags" id="en-angles"></div></div>
+        <div class="form-group"><label class="form-label">Key trigger words (worked naturally into scripts)</label>
+          <div class="tags" id="en-triggers"></div></div>
+        <div style="display:flex;gap:8px">
+          <button class="mini-btn" onclick="saveNiche(${isNew})">💾 Save niche</button>
+          <button class="mini-btn" onclick="state.editing=null;renderAdmin()">Cancel</button>
+        </div>
+      </div>`;
+    }
+  }
+  return html;
+}
+
+function renderTags(containerId, arr, placeholder) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.__arr = arr; el.__placeholder = placeholder;
+  el.innerHTML = arr.map((t, i) =>
+    `<span class="tag-item">${esc(t)}<b onclick="removeTag('${containerId}',${i})">×</b></span>`).join('') +
+    `<input class="tag-input" placeholder="${esc(placeholder)}" onkeydown="if(event.key==='Enter'){event.preventDefault();addTag('${containerId}',this)}">`;
+}
+function addTag(containerId, input) {
+  const el = document.getElementById(containerId);
+  const v = input.value.trim();
+  if (!v) return;
+  el.__arr.push(v);
+  renderTags(containerId, el.__arr, el.__placeholder);
+  el.querySelector('.tag-input').focus();
+}
+function removeTag(containerId, i) {
+  const el = document.getElementById(containerId);
+  el.__arr.splice(i, 1);
+  renderTags(containerId, el.__arr, el.__placeholder);
+}
+
+function saveNiche(isNew) {
+  const name = document.getElementById('en-name').value.trim();
+  if (!name) return showNotif('Name required', true);
+  const obj = {
+    id: isNew ? uid('niche') : state.editing.id,
+    name,
+    angles: document.getElementById('en-angles').__arr,
+    triggerWords: document.getElementById('en-triggers').__arr
+  };
+  if (isNew) config.niches.push(obj);
+  else config.niches = config.niches.map(n => n.id === obj.id ? obj : n);
+  state.editing = null; persistConfig(); renderAdmin(); renderClientList(); showNotif('Niche saved');
+}
+
+// — Clients tab —
+function adminClients() {
+  let html = `<button class="mini-btn" onclick="adminEdit('clients','__new__')">+ New client</button>`;
+  html += config.clients.map(c => `
+    <div class="list-row">
+      <div><b>${esc(c.name)}</b> <span class="sub">${esc(c.meta || '')}</span>
+        <div class="sub">${esc(niche(c.nicheId)?.name || 'no niche')} · ${Object.keys(c.frameworkOverrides || {}).filter(k => (c.frameworkOverrides[k] || '').trim()).length} framework overrides</div></div>
+      <div style="display:flex;gap:6px">
+        <button class="mini-btn" onclick="adminEdit('clients','${c.id}')">Edit</button>
+        <button class="mini-btn danger" onclick="deleteItem('clients','${c.id}')">Delete</button>
+      </div>
+    </div>`).join('');
+
+  if (state.editing?.type === 'clients') {
+    const isNew = state.editing.id === '__new__';
+    const c = isNew
+      ? { name: '', meta: '', nicheId: config.niches[0]?.id, caseStudy: { size: '', result: '', mechanism: '', proofLine: '', pains: [], objections: [], desires: [] }, frameworkOverrides: {} }
+      : client(state.editing.id);
+    if (c) {
+      const cs = c.caseStudy || {};
+      pendingTags['ec-pains'] = { arr: structuredClone(cs.pains || []), placeholder: 'add pain + Enter' };
+      pendingTags['ec-objections'] = { arr: structuredClone(cs.objections || []), placeholder: 'add objection + Enter' };
+      pendingTags['ec-desires'] = { arr: structuredClone(cs.desires || []), placeholder: 'add desire + Enter' };
+      html += `
+      <div class="editor">
+        <h3>${isNew ? 'New client' : 'Edit: ' + esc(c.name)}</h3>
+        <div class="grid2">
+          <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ec-name" value="${esc(c.name)}"></div>
+          <div class="form-group"><label class="form-label">Meta (shown under name)</label><input class="form-input" id="ec-meta" value="${esc(c.meta || '')}"></div>
+        </div>
+        <div class="grid2">
+          <div class="form-group"><label class="form-label">Niche</label>
+            <select class="form-select" id="ec-niche">${config.niches.map(n => `<option value="${n.id}" ${n.id === c.nicheId ? 'selected' : ''}>${esc(n.name)}</option>`).join('')}</select></div>
+          <div class="form-group"><label class="form-label">Size</label><input class="form-input" id="ec-size" value="${esc(cs.size || '')}"></div>
+        </div>
+        <div class="grid2">
+          <div class="form-group"><label class="form-label">Headline result</label><input class="form-input" id="ec-result" value="${esc(cs.result || '')}"></div>
+          <div class="form-group"><label class="form-label">Mechanism (how you did it)</label><input class="form-input" id="ec-mechanism" value="${esc(cs.mechanism || '')}"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Proof line (1 sentence, used near-verbatim in scripts)</label>
+          <textarea class="form-textarea" id="ec-proofline">${esc(cs.proofLine || '')}</textarea></div>
+        <div class="form-group"><label class="form-label">Niche pains</label><div class="tags" id="ec-pains"></div></div>
+        <div class="form-group"><label class="form-label">Common objections</label><div class="tags" id="ec-objections"></div></div>
+        <div class="form-group"><label class="form-label">Prospect desires</label><div class="tags" id="ec-desires"></div></div>
+        <div class="form-group"><label class="form-label">Client framework overrides — paste this client's own framework/notes per niche (used on top of the global framework when generating for that niche)</label>
+          ${config.niches.map(n => `
+            <div style="margin-bottom:8px">
+              <div class="hint" style="margin-bottom:3px">${esc(n.name)}</div>
+              <textarea class="form-textarea" data-override="${n.id}" placeholder="paste ${esc(c.name || 'client')}'s framework for ${esc(n.name)}…">${esc((c.frameworkOverrides || {})[n.id] || '')}</textarea>
+            </div>`).join('')}
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="mini-btn" onclick="saveClient(${isNew})">💾 Save client</button>
+          <button class="mini-btn" onclick="state.editing=null;renderAdmin()">Cancel</button>
+        </div>
+      </div>`;
+    }
+  }
+  return html;
+}
+
+function saveClient(isNew) {
+  const name = document.getElementById('ec-name').value.trim();
+  if (!name) return showNotif('Name required', true);
+  const overrides = {};
+  document.querySelectorAll('[data-override]').forEach(t => { if (t.value.trim()) overrides[t.dataset.override] = t.value.trim(); });
+  const obj = {
+    id: isNew ? uid('client') : state.editing.id,
+    name,
+    meta: document.getElementById('ec-meta').value.trim(),
+    nicheId: document.getElementById('ec-niche').value,
+    caseStudy: {
+      size: document.getElementById('ec-size').value.trim(),
+      result: document.getElementById('ec-result').value.trim(),
+      mechanism: document.getElementById('ec-mechanism').value.trim(),
+      proofLine: document.getElementById('ec-proofline').value.trim(),
+      pains: document.getElementById('ec-pains').__arr,
+      objections: document.getElementById('ec-objections').__arr,
+      desires: document.getElementById('ec-desires').__arr
+    },
+    frameworkOverrides: overrides
+  };
+  if (isNew) { config.clients.push(obj); state.clientId = obj.id; state.nicheId = obj.nicheId; }
+  else config.clients = config.clients.map(c => c.id === obj.id ? obj : c);
+  state.editing = null; persistConfig(); renderAdmin(); renderClientList(); renderBuilder(); showNotif('Client saved');
+}
+
+// — Settings tab —
+function adminSettings() {
+  return `
+    <div class="info-block">
+      <div class="info-title">Global style rules (the language every framework obeys)</div>
+      <textarea class="form-textarea" id="es-rules" style="min-height:110px">${esc(config.settings?.globalRules || '')}</textarea>
+      <div style="margin-top:8px"><button class="mini-btn" onclick="saveSettings()">💾 Save rules</button></div>
+    </div>
+    <div class="info-block">
+      <div class="info-title">Config</div>
+      Stored ${configSource === 'server' ? 'on the server (shared across browsers)' : configSource === 'local' ? 'in this browser only' : 'as defaults (nothing saved yet)'}.
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="mini-btn" onclick="exportConfig()">Export JSON</button>
+        <button class="mini-btn" onclick="document.getElementById('importFile').click()">Import JSON</button>
+        <button class="mini-btn danger" onclick="resetConfig()">Reset to defaults</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importConfig(this)">
+      </div>
+    </div>`;
+}
+
+function saveSettings() {
+  config.settings = config.settings || {};
+  config.settings.globalRules = document.getElementById('es-rules').value;
+  persistConfig(); showNotif('Rules saved');
+}
+
+function exportConfig() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' }));
+  a.download = 'outreach-config.json'; a.click(); URL.revokeObjectURL(a.href);
+}
+
+function importConfig(input) {
+  const file = input.files?.[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      if (!parsed.frameworks || !parsed.niches || !parsed.clients) throw new Error('not a valid config file');
+      config = parsed; persistConfig(); initSelections(); renderEverything(); showNotif('Config imported');
+    } catch (e) { showNotif('Import failed: ' + e.message, true); }
+  };
+  reader.readAsText(file);
+}
+
+function resetConfig() {
+  if (!confirm('Reset all frameworks, niches and clients to the built-in defaults? Your current config will be overwritten.')) return;
+  config = structuredClone(DEFAULT_CONFIG);
+  persistConfig(); initSelections(); renderEverything(); showNotif('Reset to defaults');
+}
+
+function deleteItem(type, id) {
+  const names = { frameworks: 'framework', niches: 'niche', clients: 'client' };
+  if (!confirm(`Delete this ${names[type]}?`)) return;
+  config[type] = config[type].filter(x => x.id !== id);
+  if (type === 'frameworks') state.frameworks.delete(id);
+  if (type === 'clients' && state.clientId === id) state.clientId = config.clients[0]?.id ?? null;
+  if (type === 'niches' && state.nicheId === id) { state.nicheId = config.niches[0]?.id ?? null; state.angles = new Set(); }
+  state.editing = null; persistConfig(); renderAdmin(); renderClientList(); renderBuilder(); showNotif('Deleted');
+}
+
+// ─── MISC ──────────────────────────────────────────────────────────────────────
 function showNotif(msg, err = false) {
   const n = document.getElementById('notif');
   n.textContent = msg;
   n.style.borderColor = err ? 'var(--red)' : 'var(--green)';
   n.style.color = err ? 'var(--red)' : 'var(--green)';
   n.classList.add('show');
-  setTimeout(() => n.classList.remove('show'), 2500);
+  setTimeout(() => n.classList.remove('show'), 2800);
 }
 
-function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+function initSelections() {
+  state.clientId = config.clients[0]?.id ?? null;
+  state.nicheId = client(state.clientId)?.nicheId ?? config.niches[0]?.id ?? null;
+  state.angles = new Set((niche(state.nicheId)?.angles || []).slice(0, 3));
+  state.frameworks = new Set(config.frameworks.slice(0, 2).map(f => f.id));
+}
 
-// Init
-selectClient('ehealth');
+function renderEverything() {
+  renderClientList(); renderBuilder(); renderOutput();
+  if (state.screen === 'admin') renderAdmin();
+}
+
+async function loadConfigAndRender() {
+  await loadConfig();
+  setConfigPill(configSource === 'server' ? 'server' : 'local');
+  initSelections();
+  renderEverything();
+}
+
+loadConfigAndRender();
 </script>
 </body>
 </html>
