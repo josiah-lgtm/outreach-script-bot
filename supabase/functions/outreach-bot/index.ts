@@ -57,28 +57,28 @@ function storageEnv() {
   const url = Deno.env.get("SUPABASE_URL");
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!url || !key) throw new Error("storage env not available");
-  return { url, key };
+  // `apikey` works for both legacy JWT service keys and new sb_secret_ keys;
+  // the bare Bearer header alone fails JWT parsing on new-style keys.
+  return { url, headers: { Authorization: `Bearer ${key}`, apikey: key } };
 }
 
 async function configLoad(): Promise<unknown | null> {
-  const { url, key } = storageEnv();
-  const res = await fetch(`${url}/storage/v1/object/${BUCKET}/${OBJECT}`, {
-    headers: { Authorization: `Bearer ${key}` },
-  });
+  const { url, headers } = storageEnv();
+  const res = await fetch(`${url}/storage/v1/object/${BUCKET}/${OBJECT}`, { headers });
   if (!res.ok) return null;
   return await res.json();
 }
 
 async function configSave(config: unknown): Promise<void> {
-  const { url, key } = storageEnv();
+  const { url, headers } = storageEnv();
   await fetch(`${url}/storage/v1/bucket`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    headers: { ...headers, "Content-Type": "application/json" },
     body: JSON.stringify({ id: BUCKET, name: BUCKET, public: false }),
   }).catch(() => {});
   const res = await fetch(`${url}/storage/v1/object/${BUCKET}/${OBJECT}`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "x-upsert": "true" },
+    headers: { ...headers, "Content-Type": "application/json", "x-upsert": "true" },
     body: JSON.stringify(config),
   });
   if (!res.ok) throw new Error(`config save failed: ${res.status} ${await res.text()}`);

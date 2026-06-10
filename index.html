@@ -568,7 +568,7 @@ async function loadConfig() {
   if (adminKey) {
     try {
       const data = await api({ action: 'get_config' });
-      if (data.config && data.config.frameworks) {
+      if (data.config && Array.isArray(data.config.frameworks) && data.config.frameworks.length) {
         config = data.config; configSource = 'server';
         safeStorageSet('outreach_config_v2', JSON.stringify(config));
         return;
