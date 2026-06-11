@@ -55,7 +55,8 @@ function nRich(content: string) {
   return [{ type: "text", text: { content: String(content ?? "").slice(0, 1900) } }];
 }
 // Convert the app's portable block list into Notion API block objects.
-function toNotionBlock(b: { t: string; text?: string; headers?: string[]; rows?: string[][] }) {
+// deno-lint-ignore no-explicit-any
+function toNotionBlock(b: { t: string; text?: string; headers?: string[]; rows?: string[][]; children?: Array<{ t: string }> }): any {
   switch (b.t) {
     case "h1": return { object: "block", type: "heading_1", heading_1: { rich_text: nRich(b.text ?? "") } };
     case "h2": return { object: "block", type: "heading_2", heading_2: { rich_text: nRich(b.text ?? "") } };
@@ -64,6 +65,10 @@ function toNotionBlock(b: { t: string; text?: string; headers?: string[]; rows?:
     case "bullet": return { object: "block", type: "bulleted_list_item", bulleted_list_item: { rich_text: nRich(b.text ?? "") } };
     case "todo": return { object: "block", type: "to_do", to_do: { rich_text: nRich(b.text ?? ""), checked: false } };
     case "code": return { object: "block", type: "code", code: { rich_text: nRich(b.text ?? ""), language: "plain text" } };
+    case "toggle": {
+      const kids = (b.children ?? []).map(toNotionBlock);
+      return { object: "block", type: "toggle", toggle: { rich_text: nRich(b.text ?? ""), children: kids.slice(0, 100) } };
+    }
     case "table": {
       const headers = b.headers ?? [];
       const rows = b.rows ?? [];
@@ -706,6 +711,46 @@ Deno.serve(async (req) => {
           }],
         });
         return json({ ok: true, html: textOf(res.content).trim() });
+      }
+
+      case "generate_followups": {
+        const parent = String(body.parentScript ?? "").trim();
+        const frameworks = Array.isArray(body.frameworks) ? body.frameworks as Array<{ name: string; template: string }> : [];
+        if (!frameworks.length) return json({ ok: false, error: "at least one follow-up framework required" }, 400);
+        const gapDays = Math.max(1, +(body.gapDays ?? 2));
+        const icp = body.icp as { title?: string; jobTitles?: string[]; niche?: string } | undefined;
+        const cs = (body.client as { name?: string; caseStudy?: Record<string, unknown> } | undefined) ?? {};
+        const basis = body.basis as { pains?: string[]; desires?: string[]; angles?: string[] } | undefined;
+        const rules = String(body.rules ?? "").trim();
+        const sys =
+          `You write OUTBOUND FOLLOW-UP emails — short messages sent AFTER a first cold email that got no reply. ` +
+          `Write ${frameworks.length} follow-ups, one per framework given, in order. Each must:\n` +
+          `- Follow its framework's structure and fill every {placeholder} from the real client data (never leave a {placeholder} or invent numbers).\n` +
+          `- Build on the first script's thread without repeating it; reference it lightly ("circling back", "following up").\n` +
+          `- Be sendable as-is, short, plain, human. Keep {{first_name}} / {{company}} merge tags.\n` +
+          (icp?.title ? `- Speak to the ICP: ${icp.title}${icp.jobTitles?.length ? " (" + icp.jobTitles.join(", ") + ")" : ""}.\n` : "") +
+          (rules ? `HOUSE LANGUAGE RULES (always obey):\n${rules}\n` : "") +
+          `Return valid JSON only, no fences: {"followups":[{"framework":"<framework name>","text":"<the follow-up>"}]}`;
+        const user =
+          `FIRST SCRIPT (the one already sent):\n${parent || "(none provided)"}\n\n` +
+          `CLIENT: ${cs.name ?? ""}\nProof: ${(cs.caseStudy?.proofLine as string) ?? ""}\nMechanism: ${(cs.caseStudy?.mechanism as string) ?? ""}\n` +
+          `Case studies: ${((cs.caseStudy?.caseStudies as string[]) ?? []).join(" | ")}\n` +
+          (basis?.pains?.length ? `Pains: ${basis.pains.join("; ")}\n` : "") +
+          (basis?.desires?.length ? `Desired outcomes: ${basis.desires.join("; ")}\n` : "") +
+          (basis?.angles?.length ? `Angles: ${basis.angles.join("; ")}\n` : "") +
+          `\nFRAMEWORKS (write one follow-up each, in this order):\n` +
+          frameworks.map((f, i) => `FRAMEWORK ${i + 1} — ${f.name}:\n${f.template}`).join("\n\n");
+        const res = await claudeMessages({
+          model: CLAUDE_MODEL,
+          max_tokens: 1800,
+          system: sys,
+          messages: [{ role: "user", content: user }],
+        });
+        const parsed = parseJson(textOf(res.content), null as { followups?: Array<{ framework: string; text: string }> } | null);
+        if (!parsed?.followups?.length) return json({ ok: false, error: "could not parse follow-ups — try again" }, 422);
+        // Stamp the send-day cadence (Day +gap, +2*gap, …) server-side.
+        const followups = parsed.followups.map((f, i) => ({ day: gapDays * (i + 1), framework: f.framework || frameworks[i]?.name || "", text: f.text || "" }));
+        return json({ ok: true, followups });
       }
 
       case "compose_growth_plan": {

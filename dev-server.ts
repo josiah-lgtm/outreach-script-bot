@@ -201,6 +201,19 @@ async function handle(req: Request): Promise<Response> {
         html: `<p>📌 [mock ${instruction}] ${text.split(" ").slice(0, 6).join(" ")}…</p><ul><li>✅ point one</li><li style="color:red" onclick="alert(1)">point two (attrs must be stripped)</li></ul><script>bad()</script>`,
       }, cors);
     }
+    if (body.action === "generate_followups") {
+      await new Promise((r) => setTimeout(r, 1000));
+      const fws = Array.isArray(body.frameworks) ? body.frameworks as Array<{ name: string }> : [];
+      const gap = Math.max(1, Number(body.gapDays) || 2);
+      return json({
+        ok: true,
+        followups: fws.map((f, i) => ({
+          day: gap * (i + 1),
+          framework: f.name,
+          text: `Hi {{first_name}}, circling back — (mock ${f.name}) we just helped a similar company hit their numbers. Mind if I share how we'd do the same for {{company}}?\n\nThanks`,
+        })),
+      }, cors);
+    }
     if (body.action === "compose_growth_plan") {
       await new Promise((r) => setTimeout(r, 900));
       const targets = Array.isArray(body.targets) ? body.targets : [];

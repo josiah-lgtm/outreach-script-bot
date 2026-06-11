@@ -856,6 +856,7 @@
           <button class="tab-btn" id="atab-winning" onclick="switchAdminTab('winning')">🏆 Winning Scripts</button>
           <button class="tab-btn" id="atab-niches" onclick="switchAdminTab('niches')">Niches & Angles</button>
           <button class="tab-btn" id="atab-clients" onclick="switchAdminTab('clients')">Clients</button>
+          <button class="tab-btn" id="atab-followups" onclick="switchAdminTab('followups')">↪ Follow-ups</button>
           <button class="tab-btn" id="atab-tools" onclick="switchAdminTab('tools')">🧰 Tools KB</button>
           <button class="tab-btn" id="atab-settings" onclick="switchAdminTab('settings')">Settings</button>
         </div>
@@ -924,8 +925,26 @@
     <div class="modal-foot">
       <button class="mini-btn" onclick="modalSnapshot()">📌 Save as version</button>
       <div style="flex:1"></div>
+      <button class="mini-btn" onclick="modalFollowups()">↪ Follow-ups</button>
       <button class="mini-btn" onclick="modalSaveReservoir()">💾 To Reservoir</button>
       <button class="btn btn-primary" style="width:auto;padding:8px 18px" onclick="modalApply()">Apply to script</button>
+    </div>
+  </div>
+</div>
+
+<!-- OUTBOUND FOLLOW-UPS MODAL -->
+<div class="modal-overlay" id="followupModal" onclick="if(event.target===this)closeFollowupModal()">
+  <div class="modal" style="height:min(740px,93vh)">
+    <div class="modal-head">
+      <div><span class="modal-title">↪ Outbound follow-ups</span><span class="modal-sub" id="fuSub"></span></div>
+      <button class="modal-close" onclick="closeFollowupModal()">✕</button>
+    </div>
+    <div class="modal-body" style="display:block;overflow-y:auto;padding:16px 20px" id="fuBody"></div>
+    <div class="modal-foot">
+      <button class="mini-btn" onclick="closeFollowupModal()">Close</button>
+      <div style="flex:1"></div>
+      <button class="mini-btn" id="fuGenBtn" onclick="fuGenerate()">✨ Generate follow-ups</button>
+      <button class="btn btn-primary" style="width:auto;padding:8px 18px" onclick="fuSave()">💾 Save sequence</button>
     </div>
   </div>
 </div>
@@ -1141,7 +1160,9 @@ function migrateConfig(cfg) {
     c.sources = c.sources || {};   // text → {type:'site'|'transcript'|'research'|'ai'|'competitor', label}
     c.icps = c.icps || [];         // saved ideal customer profiles from the ICP builder
     c.growthPlans = c.growthPlans || []; // saved growth plans
+    c.followups = c.followups || []; // saved outbound follow-up sequences
   });
+  if (!Array.isArray(cfg.followupFrameworks) || !cfg.followupFrameworks.length) cfg.followupFrameworks = structuredClone(DEFAULT_FOLLOWUP_FRAMEWORKS);
   (cfg.frameworks || []).forEach(f => { f.nicheIds = f.nicheIds || []; });
   cfg.winningScripts = cfg.winningScripts || [];
   cfg.settings = cfg.settings || {};
@@ -1160,6 +1181,21 @@ function migrateConfig(cfg) {
   if (!Array.isArray(cfg.toolsKB) || !cfg.toolsKB.length) cfg.toolsKB = structuredClone(DEFAULT_TOOLS_KB);
   return cfg;
 }
+
+// Outbound follow-up frameworks — models the AI bases each follow-up on.
+const DEFAULT_FOLLOWUP_FRAMEWORKS = [
+  { id: 'fu-clientwin', name: 'Client win story', template: "Hi {{first_name}},\nI wanted to share what we did for {client}. {client} is a {client business}.\n{the problem they had}\nOur solution: {how we solved it}\nWould love to see if we could do something similar for {{company}}.\nThanks\n{signature}" },
+  { id: 'fu-winstack', name: 'Recent wins stack', template: "Hi {{first_name}}, just wanted to share a few recent wins with you.\n{case study}\n{case study}\n{case study}\nAnd {case study}.\nMind if I share some info on how we consistently get results like these for {sub-niche}?\nThanks\n{signature}" },
+  { id: 'fu-videooffer', name: 'Case study video offer', template: "Hi {{first_name}}, we've just made a video on how we helped {case study} get {outcome} in {timeframe}, want to see it?\nThanks\n{signature}" },
+  { id: 'fu-research', name: 'Research / study share', template: "Hi {{first_name}}, we recently completed a research paper on how {niche} get {outcome} where we discovered {mechanism}.\nDo you mind if I share the document here?\nThanks\n{signature}" },
+  { id: 'fu-plan', name: 'Custom plan + video offer', template: "Hi {{first_name}}, I wanted to share my plan for {{company}} and how we'd get {outcome}:\n{plan}\nWe just helped {case study}.\nMind if I record a quick 3-minute video outlining how we'd do something similar for {{company}}?\nThanks\n{signature}" },
+  { id: 'fu-peer', name: 'Reminded by a peer', template: "Hi {{first_name}}, I was speaking to {name} from {case study} and it reminded me to follow up with you. They're also a {common identifier} and we recently helped them {transformation} in {timeframe}.\nInterested in seeing if we could do something similar for {{company}}?\nThanks\n{signature}" },
+  { id: 'fu-peervideo', name: 'Case study video (peer)', template: "Hi {{first_name}}, we just spoke to {case study} and thought you might be interested in what they had to say.\n[link to case study video]\nMind if I share it here?\nThanks\n{signature}" },
+  { id: 'fu-xcompanies', name: 'X companies like you', template: "Hi {{first_name}}, we have helped over {X} companies similar to {{company}} in the {sub-niche}. Would you mind if I send over a video outlining how we can {transformation} in {time} for you?\nThanks\n{signature}" },
+  { id: 'fu-directhelp', name: 'Direct help offer', template: "Hi {{first_name}}, would you mind if I tell you exactly how we can help you with {what we help with} in {time}?\nThanks\n{signature}" },
+  { id: 'fu-problemq', name: 'Problem question', template: "Hi {{first_name}}, are you ever facing the problem of {what we can help with}?\nMind if I share some examples of what's possible?\nThanks\n{signature}" },
+  { id: 'fu-fullplan', name: 'Full plan + chat', template: "Hey {{first_name}}, have you ever heard of {case study}? We just helped them {transformation} in {timeframe}.\nJust to show you how we'd do the same for {{company}}:\n{plan for how you'd get results}\nSimilar to how we helped {case study} {result}.\nWould you be open to a quick chat to see if we can do the same for {{company}}?\nThanks\n{signature}" },
+];
 
 // costModel: 'flat' ($/mo) · 'per_1k_leads' · 'per_1k_verified' ($ per 1000) · 'tokens' (uses inPerM/outPerM $ per 1M)
 const DEFAULT_TOOLS_KB = [
@@ -1315,6 +1351,7 @@ function renderBuilder() {
         ${(c.nicheIds || []).map(id => `<span class="badge2">${esc(niche(id)?.name || '')}</span>`).join('')}
         ${(c.icps || []).length ? `<span class="badge2" style="color:var(--amber);border-color:rgba(245,158,11,.4)">🎯 ${c.icps.length} ICP${c.icps.length > 1 ? 's' : ''}</span>` : ''}
         ${(c.growthPlans || []).length ? `<span class="badge2" style="color:var(--green);border-color:rgba(16,185,129,.4)">📈 ${c.growthPlans.length} plan${c.growthPlans.length > 1 ? 's' : ''}</span>` : ''}
+        ${(c.followups || []).length ? `<span class="badge2" style="color:var(--accent2);border-color:rgba(37,99,235,.4)">↪ ${c.followups.length} follow-up${c.followups.length > 1 ? 's' : ''}</span>` : ''}
         ${(cs.caseStudies || []).length ? `<span class="badge2">📂 ${cs.caseStudies.length} case studies</span>` : ''}
         ${(c.competitorIntel || []).length ? `<span class="badge2">🏁 ${c.competitorIntel.length} rivals</span>` : ''}
         ${(c.guarantees || []).length ? `<span class="badge2" style="color:var(--green);border-color:rgba(16,185,129,.4)">✅ ${c.guarantees.length} guarantee${c.guarantees.length > 1 ? 's' : ''}</span>` : ''}
@@ -2068,6 +2105,12 @@ function modalSaveReservoir() {
   saveToReservoir(modalIdx, 'idea');
 }
 
+function modalFollowups() {
+  const s = scriptIndex[modalIdx]; if (!s) return;
+  if (!state.clientId) return showNotif('Select a client first', true);
+  openFollowups(state.clientId, `${s.framework} · ${s.angle}`, document.getElementById('modalScript').value);
+}
+
 function saveToReservoir(idx, status) {
   const c = client(state.clientId);
   if (!c) return showNotif('Select a client first', true);
@@ -2119,6 +2162,7 @@ function renderReservoir(body) {
         </div>
         <div style="display:flex;gap:4px">
           <button class="copy-btn" onclick="navigator.clipboard.writeText(this.closest('.res-card').querySelector('.res-card-body').innerText);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1800)">Copy</button>
+          <button class="copy-btn" onclick="openFollowups('${c.id}', ${JSON.stringify(`${s.framework} · ${s.angle}`)}, this.closest('.res-card').querySelector('.res-card-body').innerText)" style="color:var(--accent2);border-color:rgba(37,99,235,.4)" title="Write outbound follow-ups to this script">↪ Follow-ups</button>
           <button class="copy-btn" onclick="sendToGrowth('${c.id}','${s.id}')" style="color:var(--accent2);border-color:rgba(37,99,235,.4)" title="Add this script to a growth plan, carrying the niche + angles over">📈 Growth</button>
           <button class="copy-btn danger" onclick="deleteReservoirScript('${c.id}','${s.id}')" style="color:var(--red);border-color:rgba(239,68,68,.35)">Del</button>
         </div>
@@ -2163,7 +2207,7 @@ function adminEdit(type, id) {
 }
 
 function renderAdmin() {
-  ['frameworks', 'winning', 'niches', 'clients', 'tools', 'settings'].forEach(t =>
+  ['frameworks', 'winning', 'niches', 'clients', 'followups', 'tools', 'settings'].forEach(t =>
     document.getElementById('atab-' + t).classList.toggle('active', t === state.adminTab));
   const body = document.getElementById('adminBody');
 
@@ -2197,7 +2241,54 @@ function adminTabHtml() {
   if (t === 'niches') return adminNiches();
   if (t === 'clients') return adminClients();
   if (t === 'tools') return adminToolsKB();
+  if (t === 'followups') return adminFollowups();
   return adminSettings();
+}
+
+// — Follow-up frameworks —
+function adminFollowups() {
+  let html = `<div class="info-block"><div class="info-title">↪ Outbound follow-up frameworks</div>
+    <div class="hint">Models the AI bases each follow-up on. Use {placeholders} for the parts AI fills; keep {{first_name}} / {{company}} merge tags.</div></div>
+    <button class="mini-btn" onclick="adminEditFollowup('__new__')">+ New follow-up framework</button>`;
+  html += (config.followupFrameworks || []).map(f => `
+    <div class="list-row">
+      <div style="min-width:0"><b>${esc(f.name)}</b>
+        <div class="sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:520px">${esc(String(f.template).replace(/\n/g, ' ').slice(0, 90))}…</div></div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="mini-btn" onclick="adminEditFollowup('${f.id}')">Edit</button>
+        <button class="mini-btn danger" onclick="deleteFollowup('${f.id}')">Delete</button>
+      </div>
+    </div>`).join('');
+  if (state.editing?.type === 'followups') {
+    const isNew = state.editing.id === '__new__';
+    const f = isNew ? { name: '', template: '' } : (config.followupFrameworks || []).find(x => x.id === state.editing.id);
+    if (f) html += `
+    <div class="editor">
+      <h3>${isNew ? 'New follow-up framework' : 'Edit: ' + esc(f.name)}</h3>
+      <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ef-fu-name" value="${esc(f.name)}"></div>
+      <div class="form-group"><label class="form-label">Template</label><textarea class="form-textarea" id="ef-fu-template" style="min-height:150px;font-family:'Courier Prime',monospace">${esc(f.template)}</textarea></div>
+      <div style="display:flex;gap:8px">
+        <button class="mini-btn" onclick="saveFollowup(${isNew})">💾 Save</button>
+        <button class="mini-btn" onclick="state.editing=null;renderAdmin()">Cancel</button>
+      </div>
+    </div>`;
+  }
+  return html;
+}
+function adminEditFollowup(id) { state.editing = { type: 'followups', id }; renderAdmin(); }
+function saveFollowup(isNew) {
+  const name = document.getElementById('ef-fu-name').value.trim();
+  const template = document.getElementById('ef-fu-template').value;
+  if (!name || !template.trim()) return showNotif('Name and template required', true);
+  const obj = { id: isNew ? uid('fu') : state.editing.id, name, template };
+  config.followupFrameworks = config.followupFrameworks || [];
+  if (isNew) config.followupFrameworks.push(obj); else config.followupFrameworks = config.followupFrameworks.map(f => f.id === obj.id ? obj : f);
+  state.editing = null; persistConfig(); renderAdmin(); showNotif('Follow-up framework saved');
+}
+function deleteFollowup(id) {
+  if (!confirm('Delete this follow-up framework?')) return;
+  config.followupFrameworks = (config.followupFrameworks || []).filter(f => f.id !== id);
+  state.editing = null; persistConfig(); renderAdmin(); showNotif('Deleted');
 }
 
 // — Tools knowledge base —
@@ -3379,6 +3470,7 @@ function initGrowth(clientId, mode = 'strategy') {
     winningScript: null,
     observed: { email: { contacted: 0, replies: 0, positive: 0, booked: 0 }, linkedin: { contacted: 0, replies: 0, positive: 0, booked: 0 } },
     nicheSize: '', targetBookings: 10, narrative: null,
+    followupIds: [],
   };
   gpResetToolDefaults();
 }
@@ -3445,6 +3537,27 @@ function computeChannel(channel, a) {
   const booked = positive * (+a.bookRate || 0);
   return { leads: connects, connects, accepted, outreaches: connects, replies, positive, booked, conversion: connects ? booked / connects : 0 };
 }
+// Reverse-engineer the whole funnel from the booking target: start at the goal
+// and divide back up through each rate. Everything is derived from the target.
+function computeReverse(channel, a, targetBookings) {
+  const booked = Math.max(0, +targetBookings || 0);
+  const div = (n, r) => (+r || 0) > 0 ? n / (+r) : 0;
+  if (channel === 'email') {
+    const pos = div(booked, a.bookRate);
+    const replies = div(pos, a.positiveRate);
+    const verified = div(replies, a.replyRate);
+    const leads = div(verified, a.verifyRate);
+    const outreaches = verified * (+a.sendsPerLead || 0);
+    return { leads, verified, outreaches, replies, positive: pos, booked, conversion: leads > 0 ? booked / leads : 0 };
+  }
+  const pos = div(booked, a.bookRate);
+  const replies = div(pos, a.positiveRate);
+  const accepted = div(replies, a.replyRate);
+  const connects = div(accepted, a.acceptRate);
+  const perDay = (+a.daysPerMonth || 0) > 0 ? connects / (+a.daysPerMonth) : 0;
+  return { leads: connects, connects, accepted, replies, positive: pos, booked, outreaches: connects, conversion: connects > 0 ? booked / connects : 0, connectsPerDayDerived: perDay };
+}
+
 // Back-solve: what volume is needed to hit a booking target, given the rates.
 function computeTargetNeed(channel, a, targetBookings) {
   const T = Math.max(0, +targetBookings || 0);
@@ -3496,7 +3609,12 @@ function gpAggregate() {
   const g = state.growth;
   let leads = 0, verified = 0, booked = 0;
   const per = {};
-  g.channels.forEach(ch => { const m = computeChannel(ch, g.assumptions[ch]); per[ch] = m; leads += m.leads; verified += (ch === 'email' ? m.verified : 0); booked += m.booked; });
+  // Strategy is reverse-engineered from the booking target; everything (leads,
+  // sends, inboxes, cost) sizes to hit that target.
+  g.channels.forEach(ch => {
+    const m = g.mode === 'strategy' ? computeReverse(ch, g.assumptions[ch], g.targetBookings) : computeChannel(ch, g.assumptions[ch]);
+    per[ch] = m; leads += m.leads; verified += (ch === 'email' ? m.verified : 0); booked += m.booked;
+  });
   return { per, leads, verified, booked };
 }
 function gpCostRows() {
@@ -3512,7 +3630,7 @@ function gpGeminiCostFor(leads) {
 }
 
 // ── render ──
-function renderGrowth() { renderGrowthForm(); renderGrowthPreview(); }
+function renderGrowth() { renderGrowthForm(); renderGrowthPreview(); gpMaybeAutoNarrate(); }
 
 function renderGrowthForm() {
   const el = document.getElementById('growthForm'); if (!el) return;
@@ -3568,15 +3686,20 @@ function renderGrowthForm() {
 
   // Pull from the reservoir without leaving the view
   html += gpReservoirPicker(c);
+  html += gpFollowupsSection(c);
 
   // Assumptions (shared) + tools + cost
   html += gpAssumptionsForm();
   html += gpToolsForm();
 
-  // Narrative
-  html += `<div class="step"><div class="step-head"><span class="step-title">✨ Narrative</span></div>
-    <button class="mini-btn" id="gp-narr-btn" onclick="gpComposeNarrative()">✨ Draft the plan narrative with AI</button>
-    <span class="hint" id="gp-narr-status" style="margin-left:8px"></span></div>`;
+  // Narrative — auto-drafts as you build; obeys the house rules from Admin
+  html += `<div class="step"><div class="step-head"><span class="step-title">✨ Narrative &amp; house style</span></div>
+    <div class="hint" style="margin-bottom:7px">The narrative writes itself as you build the plan, in your house language (Admin → Settings → growth rules). Tweak the inputs and it redrafts automatically.</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <button class="mini-btn" id="gp-narr-btn" onclick="gpComposeNarrative()">↻ Redraft narrative with AI</button>
+      <button class="mini-btn" id="gp-rules-btn" onclick="gpApplyHouseRules()" title="Rewrite every block of the doc to obey your house rules">🧹 Apply house rules to whole doc</button>
+      <span class="hint" id="gp-narr-status"></span>
+    </div></div>`;
 
   // Actions
   html += `<div style="display:flex;gap:8px;margin:18px 0 40px">
@@ -3679,7 +3802,7 @@ function gpAssumptionsForm() {
   g.channels.forEach(ch => {
     html += `<div class="gp-sub">${CH_LABEL[ch]}</div><div class="assume-grid">`;
     if (ch === 'email') {
-      html += num('email', 'leadsPerMonth', 'Leads scraped / mo') + num('email', 'verifyRate', 'Verify rate', 1) + num('email', 'sendsPerLead', 'Sends / lead') + num('email', 'replyRate', 'Reply rate', 1) + num('email', 'positiveRate', 'Positive / reply', 1) + num('email', 'bookRate', 'Book / positive', 1) + num('email', 'sendsPerInboxPerDay', 'Sends / inbox / day') + num('email', 'sendingDays', 'Sending days / mo') + num('email', 'inboxCostMo', 'Cost / inbox / mo');
+      html += num('email', 'verifyRate', 'Verify rate', 1) + num('email', 'sendsPerLead', 'Sends / lead') + num('email', 'replyRate', 'Reply rate', 1) + num('email', 'positiveRate', 'Positive / reply', 1) + num('email', 'bookRate', 'Book / positive', 1) + num('email', 'sendsPerInboxPerDay', 'Sends / inbox / day') + num('email', 'sendingDays', 'Sending days / mo') + num('email', 'inboxCostMo', 'Cost / inbox / mo');
     } else {
       html += num('linkedin', 'connectsPerDay', 'Connects / day') + num('linkedin', 'daysPerMonth', 'Sending days / mo') + num('linkedin', 'acceptRate', 'Accept rate', 1) + num('linkedin', 'replyRate', 'Reply / accepted', 1) + num('linkedin', 'positiveRate', 'Positive / reply', 1) + num('linkedin', 'bookRate', 'Book / positive', 1) + num('linkedin', 'connectsPerProfilePerDay', 'Connects / profile / day') + num('linkedin', 'profileCostMo', 'Cost / profile / mo');
     }
@@ -3870,7 +3993,69 @@ function gpPullAngle(b) {
   renderGrowth(); showNotif(`Angle added to ${t.title}`);
 }
 
+// Saved follow-up sequences attachable to this plan (export as Notion dropdowns).
+function gpFollowupsSection(c) {
+  if (!c) return '';
+  const g = state.growth;
+  const seqs = c.followups || [];
+  let rows = seqs.length ? seqs.map(s => {
+    const on = g.followupIds.includes(s.id);
+    return `<div class="gp-script-opt ${on ? 'on' : ''}" onclick="gpToggleFollowup('${s.id}')"><span>${on ? '☑' : '☐'}</span>
+      <span style="flex:1"><b>${esc(s.parentLabel)}</b> <span class="s-meta">${s.items.length} follow-ups · ${esc(s.createdAt)}</span><br>
+      <span style="color:var(--muted)">${s.items.map(it => `Day +${it.day}: ${esc((it.framework || '').slice(0, 22))}`).join(' · ')}</span></span></div>`;
+  }).join('') : '<div class="proof-empty">No follow-up sequences saved yet. Build them from a script (Reservoir → ↪ Follow-ups).</div>';
+  return `
+  <details class="personalize" style="margin:6px 0 10px">
+    <summary>↪ Outbound follow-ups — attach sequences to this plan</summary>
+    <div class="inner">
+      <div class="hint" style="margin-bottom:6px">Attached sequences appear in the plan as a dropdown, and export to Notion as a collapsible toggle.</div>
+      ${rows}
+    </div>
+  </details>`;
+}
+function gpToggleFollowup(id) {
+  const a = state.growth.followupIds, i = a.indexOf(id);
+  if (i === -1) a.push(id); else a.splice(i, 1);
+  renderGrowth();
+}
+function gpActiveFollowups() {
+  const c = gpClient();
+  return (state.growth.followupIds || []).map(id => (c.followups || []).find(s => s.id === id)).filter(Boolean);
+}
+// Preview HTML: each sequence as a native <details> dropdown.
+function gpFollowupsDocHtml() {
+  const seqs = gpActiveFollowups();
+  if (!seqs.length) return '';
+  return `<h2>↪ Outbound follow-ups</h2>` + seqs.map(s => `
+    <details style="border:1px solid var(--border);border-radius:8px;background:var(--bg2);padding:0 12px;margin-bottom:8px">
+      <summary style="cursor:pointer;padding:10px 0;font-weight:600;font-size:13px">${esc(s.parentLabel)} — ${s.items.length} follow-ups (every ${s.gapDays || 2} days)</summary>
+      <div style="padding:0 0 12px">${s.items.map(it => `<h3>Day +${it.day} · ${esc(it.framework || '')}</h3><div class="scriptbox">${esc(it.text)}</div>`).join('')}</div>
+    </details>`).join('');
+}
+// Export: each sequence as a Notion toggle (dropdown) with the follow-ups inside.
+function gpFollowupsBlocks() {
+  const seqs = gpActiveFollowups();
+  if (!seqs.length) return [];
+  const B = [{ t: 'h2', text: '↪ Outbound follow-ups' }];
+  seqs.forEach(s => {
+    const kids = [];
+    s.items.forEach(it => { kids.push({ t: 'h3', text: `Day +${it.day} · ${it.framework || ''}` }); kids.push({ t: 'code', text: it.text }); });
+    B.push({ t: 'toggle', text: `${s.parentLabel} — ${s.items.length} follow-ups (every ${s.gapDays || 2} days)`, children: kids });
+  });
+  return B;
+}
+
 // ── preview document ──
+// Reverse funnel: target at the top, requirements derived beneath it.
+function funnelTableReverse(channel, m, T) {
+  const rows = channel === 'email'
+    ? [['🎯 Booked calls (target)', T, true], ['Positive replies needed', m.positive], ['Replies needed', m.replies], ['Verified emails needed', m.verified], ['Leads to scrape', m.leads, true], ['Emails to send / mo', m.outreaches]]
+    : [['🎯 Booked calls (target)', T, true], ['Positive replies needed', m.positive], ['Replies needed', m.replies], ['Accepted connections needed', m.accepted], ['Connection requests / mo', m.connects, true], ['Connects / day needed', Math.ceil(m.connectsPerDayDerived || 0)]];
+  return `<table><thead><tr><th>Reverse funnel</th><th class="num">Per month</th></tr></thead><tbody>
+    ${rows.map(([k, v, strong]) => `<tr><td${strong ? ' class="tot"' : ''}>${k}</td><td class="num${strong ? ' tot' : ''}">${gpInt(v)}</td></tr>`).join('')}
+  </tbody></table>`;
+}
+
 function funnelTable(channel, m) {
   const rows = channel === 'email'
     ? [['Leads scraped', m.leads], ['Verified (sendable)', m.verified], ['Outreaches sent', m.outreaches], ['Replies', m.replies], ['Positive replies', m.positive], ['Booked calls', m.booked]]
@@ -4074,20 +4259,14 @@ function gpPreviewStrategy(c) {
       <h3>Scripts</h3>${t.scripts.map(s => `<div class="scriptbox">${esc(s.text)}</div>`).join('') || '<p>—</p>'}`;
   });
 
-  // Per-channel funnel + the booking/sending target it's sized against
+  // Reverse-engineered funnel: start at the booking target, divide back up the rates
   const per = {};
   const T = +g.targetBookings || 0;
   g.channels.forEach(ch => {
-    const m = computeChannel(ch, g.assumptions[ch]); per[ch] = m;
-    h += `<h2>${CH_LABEL[ch]} — projected funnel</h2>${funnelTable(ch, m)}`;
-    const need = computeTargetNeed(ch, g.assumptions[ch], T);
-    const gem = gpGeminiCostFor(need.leadsNeeded);
-    h += `<table><thead><tr><th>🎯 To hit the target</th><th class="num">Needed / mo</th></tr></thead><tbody>
-      <tr><td>Book-in target</td><td class="num tot">${gpInt(T)} calls</td></tr>
-      ${ch === 'email'
-        ? `<tr><td>Leads to scrape</td><td class="num">${gpInt(need.leadsNeeded)}</td></tr><tr><td>Sending target (emails)</td><td class="num">${gpInt(need.sendsNeeded)}</td></tr>`
-        : `<tr><td>Connection requests</td><td class="num">${gpInt(need.connectsNeeded)}</td></tr>`}
-      <tr><td>Gemini personalization for target</td><td class="num">${gpMoney(gem)}/mo</td></tr></tbody></table>`;
+    const m = computeReverse(ch, g.assumptions[ch], T); per[ch] = m;
+    h += `<h2>${CH_LABEL[ch]} funnel — reverse-engineered from ${gpInt(T)} booked calls/mo</h2>
+      <p>Working back from the goal: to book <b>${gpInt(T)}</b> calls a month at these rates, here is what we provision.</p>
+      ${funnelTableReverse(ch, m, T)}`;
   });
 
   // Personalization note
@@ -4112,6 +4291,7 @@ function gpPreviewStrategy(c) {
     <li>☐ Kickoff: ${g.channels.includes('email') ? 'domains + inbox warmup' : ''}${g.channels.length > 1 ? ' / ' : ''}${g.channels.includes('linkedin') ? 'LinkedIn seat setup' : ''}</li>
   </ul>`;
 
+  h += gpFollowupsDocHtml();
   if (g.toggles.pledge && g.toggles.pledgeText.trim()) h += `<div class="callout pledge"><b>Our pledge:</b> ${esc(g.toggles.pledgeText)}</div>`;
   if (N?.closing) h += `<p><i>${esc(N.closing)}</i></p>`;
   h += `</div>`;
@@ -4181,6 +4361,7 @@ function gpPreviewGrowth(c) {
   const otherCh = ['email', 'linkedin'].find(ch => !g.channels.includes(ch));
   if (otherCh) h += `<div class="opt-card"><div class="oc-title">➕ Add ${CH_LABEL[otherCh]}</div><p>Layer in ${CH_LABEL[otherCh]} to multiply touchpoints on the same accounts.</p></div>`;
 
+  h += gpFollowupsDocHtml();
   if (g.toggles.pledge && g.toggles.pledgeText.trim()) h += `<div class="callout pledge"><b>Our pledge:</b> ${esc(g.toggles.pledgeText)}</div>`;
   if (N?.closing) h += `<p><i>${esc(N.closing)}</i></p>`;
   h += `</div>`;
@@ -4188,14 +4369,15 @@ function gpPreviewGrowth(c) {
 }
 
 // ── narrative / save / export ──
-async function gpComposeNarrative() {
-  if (!adminKey) return showNotif('No admin key', true);
+async function gpComposeNarrative(silent) {
+  if (!adminKey) { if (!silent) showNotif('No admin key', true); return; }
   const g = state.growth, c = gpClient();
+  g._narrating = true;
   const btn = document.getElementById('gp-narr-btn'), st = document.getElementById('gp-narr-status');
   if (btn) { btn.textContent = '✨ Drafting…'; btn.disabled = true; }
   if (st) st.textContent = 'Writing…';
   try {
-    const numbers = g.channels.map(ch => ({ channel: ch, ...computeChannel(ch, g.assumptions[ch]) }));
+    const numbers = g.channels.map(ch => ({ channel: ch, ...(g.mode === 'strategy' ? computeReverse(ch, g.assumptions[ch], g.targetBookings) : computeChannel(ch, g.assumptions[ch])) }));
     const r = await api({
       action: 'compose_growth_plan',
       mode: g.mode,
@@ -4205,11 +4387,64 @@ async function gpComposeNarrative() {
       rules: config.settings?.growthRules || '',
     });
     g.narrative = { execSummary: r.execSummary || '', targetRationales: r.targetRationales || [], closing: r.closing || '' };
-    renderGrowthPreview();
+    if (!g.docHtml) renderGrowthPreview();
     if (st) st.textContent = '✅ Drafted';
-    showNotif('Narrative drafted');
-  } catch (e) { if (st) st.textContent = '⚠️ ' + e.message; showNotif('Draft failed: ' + e.message, true); }
-  if (btn) { btn.textContent = '✨ Draft the plan narrative with AI'; btn.disabled = false; }
+    if (!silent) showNotif('Narrative drafted');
+  } catch (e) { if (st) st.textContent = '⚠️ ' + e.message; if (!silent) showNotif('Draft failed: ' + e.message, true); }
+  g._narrating = false;
+  if (btn) { btn.textContent = '↻ Redraft narrative with AI'; btn.disabled = false; }
+}
+
+// Apply the house style rules to EVERY prose block of the doc at once, so the
+// whole document reads consistently (tables, numbers and scripts untouched).
+async function gpApplyHouseRules() {
+  if (!adminKey) return showNotif('No admin key', true);
+  const rules = (config.settings?.growthRules || '').trim();
+  if (!rules) return showNotif('Add your house rules in Admin → Settings first', true);
+  if (state.growth.docHtml == null) { gpEnterEdit(); await new Promise(r => setTimeout(r, 80)); }
+  const doc = document.getElementById('gpDoc'); if (!doc) return;
+  const nodes = [...doc.children].filter(el => /^(P|H2|H3)$/.test(el.tagName) || el.tagName === 'UL' || el.classList.contains('callout'));
+  if (!nodes.length) return showNotif('Nothing to restyle', true);
+  const btn = document.getElementById('gp-rules-btn');
+  const ctx = doc.innerText.slice(0, 4000);
+  let done = 0;
+  const run = async (el) => {
+    const text = el.innerText.trim(); if (!text) return;
+    const kind = /^H[23]$/.test(el.tagName) ? 'heading' : (el.tagName === 'UL' ? 'list' : 'paragraph');
+    try {
+      const r = await api({ action: 'ai_edit_text', text, instruction: `Apply the house style to this ${kind}. Keep every number, name and fact exact.`, context: ctx, rules });
+      const raw = r.html ?? r.text ?? '';
+      if (/^H[23]$/.test(el.tagName)) {
+        const tmp = document.createElement('div'); tmp.innerHTML = raw;
+        el.textContent = (tmp.innerText || text).trim();   // headings stay headings
+      } else {
+        const clean = sanitizeAiHtml(raw);
+        if (clean) { const w = document.createElement('div'); w.innerHTML = clean; el.replaceWith(...w.childNodes); }
+      }
+    } catch {}
+    done++;
+    if (btn) btn.textContent = `🧹 ${done}/${nodes.length}…`;
+  };
+  if (btn) { btn.disabled = true; btn.textContent = '🧹 0/' + nodes.length + '…'; }
+  await Promise.all(nodes.map(run));
+  state.growth.docHtml = doc.innerHTML;
+  renderGrowthPreview();
+  if (btn) { btn.disabled = false; btn.textContent = '🧹 Apply house rules to whole doc'; }
+  showNotif('✅ House rules applied across the doc');
+}
+
+// Auto-draft the narrative once the plan has content — no manual click needed.
+// Re-drafts when the plan's structure changes (targets/script/mode/channels).
+function gpMaybeAutoNarrate() {
+  const g = state.growth;
+  if (!g || !adminKey || g.docHtml) return;
+  const hasContent = g.mode === 'strategy' ? g.targets.length : !!g.winningScript;
+  if (!hasContent) return;
+  const sig = JSON.stringify({ m: g.mode, ch: g.channels, t: g.targets.map(t => t.icpId + '|' + t.angles.join(',') + '|' + t.scripts.length), w: g.winningScript?.text || '', tb: g.targetBookings });
+  if (g._narratedSig === sig || g._narrating) return;
+  g._narratedSig = sig;
+  clearTimeout(g._narrTimer);
+  g._narrTimer = setTimeout(() => gpComposeNarrative(true), 1100);
 }
 
 function gpSnapshot() {
@@ -4226,6 +4461,7 @@ function gpSnapshot() {
     observed: structuredClone(g.observed), nicheSize: g.nicheSize, targetBookings: g.targetBookings,
     narrative: g.narrative ? structuredClone(g.narrative) : null,
     docHtml: g.docHtml ?? null,
+    followupIds: [...(g.followupIds || [])],
     notionUrl: g._notionUrl || '',
     createdAt: new Date().toISOString().slice(0, 10),
   };
@@ -4262,6 +4498,7 @@ function gpLoadPlan(id) {
     nicheSize: p.nicheSize || '', targetBookings: p.targetBookings || 10,
     narrative: p.narrative ? structuredClone(p.narrative) : null, _notionUrl: p.notionUrl || '',
     docHtml: p.docHtml ?? null,
+    followupIds: [...(p.followupIds || [])],
   };
   renderGrowth(); showNotif('Plan loaded');
 }
@@ -4295,18 +4532,12 @@ function gpBuildBlocks() {
     const per = {};
     const T = +g.targetBookings || 0;
     g.channels.forEach(ch => {
-      const m = computeChannel(ch, g.assumptions[ch]); per[ch] = m;
-      B.push({ t: 'h2', text: `${CH_LABEL[ch]} — projected funnel` });
+      const m = computeReverse(ch, g.assumptions[ch], T); per[ch] = m;
+      B.push({ t: 'h2', text: `${CH_LABEL[ch]} funnel — reverse-engineered from ${gpInt(T)} booked calls/mo` });
       const rows = ch === 'email'
-        ? [['Leads scraped', gpInt(m.leads)], ['Verified', gpInt(m.verified)], ['Outreaches', gpInt(m.outreaches)], ['Replies', gpInt(m.replies)], ['Positive replies', gpInt(m.positive)], ['Booked calls', gpInt(m.booked)], ['Conversion', gpPct(m.conversion)]]
-        : [['Connections', gpInt(m.connects)], ['Accepted', gpInt(m.accepted)], ['Replies', gpInt(m.replies)], ['Positive replies', gpInt(m.positive)], ['Booked calls', gpInt(m.booked)], ['Conversion', gpPct(m.conversion)]];
-      B.push({ t: 'table', headers: ['Metric', 'Expected/mo'], rows });
-      const need = computeTargetNeed(ch, g.assumptions[ch], T);
-      const targetRows = [['Book-in target', gpInt(T) + ' calls']];
-      if (ch === 'email') { targetRows.push(['Leads to scrape', gpInt(need.leadsNeeded)], ['Sending target (emails)', gpInt(need.sendsNeeded)]); }
-      else targetRows.push(['Connection requests', gpInt(need.connectsNeeded)]);
-      targetRows.push(['Gemini personalization for target', gpMoney(gpGeminiCostFor(need.leadsNeeded)) + '/mo']);
-      B.push({ t: 'table', headers: ['🎯 To hit the target', 'Needed/mo'], rows: targetRows });
+        ? [['🎯 Booked calls (target)', gpInt(T)], ['Positive replies needed', gpInt(m.positive)], ['Replies needed', gpInt(m.replies)], ['Verified emails needed', gpInt(m.verified)], ['Leads to scrape', gpInt(m.leads)], ['Emails to send / mo', gpInt(m.outreaches)]]
+        : [['🎯 Booked calls (target)', gpInt(T)], ['Positive replies needed', gpInt(m.positive)], ['Replies needed', gpInt(m.replies)], ['Accepted connections needed', gpInt(m.accepted)], ['Connection requests / mo', gpInt(m.connects)], ['Connects / day needed', gpInt(Math.ceil(m.connectsPerDayDerived || 0))]];
+      B.push({ t: 'table', headers: ['Reverse funnel', 'Per month'], rows });
     });
     const costRows = gpCostRows();
     const infra = gpInfraRows(per);
@@ -4344,6 +4575,7 @@ function gpBuildBlocks() {
     B.push({ t: 'todo', text: `Bulk order ${gpInt(leadsAll)} leads` });
     B.push({ t: 'todo', text: 'Run the script at the volume above' });
   }
+  gpFollowupsBlocks().forEach(b => B.push(b));
   if (g.toggles.pledge && g.toggles.pledgeText.trim()) B.push({ t: 'callout', text: '✅ Our pledge: ' + g.toggles.pledgeText });
   if (N?.closing) B.push({ t: 'p', text: N.closing });
   return B;
@@ -4370,6 +4602,120 @@ async function gpExportNotion() {
     showNotif('✅ Exported to Notion');
     if (r.url) window.open(r.url, '_blank');
   } catch (e) { showNotif('Notion export failed: ' + e.message, true); }
+}
+
+// ─── OUTBOUND FOLLOW-UPS ─────────────────────────────────────────────────────
+let fuState = null;
+
+function openFollowups(clientId, label, text) {
+  const c = client(clientId); if (!c) return;
+  fuState = {
+    clientId, parentLabel: label || 'First script', parentText: text || '',
+    icpId: (c.icps || [])[0]?.id || '',
+    use: { pains: true, desires: true, angles: false },
+    frameworkIds: (config.followupFrameworks || []).slice(0, 2).map(f => f.id),
+    gapDays: 2,
+    result: null,
+  };
+  renderFollowupModal();
+  document.getElementById('followupModal').classList.add('show');
+}
+function closeFollowupModal() { document.getElementById('followupModal').classList.remove('show'); fuState = null; }
+
+function renderFollowupModal() {
+  const el = document.getElementById('fuBody'); if (!el || !fuState) return;
+  const c = client(fuState.clientId);
+  document.getElementById('fuSub').textContent = c.name;
+  const fws = config.followupFrameworks || [];
+  const useChip = (kind, label) => `<div class="chip ${fuState.use[kind] ? 'on' : ''}" onclick="fuToggleUse('${kind}')">${label}</div>`;
+
+  el.innerHTML = `
+    <div class="gp-sub">First script (these follow up on it)</div>
+    <div class="scriptbox" style="background:var(--bg2);border:1px solid var(--border);border-radius:7px;padding:11px 13px;font-family:'Courier Prime',monospace;font-size:12px;white-space:pre-wrap;max-height:120px;overflow:auto">${esc(fuState.parentText) || '<span style="color:var(--muted)">No first script linked — follow-ups will stand alone.</span>'}</div>
+
+    <div class="gp-sub" style="margin-top:12px">Target ICP</div>
+    <select class="form-select" onchange="fuState.icpId=this.value">
+      <option value="">— no ICP —</option>
+      ${(c.icps || []).map(i => `<option value="${i.id}" ${fuState.icpId === i.id ? 'selected' : ''}>${esc(i.title)}</option>`).join('')}
+    </select>
+
+    <div class="gp-sub" style="margin-top:12px">Base the follow-ups on</div>
+    <div class="chips">${useChip('pains', '🔴 Pains')}${useChip('desires', '🟢 Desires')}${useChip('angles', '🎯 Angles')}</div>
+
+    <div class="gp-sub" style="margin-top:12px">Frameworks — pick in order (one follow-up each)</div>
+    <div class="chips">${fws.map(f => {
+      const idx = fuState.frameworkIds.indexOf(f.id);
+      return `<div class="chip ${idx !== -1 ? 'on' : ''}" onclick="fuToggleFw('${f.id}')">${idx !== -1 ? (idx + 1) + '. ' : ''}${esc(f.name)}</div>`;
+    }).join('')}</div>
+
+    <div class="assume-grid" style="margin-top:12px"><label>Days between follow-ups</label><input class="num-input" type="number" value="${fuState.gapDays}" onchange="fuState.gapDays=Math.max(1,+this.value||2);renderFollowupModal()"></div>
+    <div class="hint">${fuState.frameworkIds.length ? 'Cadence: ' + fuState.frameworkIds.map((_, i) => 'Day +' + (fuState.gapDays * (i + 1))).join(' · ') : 'Pick at least one framework.'}</div>
+
+    ${fuState.result ? `<div class="gp-sub" style="margin-top:14px">✨ Generated follow-ups — edit freely</div>` +
+      fuState.result.map((f, i) => `
+        <div class="res-card" style="margin-top:7px">
+          <div class="res-card-head"><span class="res-card-labels"><span class="gp-badge growth">Day +${f.day}</span> <b style="font-size:12px">${esc(f.framework)}</b></span></div>
+          <textarea class="script-edit-area" style="border-bottom:none;min-height:120px" onchange="fuState.result[${i}].text=this.value">${esc(f.text)}</textarea>
+        </div>`).join('') : ''}
+  `;
+}
+
+function fuToggleUse(kind) { fuState.use[kind] = !fuState.use[kind]; renderFollowupModal(); }
+function fuToggleFw(id) {
+  const i = fuState.frameworkIds.indexOf(id);
+  if (i === -1) fuState.frameworkIds.push(id); else fuState.frameworkIds.splice(i, 1);
+  renderFollowupModal();
+}
+
+async function fuGenerate() {
+  if (!adminKey) return showNotif('No admin key', true);
+  if (!fuState.frameworkIds.length) return showNotif('Pick at least one framework', true);
+  const c = client(fuState.clientId);
+  const fws = fuState.frameworkIds.map(id => (config.followupFrameworks || []).find(f => f.id === id)).filter(Boolean);
+  const icp = (c.icps || []).find(i => i.id === fuState.icpId);
+  const basis = {
+    pains: fuState.use.pains ? clientPains(c) : [],
+    desires: fuState.use.desires ? clientDesires(c) : [],
+    angles: fuState.use.angles ? clientAnglePool(c) : [],
+  };
+  const btn = document.getElementById('fuGenBtn');
+  if (btn) { btn.textContent = '✨ Writing…'; btn.disabled = true; }
+  try {
+    const r = await api({
+      action: 'generate_followups',
+      parentScript: fuState.parentText,
+      frameworks: fws.map(f => ({ name: f.name, template: f.template })),
+      gapDays: fuState.gapDays,
+      icp: icp ? { title: icp.title, jobTitles: icp.jobTitles || [], niche: icp.niche } : undefined,
+      client: { name: c.name, caseStudy: c.caseStudy || {} },
+      basis,
+      rules: config.settings?.growthRules || '',
+    });
+    fuState.result = r.followups || [];
+    renderFollowupModal();
+    showNotif(`✨ ${fuState.result.length} follow-ups written`);
+  } catch (e) { showNotif('Generate failed: ' + e.message, true); }
+  if (btn) { btn.textContent = '✨ Generate follow-ups'; btn.disabled = false; }
+}
+
+function fuSave() {
+  if (!fuState?.result?.length) return showNotif('Generate the follow-ups first', true);
+  const c = client(fuState.clientId); if (!c) return;
+  c.followups = c.followups || [];
+  c.followups.push({
+    id: uid('fu'),
+    parentLabel: fuState.parentLabel,
+    parentText: fuState.parentText,
+    icpId: fuState.icpId,
+    gapDays: fuState.gapDays,
+    items: structuredClone(fuState.result),
+    createdAt: new Date().toISOString().slice(0, 10),
+  });
+  persistConfig();
+  showNotif('↪ Follow-up sequence saved');
+  closeFollowupModal();
+  if (state.screen === 'builder') renderBuilder();
+  if (state.screen === 'growth') renderGrowth();
 }
 
 // ─── MISC ──────────────────────────────────────────────────────────────────────
