@@ -142,6 +142,51 @@ async function handle(req: Request): Promise<Response> {
         ],
       }, cors);
     }
+    if (body.action === "build_icp") {
+      await new Promise((r) => setTimeout(r, 1800));
+      return json({
+        ok: true,
+        icps: [
+          {
+            title: "Scaling B2B SaaS — pricing left behind",
+            niche: "B2B SaaS, Series A-C",
+            jobTitles: ["CEO", "CFO", "VP Revenue", "Head of RevOps"],
+            locations: ["United States", "UK"],
+            employeeSize: "51-200",
+            revenue: "$5M-$50M ARR",
+            marketSize: "~34K — LinkedIn shows ~31-37K matching titles at US/UK SaaS cos 51-200",
+            why: "(mock) Their $500M eHealth case study transfers directly: same 'existing customers underpriced' pain, same repricing mechanism. Budget holder is the CEO/CFO at this size.",
+            outboundNotes: "Highly reachable on LinkedIn/Apollo. Trigger: recent funding round or flat NRR. Lead with the 20% ARR uplift case.",
+            score: 9,
+          },
+          {
+            title: "PE-backed vertical software",
+            niche: "PE portfolio software companies",
+            jobTitles: ["Operating Partner", "Portfolio CEO", "CFO"],
+            locations: ["United States"],
+            employeeSize: "201-1000",
+            revenue: "$20M-$100M",
+            marketSize: "~12K — est. from PitchBook PE software portfolio counts",
+            why: "(mock) PE owners care about exit multiples — the client's 'stronger multiple' framing lands hardest here, and 3 of their case studies are PE-backed.",
+            outboundNotes: "Smaller but high-ACV market. Lead with exit-multiple math, not features.",
+            score: 8,
+          },
+          {
+            title: "Bootstrapped SaaS hitting the growth wall",
+            niche: "Bootstrapped B2B SaaS",
+            jobTitles: ["Founder", "CEO"],
+            locations: ["US", "EU"],
+            employeeSize: "11-50",
+            revenue: "$1M-$10M ARR",
+            marketSize: "~80K — broad; would need niching down to ~30K via vertical filter",
+            why: "(mock) Price-sensitive but the pain is acute: CAC rising, no pricing function in-house.",
+            outboundNotes: "Cheaper deals, faster cycles. Flag: market is broad — niche by vertical before sequencing.",
+            score: 6,
+          },
+        ],
+        insights: "(mock) Start with ICP 1 — proof transfers cleanly and the ~34K market is the outbound sweet spot. ICP 2 is the high-ACV expansion play.",
+      }, cors);
+    }
     if (body.action === "suggest_offers") {
       await new Promise((r) => setTimeout(r, 800));
       return json({

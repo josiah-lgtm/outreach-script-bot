@@ -570,6 +570,43 @@ Deno.serve(async (req) => {
         return json(result, result.ok ? 200 : 422);
       }
 
+      case "build_icp": {
+        const context = String(body.context ?? "").slice(0, 14_000);
+        if (!context.trim()) return json({ ok: false, error: "client context required" }, 400);
+        const res = await claudeMessages({
+          model: CLAUDE_MODEL,
+          max_tokens: 6000,
+          system:
+            `You are a world-renowned outbound/cold-email strategist. Given everything known about a lead-gen agency's client ` +
+            `(their offer, mechanism, proof, customer pains, call-transcript intel, competitors), define the 1-5 BEST ideal customer profiles to target with cold outreach.\n` +
+            `Rules of great outbound ICPs:\n` +
+            `- Specific job titles that actually hold the budget/pain (not generic "decision makers").\n` +
+            `- A market that is ACCESSIBLE via outbound (findable on LinkedIn/Apollo/email databases). The sweet spot is roughly 10,000-100,000 reachable prospects — big enough to scale sequences, small enough to specialize messaging. Around 30-40K is ideal. Flag anything under ~5K (too thin) or over ~500K (unfocused).\n` +
+            `- The client's existing proof must transfer: pick ICPs where their case studies and mechanism are believable.\n` +
+            `- Use web search (up to 6 searches) to ESTIMATE market size: LinkedIn title counts, industry association stats, census/firmographic data ("number of X companies in Y"). State numbers with their basis; never present a guess as fact — if it is a reasoned estimate, say so.\n` +
+            `Return valid JSON only, no markdown fences:\n` +
+            `{"icps":[{` +
+            `"title":"short memorable ICP label",` +
+            `"niche":"the vertical/niche",` +
+            `"jobTitles":["3-6 exact titles to target"],` +
+            `"locations":["1-3 geos, most accessible first"],` +
+            `"employeeSize":"company size band, e.g. 11-50",` +
+            `"revenue":"revenue band if relevant, else empty string",` +
+            `"marketSize":"estimated reachable prospects + one-line basis, e.g. '~35K — LinkedIn shows 32-38K matching titles in US'",` +
+            `"why":"2-3 sentences: why this ICP fits THIS client — tie to their pains/mechanism/proof",` +
+            `"outboundNotes":"reachability, buying triggers, what to lead with",` +
+            `"score":8` +
+            `}],"insights":"2-3 sentences: overall targeting strategy and which ICP to start with"}\n` +
+            `Order icps best-first. score is outbound-fit 1-10.\n` +
+            `IMPORTANT: do all web searching FIRST, then write NOTHING except the single JSON object as your final answer — no commentary before or after it.`,
+          messages: [{ role: "user", content: `CLIENT DOSSIER:\n${context}` }],
+          tools: [webSearchTool(6)],
+        });
+        const parsed = parseJson(textOf(res.content), null as Record<string, unknown> | null);
+        if (!parsed) return json({ ok: false, error: "could not parse ICP output — try again" }, 422);
+        return json({ ok: true, ...parsed });
+      }
+
       case "suggest_offers": {
         const context = String(body.context ?? "").slice(0, 6_000);
         if (!context.trim()) return json({ ok: false, error: "context required" }, 400);

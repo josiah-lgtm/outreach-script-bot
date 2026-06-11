@@ -445,6 +445,36 @@
   }
   .suggest-pill:hover { background: rgba(37,99,235,.12); }
 
+  /* ── ICP BUILDER ── */
+  .icp-card {
+    border: 1px solid var(--border); border-radius: 10px; background: var(--bg2);
+    padding: 13px 15px; margin-bottom: 9px;
+  }
+  .icp-card.saved { border-color: rgba(16,185,129,.4); }
+  .icp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  .icp-title { font: 700 13px 'Inter', sans-serif; color: var(--text); }
+  .icp-niche { font: 500 11px 'Inter', sans-serif; color: var(--accent2); margin-top: 2px; }
+  .icp-score {
+    flex-shrink: 0; font: 700 11px 'Inter', sans-serif; padding: 3px 10px; border-radius: 12px;
+    background: rgba(37,99,235,.14); color: var(--accent2); border: 1px solid rgba(37,99,235,.35);
+  }
+  .icp-score.hot { background: rgba(16,185,129,.12); color: var(--green); border-color: rgba(16,185,129,.4); }
+  .icp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 14px; margin: 8px 0; }
+  .icp-kv { font-size: 11px; color: var(--subtle); line-height: 1.5; }
+  .icp-kv b { color: var(--muted); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; display: block; }
+  .icp-market {
+    font-size: 11.5px; color: var(--amber); background: rgba(245,158,11,.08);
+    border: 1px solid rgba(245,158,11,.25); border-radius: 7px; padding: 7px 10px; margin: 8px 0; line-height: 1.5;
+  }
+  .icp-why { font-size: 12px; color: var(--subtle); line-height: 1.55; margin: 8px 0; }
+  .icp-why b { color: var(--text); }
+  .icp-notes { font-size: 11px; color: var(--muted); line-height: 1.5; font-style: italic; }
+  .icp-actions { display: flex; gap: 6px; margin-top: 10px; }
+  .title-chip {
+    display: inline-block; font-size: 11px; padding: 3px 9px; border-radius: 12px;
+    background: var(--bg3); border: 1px solid var(--border); color: var(--text); margin: 2px 3px 2px 0;
+  }
+
   /* ── TRANSCRIPT SECTION ── */
   .transcript-card {
     border: 1px solid var(--border); border-radius: 7px; background: var(--bg2);
@@ -946,6 +976,7 @@ function migrateConfig(cfg) {
     c.favorites = c.favorites || { pains: [], desires: [], caseStudies: [], offers: [] };
     ['pains', 'desires', 'caseStudies', 'offers'].forEach(k => { if (!Array.isArray(c.favorites[k])) c.favorites[k] = []; });
     c.sources = c.sources || {};   // text → {type:'site'|'transcript'|'research'|'ai'|'competitor', label}
+    c.icps = c.icps || [];         // saved ideal customer profiles from the ICP builder
   });
   (cfg.frameworks || []).forEach(f => { f.nicheIds = f.nicheIds || []; });
   cfg.winningScripts = cfg.winningScripts || [];
@@ -1084,6 +1115,7 @@ function renderBuilder() {
       ${cs.result ? `<div class="client-hero-result"><b>${esc(cs.result)}</b>${cs.mechanism ? ' — ' + esc(cs.mechanism) : ''}</div>` : ''}
       <div class="hero-badges">
         ${(c.nicheIds || []).map(id => `<span class="badge2">${esc(niche(id)?.name || '')}</span>`).join('')}
+        ${(c.icps || []).length ? `<span class="badge2" style="color:var(--amber);border-color:rgba(245,158,11,.4)">🎯 ${c.icps.length} ICP${c.icps.length > 1 ? 's' : ''}</span>` : ''}
         ${(cs.caseStudies || []).length ? `<span class="badge2">📂 ${cs.caseStudies.length} case studies</span>` : ''}
         ${(c.competitorIntel || []).length ? `<span class="badge2">🏁 ${c.competitorIntel.length} rivals</span>` : ''}
         ${(c.guarantees || []).length ? `<span class="badge2" style="color:var(--green);border-color:rgba(16,185,129,.4)">✅ ${c.guarantees.length} guarantee${c.guarantees.length > 1 ? 's' : ''}</span>` : ''}
@@ -2136,7 +2168,9 @@ function adminClients() {
         candidates: [],
         transcripts: structuredClone(c.transcripts || []),
         suggestedOffers: [],
-        sources: structuredClone(c.sources || {})
+        sources: structuredClone(c.sources || {}),
+        icps: structuredClone(c.icps || []),
+        icpCandidates: []
       };
       pendingTags['ec-pains'] = { arr: structuredClone(cs.pains || []), placeholder: 'add pain + Enter' };
       pendingTags['ec-objections'] = { arr: structuredClone(cs.objections || []), placeholder: 'add objection + Enter' };
@@ -2166,6 +2200,16 @@ function adminClients() {
           </div>
           <div class="hint" id="ec-ai-status"></div>
           <div id="ec-competitors"></div>
+        </div>
+
+        <div class="info-block" style="border-color:rgba(245,158,11,.35)">
+          <div class="info-title">🎯 ICP Builder — who should this client target?</div>
+          <div class="hint" style="margin-bottom:10px">Acts like a world-class outbound strategist: reads everything on this profile (offer, mechanism, proof, pains, transcripts, competitors) and proposes 1-5 ideal customer profiles — job titles, niche, locations, employee size — each justified and sized via web search. Sweet spot: ~10-100K reachable prospects.</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="mini-btn" id="btn-icp" onclick="buildIcp()">🎯 Build ICPs from this profile</button>
+            <span class="hint" id="ec-icp-status"></span>
+          </div>
+          <div id="ec-icps"></div>
         </div>
 
         <div class="grid2">
@@ -2233,7 +2277,7 @@ function adminClients() {
           <button class="mini-btn" onclick="state.editing=null;editClient=null;renderAdmin()">Cancel</button>
         </div>
       </div>`;
-      setTimeout(() => { renderEditNiches(); renderOverrideBoxes(); renderCompetitors(); renderTranscripts(); }, 0);
+      setTimeout(() => { renderEditNiches(); renderOverrideBoxes(); renderCompetitors(); renderTranscripts(); renderIcps(); }, 0);
     }
   }
   return html;
@@ -2540,6 +2584,140 @@ function addSuggestedOffer(i) {
   renderSuggestedOffers();
 }
 
+// — ICP builder —
+// Assemble everything we know about the client into one dossier string.
+function icpDossier() {
+  const g = id => document.getElementById(id)?.value.trim() || '';
+  const tags = id => (document.getElementById(id)?.__arr || []).join('; ');
+  const lines = [];
+  lines.push(`Client: ${g('ec-name')} (${g('ec-meta')})`);
+  if (g('ec-website')) lines.push(`Website: ${g('ec-website')}`);
+  if (g('ec-size')) lines.push(`Their size: ${g('ec-size')}`);
+  if (g('ec-mechanism')) lines.push(`Mechanism (how they deliver results): ${g('ec-mechanism')}`);
+  if (g('ec-result')) lines.push(`Headline result: ${g('ec-result')}`);
+  if (g('ec-proofline')) lines.push(`Proof line: ${g('ec-proofline')}`);
+  if (g('ec-offers')) lines.push(`Offers:\n${g('ec-offers')}`);
+  if (g('ec-casestudies')) lines.push(`Case studies:\n${g('ec-casestudies')}`);
+  if (tags('ec-pains')) lines.push(`Customer pains they solve: ${tags('ec-pains')}`);
+  if (tags('ec-desires')) lines.push(`Customer desires: ${tags('ec-desires')}`);
+  if (tags('ec-objections')) lines.push(`Common objections: ${tags('ec-objections')}`);
+  (editClient?.transcripts || []).forEach(t => {
+    const bits = [];
+    if ((t.pains || []).length) bits.push(`pains: ${t.pains.join('; ')}`);
+    if ((t.desires || []).length) bits.push(`desires: ${t.desires.join('; ')}`);
+    if ((t.offers || []).length) bits.push(`offer ideas: ${t.offers.join('; ')}`);
+    if (bits.length) lines.push(`From call transcript "${t.title}": ${bits.join(' | ')}`);
+  });
+  if ((editClient?.competitorIntel || []).length) {
+    lines.push(`Competitors: ${editClient.competitorIntel.map(x => `${x.name} (${x.offer || '?'})`).join('; ')}`);
+  }
+  const existingNiches = (editClient?.nicheIds || []).map(id => niche(id)?.name).filter(Boolean);
+  if (existingNiches.length) lines.push(`Niches already targeted: ${existingNiches.join(', ')}`);
+  return lines.join('\n');
+}
+
+function syncIcpsToClient() {
+  const id = state.editing?.id;
+  if (!id || id === '__new__') return;
+  const c = client(id);
+  if (c) { c.icps = structuredClone(editClient.icps); persistConfig(); }
+}
+
+async function buildIcp() {
+  if (aiBusy) return;
+  if (!adminKey) return showNotif('No admin key', true);
+  const dossier = icpDossier();
+  if (dossier.length < 80) return showNotif('Fill in (or scrape) the profile first — the ICP builder needs material to work with', true);
+  aiBusy = true;
+  const btn = document.getElementById('btn-icp');
+  const status = document.getElementById('ec-icp-status');
+  if (btn) { btn.textContent = '🎯 Building ICPs…'; btn.disabled = true; }
+  if (status) status.textContent = '🔍 Analyzing profile + sizing markets via web search… (~30-60s)';
+  try {
+    const r = await api({ action: 'build_icp', context: dossier });
+    editClient.icpCandidates = r.icps || [];
+    renderIcps();
+    if (status) status.innerHTML = `✅ ${(r.icps || []).length} ICPs proposed. ${esc(r.insights || '')}`;
+    showNotif('ICPs built — review below');
+  } catch (e) {
+    if (status) status.textContent = '⚠️ ' + e.message;
+    showNotif('ICP build failed: ' + e.message, true);
+  }
+  if (btn) { btn.textContent = '🎯 Build ICPs from this profile'; btn.disabled = false; }
+  aiBusy = false;
+}
+
+function icpCardHtml(icp, i, saved) {
+  const score = Number(icp.score) || 0;
+  return `<div class="icp-card ${saved ? 'saved' : ''}">
+    <div class="icp-head">
+      <div><div class="icp-title">${saved ? '✅ ' : ''}${esc(icp.title || 'ICP')}</div>
+        <div class="icp-niche">${esc(icp.niche || '')}</div></div>
+      <span class="icp-score ${score >= 8 ? 'hot' : ''}">fit ${score}/10</span>
+    </div>
+    <div>${(icp.jobTitles || []).map(t => `<span class="title-chip">${esc(t)}</span>`).join('')}</div>
+    <div class="icp-grid">
+      <div class="icp-kv"><b>Locations</b>${esc((icp.locations || []).join(', ') || '—')}</div>
+      <div class="icp-kv"><b>Employee size</b>${esc(icp.employeeSize || '—')}${icp.revenue ? ' · ' + esc(icp.revenue) : ''}</div>
+    </div>
+    ${icp.marketSize ? `<div class="icp-market">📊 <b>Market size:</b> ${esc(icp.marketSize)}</div>` : ''}
+    <div class="icp-why"><b>Why this fits:</b> ${esc(icp.why || '')}</div>
+    ${icp.outboundNotes ? `<div class="icp-notes">📬 ${esc(icp.outboundNotes)}</div>` : ''}
+    <div class="icp-actions">
+      ${saved
+        ? `<button class="mini-btn" onclick="useIcpNiche(${i})">🔍 Research as niche</button>
+           <button class="mini-btn danger" onclick="deleteIcp(${i})">Remove</button>`
+        : `<button class="mini-btn" onclick="saveIcp(${i})">💾 Save ICP</button>
+           <button class="mini-btn" onclick="useIcpNiche(${i}, true)">🔍 Research as niche</button>`}
+    </div>
+  </div>`;
+}
+
+function renderIcps() {
+  const el = document.getElementById('ec-icps'); if (!el || !editClient) return;
+  const saved = editClient.icps || [];
+  const cands = (editClient.icpCandidates || []).filter(x => !saved.some(s => s.title === x.title));
+  let html = '';
+  if (saved.length) {
+    html += `<div class="info-title" style="margin-top:12px">Saved ICPs (${saved.length})</div>`;
+    html += saved.map((icp, i) => icpCardHtml(icp, i, true)).join('');
+  }
+  if (cands.length) {
+    html += `<div class="info-title" style="margin-top:12px">Proposed — review and save the keepers</div>`;
+    html += cands.map((icp, i) => icpCardHtml(icp, i, false)).join('');
+  }
+  el.innerHTML = html;
+}
+
+function saveIcp(i) {
+  const cands = (editClient.icpCandidates || []).filter(x => !(editClient.icps || []).some(s => s.title === x.title));
+  const icp = cands[i]; if (!icp) return;
+  editClient.icps.push({ ...icp, id: uid('icp'), savedAt: new Date().toISOString().slice(0, 10) });
+  syncIcpsToClient();
+  renderIcps();
+  showNotif('ICP saved to client');
+}
+
+function deleteIcp(i) {
+  editClient.icps.splice(i, 1);
+  syncIcpsToClient();
+  renderIcps();
+}
+
+// Hand the ICP's niche to the existing niche-research flow, one click away.
+function useIcpNiche(i, fromCandidates) {
+  const cands = (editClient.icpCandidates || []).filter(x => !(editClient.icps || []).some(s => s.title === x.title));
+  const icp = fromCandidates ? cands[i] : editClient.icps[i];
+  if (!icp) return;
+  const input = document.getElementById('ec-newniche');
+  if (input) {
+    input.value = [icp.niche, (icp.jobTitles || [])[0], (icp.locations || [])[0]].filter(Boolean).join(' — ');
+    input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    input.focus();
+  }
+  showNotif('Niche prefilled — hit “Research & create” to build it');
+}
+
 function saveClient(isNew) {
   const name = document.getElementById('ec-name').value.trim();
   if (!name) return showNotif('Name required', true);
@@ -2568,6 +2746,7 @@ function saveClient(isNew) {
     guarantees: (document.getElementById('ec-guarantees').__arr || []).map(t => ({ id: uid('g'), text: String(t).trim() })).filter(g => g.text),
     transcripts: editClient.transcripts,
     sources: editClient.sources || {},
+    icps: editClient.icps || [],
     scriptReservoir: (client(isNew ? null : state.editing?.id)?.scriptReservoir) || [],
     savedAngles: (client(isNew ? null : state.editing?.id)?.savedAngles) || [],
     favorites: (client(isNew ? null : state.editing?.id)?.favorites) || { pains: [], desires: [], caseStudies: [], offers: [] }
