@@ -826,6 +826,7 @@
         </div>
         <div class="matrix-line" id="matrixLine"></div>
         <button class="btn btn-primary" id="generateBtn" onclick="generate()">Generate Matrix →</button>
+        <button class="btn btn-secondary" onclick="openFollowupsBlank()">↪ Build follow-ups — no first script needed</button>
       </div>
     </div>
   </div>
@@ -2162,7 +2163,7 @@ function renderReservoir(body) {
         </div>
         <div style="display:flex;gap:4px">
           <button class="copy-btn" onclick="navigator.clipboard.writeText(this.closest('.res-card').querySelector('.res-card-body').innerText);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1800)">Copy</button>
-          <button class="copy-btn" onclick="openFollowups('${c.id}', ${JSON.stringify(`${s.framework} · ${s.angle}`)}, this.closest('.res-card').querySelector('.res-card-body').innerText)" style="color:var(--accent2);border-color:rgba(37,99,235,.4)" title="Write outbound follow-ups to this script">↪ Follow-ups</button>
+          <button class="copy-btn" onclick="openFollowupsFromReservoir('${c.id}','${s.id}')" style="color:var(--accent2);border-color:rgba(37,99,235,.4)" title="Write outbound follow-ups to this script">↪ Follow-ups</button>
           <button class="copy-btn" onclick="sendToGrowth('${c.id}','${s.id}')" style="color:var(--accent2);border-color:rgba(37,99,235,.4)" title="Add this script to a growth plan, carrying the niche + angles over">📈 Growth</button>
           <button class="copy-btn danger" onclick="deleteReservoirScript('${c.id}','${s.id}')" style="color:var(--red);border-color:rgba(239,68,68,.35)">Del</button>
         </div>
@@ -2824,17 +2825,21 @@ function renderCompetitors() {
   }
   if (cands.length) {
     html += `<div class="info-title" style="margin-top:10px">Found competitors — add the relevant ones</div>`;
-    html += cands.map((x, i) => `
+    html += cands.map((x) => {
+      const idx = editClient.candidates.indexOf(x);
+      return `
       <div class="list-row" style="margin-bottom:5px"><div><b>${esc(x.name)}</b> <span class="sub">${esc(x.website || '')}</span>
         <div class="sub">offer: ${esc(x.offer || '?')} · mechanism: ${esc(x.mechanism || '?')}</div>
         <div class="sub">results: ${esc(x.results || '?')}${x.guarantee ? ' · guarantee: ' + esc(x.guarantee) : ''}</div></div>
-        <button class="mini-btn" onclick='addCompetitor(${JSON.stringify(JSON.stringify(x))})'>+ Track</button></div>`).join('');
+        <button class="mini-btn" onclick="addCompetitor(${idx})">+ Track</button></div>`;
+    }).join('');
   }
   el.innerHTML = html;
 }
 
-function addCompetitor(jsonStr) {
-  const x = JSON.parse(jsonStr);
+function addCompetitor(idx) {
+  const x = editClient.candidates[idx];
+  if (!x) return;
   if (!editClient.competitorIntel.some(t => t.name === x.name)) editClient.competitorIntel.push(x);
   renderCompetitors();
 }
@@ -4223,6 +4228,13 @@ function gpBlocksFromDocHtml(html) {
       }
       else if (el.classList.contains('scriptbox')) B.push({ t: 'code', text });
       else if (el.classList.contains('callout')) B.push({ t: 'callout', text: flat(text) });
+      else if (tag === 'details') {
+        // follow-up dropdowns and other folds → Notion toggle with children
+        const summary = el.querySelector(':scope > summary');
+        const host = document.createElement('div');
+        [...el.children].forEach(ch => { if (ch.tagName !== 'SUMMARY') host.appendChild(ch.cloneNode(true)); });
+        B.push({ t: 'toggle', text: flat(summary?.innerText || 'Details'), children: gpBlocksFromDocHtml(host.innerHTML) });
+      }
       else if (tag === 'p' || tag === 'div' || tag === 'section') {
         // containers (stat rows, option cards, wrappers): recurse if they hold
         // block children, otherwise emit as a paragraph
@@ -4606,6 +4618,21 @@ async function gpExportNotion() {
 
 // ─── OUTBOUND FOLLOW-UPS ─────────────────────────────────────────────────────
 let fuState = null;
+
+// Launch the follow-up builder from a reservoir card (id-safe — labels/scripts
+// contain quotes that would break inline onclick attributes).
+function openFollowupsFromReservoir(clientId, scriptId) {
+  const c = client(clientId);
+  const s = (c?.scriptReservoir || []).find(x => x.id === scriptId);
+  if (!s) return;
+  openFollowups(clientId, s.label || `${s.framework} · ${s.angle}`, s.script);
+}
+
+// Standalone follow-ups straight from the builder — no first script required.
+function openFollowupsBlank() {
+  if (!state.clientId) return showNotif('Select a client first', true);
+  openFollowups(state.clientId, 'Standalone sequence', '');
+}
 
 function openFollowups(clientId, label, text) {
   const c = client(clientId); if (!c) return;
