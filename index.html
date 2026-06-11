@@ -979,8 +979,8 @@ const DEFAULT_CONFIG = {
     notionParentId: '3744fd2a4cfe8015830fc724e06dcdb3', // "CSM" page (CEO Station)
     // Growth-plan funnel + cost assumptions (editable in Admin → Settings).
     planDefaults: {
-      email: { leadsPerMonth: 3000, verifyRate: 0.65, sendsPerLead: 3, replyRate: 0.04, positiveRate: 0.30, bookRate: 0.40 },
-      linkedin: { connectsPerDay: 25, daysPerMonth: 22, acceptRate: 0.30, replyRate: 0.25, positiveRate: 0.40, bookRate: 0.40 },
+      email: { leadsPerMonth: 3000, verifyRate: 0.65, sendsPerLead: 3, replyRate: 0.04, positiveRate: 0.30, bookRate: 0.40, sendsPerInboxPerDay: 30, sendingDays: 22, inboxCostMo: 3 },
+      linkedin: { connectsPerDay: 25, daysPerMonth: 22, acceptRate: 0.30, replyRate: 0.25, positiveRate: 0.40, bookRate: 0.40, connectsPerProfilePerDay: 20, profileCostMo: 80 },
       personalization: { inputTokensPerLead: 2000, outputTokensPerLead: 200, model: 'Gemini 2.5 Flash' }
     }
   },
@@ -1151,7 +1151,11 @@ function migrateConfig(cfg) {
     cfg.settings.notionParentId = '3744fd2a4cfe8015830fc724e06dcdb3';
   }
   cfg.settings.growthRules = cfg.settings.growthRules || '';
+  // Backfill any planDefaults fields added in later versions (inbox/profile math).
   cfg.settings.planDefaults = cfg.settings.planDefaults || structuredClone(DEFAULT_CONFIG.settings.planDefaults);
+  ['email', 'linkedin', 'personalization'].forEach(k => {
+    cfg.settings.planDefaults[k] = { ...DEFAULT_CONFIG.settings.planDefaults[k], ...(cfg.settings.planDefaults[k] || {}) };
+  });
   // Tools knowledge base — what we use, why, cost. Seed sensible defaults once.
   if (!Array.isArray(cfg.toolsKB) || !cfg.toolsKB.length) cfg.toolsKB = structuredClone(DEFAULT_TOOLS_KB);
   return cfg;
@@ -3441,6 +3445,39 @@ function computeChannel(channel, a) {
   const booked = positive * (+a.bookRate || 0);
   return { leads: connects, connects, accepted, outreaches: connects, replies, positive, booked, conversion: connects ? booked / connects : 0 };
 }
+// Back-solve: what volume is needed to hit a booking target, given the rates.
+function computeTargetNeed(channel, a, targetBookings) {
+  const T = Math.max(0, +targetBookings || 0);
+  if (channel === 'email') {
+    const perLead = (+a.verifyRate || 0) * (+a.replyRate || 0) * (+a.positiveRate || 0) * (+a.bookRate || 0);
+    const leadsNeeded = perLead > 0 ? T / perLead : 0;
+    const verified = leadsNeeded * (+a.verifyRate || 0);
+    const sendsNeeded = verified * (+a.sendsPerLead || 0);
+    return { leadsNeeded, sendsNeeded, verified };
+  }
+  const perConnect = (+a.acceptRate || 0) * (+a.replyRate || 0) * (+a.positiveRate || 0) * (+a.bookRate || 0);
+  const connectsNeeded = perConnect > 0 ? T / perConnect : 0;
+  return { leadsNeeded: connectsNeeded, sendsNeeded: connectsNeeded, connectsNeeded };
+}
+
+// Email inboxes + LinkedIn profiles needed for a given monthly volume, as cost rows.
+function gpInfraRows(per) {
+  const g = state.growth, rows = [];
+  if (g.channels.includes('email') && per.email) {
+    const a = g.assumptions.email;
+    const days = +a.sendingDays || 22, perInbox = +a.sendsPerInboxPerDay || 30;
+    const sendsPerDay = (per.email.outreaches || 0) / days;
+    const inboxes = Math.max(per.email.outreaches > 0 ? 1 : 0, Math.ceil(sendsPerDay / perInbox) || 0);
+    rows.push({ name: `📥 Email inboxes (${inboxes})`, why: `${gpInt(perInbox)} sends/inbox/day · ~${gpInt(Math.round(sendsPerDay))} sends/day`, cost: inboxes * (+a.inboxCostMo || 0), count: inboxes });
+  }
+  if (g.channels.includes('linkedin') && per.linkedin) {
+    const a = g.assumptions.linkedin, perProfile = +a.connectsPerProfilePerDay || 20;
+    const profiles = Math.max((+a.connectsPerDay || 0) > 0 ? 1 : 0, Math.ceil((+a.connectsPerDay || 0) / perProfile) || 0);
+    rows.push({ name: `🔗 LinkedIn profiles (${profiles})`, why: `${gpInt(perProfile)} connects/profile/day`, cost: profiles * (+a.profileCostMo || 0), count: profiles });
+  }
+  return rows;
+}
+
 function gpIncludedTools() {
   const g = state.growth;
   const ids = new Set(g.toolIds);
@@ -3465,6 +3502,13 @@ function gpAggregate() {
 function gpCostRows() {
   const g = state.growth, agg = gpAggregate();
   return gpIncludedTools().map(t => ({ tool: t, cost: toolMonthlyCost(t, agg, g.assumptions.personalization) }));
+}
+// Gemini personalization cost for an arbitrary lead count (used for target sizing).
+function gpGeminiCostFor(leads) {
+  const gem = (config.toolsKB || []).find(t => t.costModel === 'tokens');
+  if (!gem) return 0;
+  const p = state.growth.assumptions.personalization;
+  return (leads || 0) * ((+p.inputTokensPerLead || 0) * (+gem.inPerM || 0) + (+p.outputTokensPerLead || 0) * (+gem.outPerM || 0)) / 1e6;
 }
 
 // ── render ──
@@ -3522,6 +3566,9 @@ function renderGrowthForm() {
 
   html += (g.mode === 'strategy') ? gpStrategyForm(c) : gpGrowthForm(c);
 
+  // Pull from the reservoir without leaving the view
+  html += gpReservoirPicker(c);
+
   // Assumptions (shared) + tools + cost
   html += gpAssumptionsForm();
   html += gpToolsForm();
@@ -3567,7 +3614,15 @@ function gpStrategyForm(c) {
         <div class="gp-sub">2 angles</div>
         <div class="chips">${angles.map(a => `<div class="chip ${t.angles.includes(a) ? 'on' : ''}" onclick="gpToggleTargetItem('${icp.id}','angles','${b64(a)}')">${esc(a)}</div>`).join('') || '<span class="proof-empty">No angles on file.</span>'}</div>
         <div class="gp-sub">2 scripts to test</div>
-        ${scripts.length ? scripts.map((s, i) => `<div class="gp-script-opt ${t.scripts.some(x => x.text === s.text) ? 'on' : ''}" onclick="gpToggleTargetScript('${icp.id}',${i})"><span>${t.scripts.some(x => x.text === s.text) ? '☑' : '☐'}</span><span><b>${esc(s.label)}</b> <span class="s-meta">${esc(s.status)}${s.note ? ' · ' + esc(s.note) : ''}</span><br>${esc(s.text.slice(0, 90))}…</span></div>`).join('') : '<div class="proof-empty">No saved scripts — generate some in the Builder and 💾 them first.</div>'}
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:7px">
+          <select class="form-select" style="flex:1;font-size:12px;padding:6px 9px" id="tfw-${icp.id}">
+            ${config.frameworks.map(f => `<option value="${f.id}" ${(t.fwId || config.frameworks[0]?.id) === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}
+          </select>
+          <button class="mini-btn" id="tgen-${icp.id}" onclick="gpGenTargetScripts('${icp.id}')" title="AI writes scripts aligned to this ICP + the client's proof, using the angles above">✨ Write 2 with AI</button>
+        </div>
+        ${t.scripts.length ? t.scripts.map((s, i) => `<div class="gp-script-opt on"><span>★</span><span><b>${esc(s.label)}</b>${s.ai ? ' <span class="s-meta" style="color:var(--accent2)">✨ AI · this target</span>' : ''}<br>${esc(s.text.slice(0, 110))}…<br><a onclick="gpRemoveTargetScript('${icp.id}',${i})" style="color:var(--red);cursor:pointer;font-size:10px">remove</a></span></div>`).join('') : ''}
+        <div class="gp-sub" style="font-weight:400;text-transform:none;color:var(--muted)">…or pick from the reservoir</div>
+        ${scripts.length ? scripts.map((s, i) => `<div class="gp-script-opt ${t.scripts.some(x => x.text === s.text) ? 'on' : ''}" onclick="gpToggleTargetScript('${icp.id}',${i})"><span>${t.scripts.some(x => x.text === s.text) ? '☑' : '☐'}</span><span><b>${esc(s.label)}</b> <span class="s-meta">${esc(s.status)}${s.note ? ' · ' + esc(s.note) : ''}</span><br>${esc(s.text.slice(0, 90))}…</span></div>`).join('') : '<div class="proof-empty">No saved scripts yet — use “Write 2 with AI” above, or generate in the Builder.</div>'}
         <div class="gp-sub">Offer</div>
         <div class="chips">${(offers.length ? offers : ['(no offers on file)']).map(o => `<div class="chip ${t.offer === o ? 'on' : ''}" onclick="gpSetTargetOffer('${icp.id}','${b64(o)}')">${esc(o)}</div>`).join('')}</div>
       </div>`;
@@ -3618,13 +3673,15 @@ function gpAssumptionsForm() {
   const g = state.growth;
   if (g.mode === 'growth') return ''; // growth mode derives rates from observed metrics
   const num = (ch, key, label, pct) => `<label>${label}</label><input class="num-input" type="number" step="${pct ? '0.01' : '1'}" value="${g.assumptions[ch][key]}" onchange="gpNum('${ch}','${key}',this.value)">`;
-  let html = `<div class="step"><div class="step-head"><span class="step-title"><span class="step-num">3</span>Volumes & assumptions</span></div>`;
+  let html = `<div class="step"><div class="step-head"><span class="step-title"><span class="step-num">3</span>Volumes, targets & assumptions</span></div>`;
+  html += `<div class="gp-sub">🎯 Book-in target</div><div class="assume-grid">
+    <label>Booked calls / mo to hit</label><input class="num-input" type="number" value="${g.targetBookings}" onchange="state.growth.targetBookings=+this.value;renderGrowthPreview()"></div>`;
   g.channels.forEach(ch => {
     html += `<div class="gp-sub">${CH_LABEL[ch]}</div><div class="assume-grid">`;
     if (ch === 'email') {
-      html += num('email', 'leadsPerMonth', 'Leads scraped / mo') + num('email', 'verifyRate', 'Verify rate', 1) + num('email', 'sendsPerLead', 'Sends / lead') + num('email', 'replyRate', 'Reply rate', 1) + num('email', 'positiveRate', 'Positive / reply', 1) + num('email', 'bookRate', 'Book / positive', 1);
+      html += num('email', 'leadsPerMonth', 'Leads scraped / mo') + num('email', 'verifyRate', 'Verify rate', 1) + num('email', 'sendsPerLead', 'Sends / lead') + num('email', 'replyRate', 'Reply rate', 1) + num('email', 'positiveRate', 'Positive / reply', 1) + num('email', 'bookRate', 'Book / positive', 1) + num('email', 'sendsPerInboxPerDay', 'Sends / inbox / day') + num('email', 'sendingDays', 'Sending days / mo') + num('email', 'inboxCostMo', 'Cost / inbox / mo');
     } else {
-      html += num('linkedin', 'connectsPerDay', 'Connects / day') + num('linkedin', 'daysPerMonth', 'Sending days / mo') + num('linkedin', 'acceptRate', 'Accept rate', 1) + num('linkedin', 'replyRate', 'Reply / accepted', 1) + num('linkedin', 'positiveRate', 'Positive / reply', 1) + num('linkedin', 'bookRate', 'Book / positive', 1);
+      html += num('linkedin', 'connectsPerDay', 'Connects / day') + num('linkedin', 'daysPerMonth', 'Sending days / mo') + num('linkedin', 'acceptRate', 'Accept rate', 1) + num('linkedin', 'replyRate', 'Reply / accepted', 1) + num('linkedin', 'positiveRate', 'Positive / reply', 1) + num('linkedin', 'bookRate', 'Book / positive', 1) + num('linkedin', 'connectsPerProfilePerDay', 'Connects / profile / day') + num('linkedin', 'profileCostMo', 'Cost / profile / mo');
     }
     html += `</div>`;
   });
@@ -3701,9 +3758,117 @@ function gpToggleTargetScript(icpId, idx) {
   if (i === -1) { if (t.scripts.length >= 2) t.scripts.shift(); t.scripts.push({ label: s.label, text: s.text }); } else t.scripts.splice(i, 1);
   renderGrowth();
 }
+function gpRemoveTargetScript(icpId, i) { const t = state.growth.targets.find(x => x.icpId === icpId); if (t) { t.scripts.splice(i, 1); renderGrowth(); } }
+
+// AI-write scripts aligned to THIS target (its ICP persona + angles) and the
+// client's real proof — same engine the Builder uses, scoped to the target.
+async function gpGenTargetScripts(icpId) {
+  if (!adminKey) return showNotif('No admin key', true);
+  const g = state.growth, c = gpClient();
+  const t = g.targets.find(x => x.icpId === icpId); if (!t) return;
+  const icp = (c.icps || []).find(x => x.id === icpId);
+  const fwId = document.getElementById('tfw-' + icpId)?.value || config.frameworks[0]?.id;
+  t.fwId = fwId;
+  const fw = framework(fwId);
+  if (!fw) return showNotif('Pick a framework first', true);
+  const angles = (t.angles.length ? t.angles : clientAnglePool(c).slice(0, 2)).slice(0, 2);
+  if (!angles.length) return showNotif('Add at least one angle to this target', true);
+  const btn = document.getElementById('tgen-' + icpId);
+  if (btn) { btn.textContent = '✨ Writing…'; btn.disabled = true; }
+  try {
+    const r = await api({
+      action: 'generate',
+      prospect: {},
+      client: {
+        name: c.name,
+        caseStudy: { ...(c.caseStudy || {}), pains: t.pains.length ? t.pains : clientPains(c) },
+        emphasis: { pains: t.pains, desires: [], caseStudies: c.favorites?.caseStudies || [], offers: t.offer ? [t.offer] : [] },
+        frameworkOverride: (c.frameworkOverrides || {})[primaryNicheId(c)] || '',
+        avoid: c.avoid || [],
+        competitorIntel: ''
+      },
+      niche: { name: t.niche || niche(state.nicheId)?.name || '', triggerWords: niche(primaryNicheId(c))?.triggerWords || [] },
+      frameworks: [{ id: fw.id, name: fw.name, category: fw.category, template: fw.template, rules: fw.rules }],
+      angles,
+      variantsPerAngle: 1,
+      globalRules: config.settings?.globalRules || '',
+      guarantee: (c.guarantees?.[0]?.text) || '',
+      icp: icp ? { title: icp.title, niche: icp.niche, jobTitles: icp.jobTitles || [], locations: icp.locations || [], employeeSize: icp.employeeSize || '', revenue: icp.revenue || '', outboundNotes: icp.outboundNotes || '' } : undefined
+    });
+    const variants = (r.results || []).flatMap(res => (res.variants || []).map(v => ({ label: `${res.framework} · ${v.angle || ''}`, text: v.script || '', ai: true })));
+    if (!variants.length) throw new Error('no scripts returned');
+    t.scripts = variants.slice(0, 2);  // AI scripts replace the slot, aligned to this target
+    renderGrowth();
+    showNotif('✨ 2 scripts written for ' + (icp?.title || 'this target'));
+  } catch (e) {
+    showNotif('Generate failed: ' + e.message, true);
+    if (btn) { btn.textContent = '✨ Write 2 with AI'; btn.disabled = false; }
+  }
+}
+
 function gpSetTargetOffer(icpId, b) { const t = state.growth.targets.find(x => x.icpId === icpId); if (t) { t.offer = decodeURIComponent(escape(atob(b))); renderGrowth(); } }
 function gpPickWinning(idx) { const s = (state.growth._winPool || [])[idx]; if (s) { state.growth.winningScript = { label: s.label, text: s.text, note: s.note }; renderGrowth(); } }
 function gpUseIcpSize(idx) { const c = gpClient(); const i = (c.icps || [])[idx]; if (i) { state.growth.nicheSize = i.marketSize || ''; renderGrowth(); } }
+
+// The target a pulled item attaches to: the most recently selected one.
+function gpActiveTarget() { const t = state.growth.targets; return t.length ? t[t.length - 1] : null; }
+
+// In-view reservoir picker: scripts, angles, and niches/ICPs you can add to the
+// open plan; each add reflects straight into the preview.
+function gpReservoirPicker(c) {
+  if (!c) return '';
+  const g = state.growth;
+  const scripts = clientScriptPool(c);
+  const angles = clientAnglePool(c);
+  const untargeted = (c.icps || []).filter(i => !g.targets.some(t => t.icpId === i.id));
+
+  const scriptRows = scripts.length ? scripts.map((s, i) =>
+    `<div class="gp-script-opt"><span>📄</span><span style="flex:1"><b>${esc(s.label)}</b> <span class="s-meta">${esc(s.status)}${s.note ? ' · ' + esc(s.note) : ''}</span><br>${esc(s.text.slice(0, 80))}…</span><button class="mini-btn" onclick="gpPullScript(${i})">+ Add</button></div>`).join('')
+    : '<div class="proof-empty">No saved scripts in the reservoir yet.</div>';
+
+  const angleChips = angles.length ? `<div class="chips">${angles.map(a =>
+    `<div class="chip" onclick="gpPullAngle('${b64(a)}')">${esc(a)} +</div>`).join('')}</div>`
+    : '<div class="proof-empty">No saved angles yet.</div>';
+
+  const nicheRows = g.mode === 'strategy'
+    ? (untargeted.length ? untargeted.map(i =>
+        `<div class="gp-script-opt"><span>🎯</span><span style="flex:1"><b>${esc(i.title)}</b> <span class="s-meta">${esc(i.niche || '')}${i.marketSize ? ' · ' + esc(i.marketSize) : ''}</span></span><button class="mini-btn" onclick="gpToggleTarget('${i.id}')">+ Add target</button></div>`).join('')
+        : '<div class="proof-empty">All ICPs are already targets.</div>')
+    : '';
+
+  return `
+  <details class="personalize" style="margin:6px 0 10px">
+    <summary>📥 Pull from the reservoir — scripts, angles${g.mode === 'strategy' ? ', niches' : ''}</summary>
+    <div class="inner">
+      <div class="hint" style="margin-bottom:6px">${g.mode === 'growth' ? 'Adding a script sets it as the winning script.' : (g.targets.length ? 'Scripts &amp; angles attach to: <b>' + esc(gpActiveTarget()?.title || '') + '</b> (your last-selected target).' : 'Add a niche as a target first, then attach scripts &amp; angles.')}</div>
+      <div class="gp-sub">Scripts</div>${scriptRows}
+      <div class="gp-sub">Angles</div>${angleChips}
+      ${g.mode === 'strategy' ? `<div class="gp-sub">Niches / ICPs</div>${nicheRows}` : ''}
+    </div>
+  </details>`;
+}
+
+function gpPullScript(i) {
+  const g = state.growth, c = gpClient();
+  const s = clientScriptPool(c)[i]; if (!s) return;
+  if (g.mode === 'growth') {
+    g.winningScript = { label: s.label, text: s.text, note: s.note || '' };
+    renderGrowth(); showNotif('Set as winning script');
+    return;
+  }
+  const t = gpActiveTarget();
+  if (!t) return showNotif('Add a niche as a target first', true);
+  if (!t.scripts.some(x => x.text === s.text)) { if (t.scripts.length >= 2) t.scripts.shift(); t.scripts.push({ label: s.label, text: s.text }); }
+  renderGrowth(); showNotif(`Added to ${t.title}`);
+}
+
+function gpPullAngle(b) {
+  const text = decodeURIComponent(escape(atob(b)));
+  const t = gpActiveTarget();
+  if (!t) return showNotif('Add a niche as a target first', true);
+  if (!t.angles.includes(text)) { if (t.angles.length >= 2) t.angles.shift(); t.angles.push(text); }
+  renderGrowth(); showNotif(`Angle added to ${t.title}`);
+}
 
 // ── preview document ──
 function funnelTable(channel, m) {
@@ -3909,20 +4074,35 @@ function gpPreviewStrategy(c) {
       <h3>Scripts</h3>${t.scripts.map(s => `<div class="scriptbox">${esc(s.text)}</div>`).join('') || '<p>—</p>'}`;
   });
 
-  // Per-channel funnel
+  // Per-channel funnel + the booking/sending target it's sized against
+  const per = {};
+  const T = +g.targetBookings || 0;
   g.channels.forEach(ch => {
-    h += `<h2>${CH_LABEL[ch]} — projected funnel</h2>${funnelTable(ch, computeChannel(ch, g.assumptions[ch]))}`;
+    const m = computeChannel(ch, g.assumptions[ch]); per[ch] = m;
+    h += `<h2>${CH_LABEL[ch]} — projected funnel</h2>${funnelTable(ch, m)}`;
+    const need = computeTargetNeed(ch, g.assumptions[ch], T);
+    const gem = gpGeminiCostFor(need.leadsNeeded);
+    h += `<table><thead><tr><th>🎯 To hit the target</th><th class="num">Needed / mo</th></tr></thead><tbody>
+      <tr><td>Book-in target</td><td class="num tot">${gpInt(T)} calls</td></tr>
+      ${ch === 'email'
+        ? `<tr><td>Leads to scrape</td><td class="num">${gpInt(need.leadsNeeded)}</td></tr><tr><td>Sending target (emails)</td><td class="num">${gpInt(need.sendsNeeded)}</td></tr>`
+        : `<tr><td>Connection requests</td><td class="num">${gpInt(need.connectsNeeded)}</td></tr>`}
+      <tr><td>Gemini personalization for target</td><td class="num">${gpMoney(gem)}/mo</td></tr></tbody></table>`;
   });
 
   // Personalization note
   const pers = g.assumptions.personalization;
   h += `<h2>Personalization</h2><p>Every lead gets a custom first line written by <b>${esc(pers.model)}</b> (~${gpInt(pers.inputTokensPerLead)} in / ${gpInt(pers.outputTokensPerLead)} out tokens per lead). Relevance is what lifts reply rates above the floor.</p>`;
 
-  // Tools & cost
+  // Tools + infrastructure cost
+  const infra = gpInfraRows(per);
+  const infraTotal = infra.reduce((s, r) => s + r.cost, 0);
+  const grand = totalCost + infraTotal;
   h += `<h2>🧰 Tech stack & cost breakdown</h2>
-    <table><thead><tr><th>Tool</th><th>Why</th><th class="num">$/mo</th></tr></thead><tbody>
+    <table><thead><tr><th>Line item</th><th>Why</th><th class="num">$/mo</th></tr></thead><tbody>
     ${costRows.map(r => `<tr><td><b>${esc(r.tool.name)}</b></td><td style="color:var(--muted)">${esc(r.tool.why)}</td><td class="num">${gpMoney(r.cost)}</td></tr>`).join('')}
-    <tr><td class="tot">Total tech stack</td><td></td><td class="num tot">${gpMoney(totalCost)}/mo</td></tr></tbody></table>`;
+    ${infra.map(r => `<tr><td><b>${esc(r.name)}</b></td><td style="color:var(--muted)">${esc(r.why)}</td><td class="num">${gpMoney(r.cost)}</td></tr>`).join('')}
+    <tr><td class="tot">Total tech stack</td><td></td><td class="num tot">${gpMoney(grand)}/mo</td></tr></tbody></table>`;
 
   // Next steps
   h += `<h2>Next steps</h2><ul>
@@ -3970,12 +4150,18 @@ function gpPreviewGrowth(c) {
   // Cost at planned volume: recompute aggregate using bulk order as leads
   const aggForCost = { leads: plannedLeadsAll, verified: plannedLeadsAll * (g.assumptions.email.verifyRate || 0.65) };
   const costRows = gpIncludedTools().map(t => ({ tool: t, cost: toolMonthlyCost(t, aggForCost, g.assumptions.personalization) }));
-  totalCostAll = costRows.reduce((s, r) => s + r.cost, 0);
+  // Infra at planned volume: synthesize per-channel outreach/connect counts
+  const perScale = {};
+  if (g.channels.includes('email')) perScale.email = { outreaches: plannedLeadsAll * (g.assumptions.email.verifyRate || 0.65) * (g.assumptions.email.sendsPerLead || 1) };
+  if (g.channels.includes('linkedin')) perScale.linkedin = { outreaches: 1 };
+  const infra = gpInfraRows(perScale);
+  totalCostAll = costRows.reduce((s, r) => s + r.cost, 0) + infra.reduce((s, r) => s + r.cost, 0);
   const perBooking = g.targetBookings ? totalCostAll / g.targetBookings : 0;
 
   h += `<h2>🧰 Cost to scale</h2>
-    <table><thead><tr><th>Tool</th><th class="num">$/mo</th></tr></thead><tbody>
+    <table><thead><tr><th>Line item</th><th class="num">$/mo</th></tr></thead><tbody>
     ${costRows.map(r => `<tr><td>${esc(r.tool.name)}</td><td class="num">${gpMoney(r.cost)}</td></tr>`).join('')}
+    ${infra.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${gpMoney(r.cost)}</td></tr>`).join('')}
     <tr><td class="tot">Total</td><td class="num tot">${gpMoney(totalCostAll)}/mo</td></tr></tbody></table>
     <div class="stat-row"><div class="s"><div class="lab">For</div><div class="big-stat">${g.targetBookings}</div><div class="lab">bookings / mo</div></div>
     <div class="s"><div class="lab">Cost per booking</div><div class="big-stat">${gpMoney(perBooking)}</div></div></div>`;
@@ -4106,17 +4292,27 @@ function gpBuildBlocks() {
       if (t.angles.length) { B.push({ t: 'h3', text: 'Angles to test' }); t.angles.forEach(a => B.push({ t: 'bullet', text: a })); }
       B.push({ t: 'h3', text: 'Scripts' }); t.scripts.forEach(s => B.push({ t: 'code', text: s.text }));
     });
+    const per = {};
+    const T = +g.targetBookings || 0;
     g.channels.forEach(ch => {
-      const m = computeChannel(ch, g.assumptions[ch]);
+      const m = computeChannel(ch, g.assumptions[ch]); per[ch] = m;
       B.push({ t: 'h2', text: `${CH_LABEL[ch]} — projected funnel` });
       const rows = ch === 'email'
         ? [['Leads scraped', gpInt(m.leads)], ['Verified', gpInt(m.verified)], ['Outreaches', gpInt(m.outreaches)], ['Replies', gpInt(m.replies)], ['Positive replies', gpInt(m.positive)], ['Booked calls', gpInt(m.booked)], ['Conversion', gpPct(m.conversion)]]
         : [['Connections', gpInt(m.connects)], ['Accepted', gpInt(m.accepted)], ['Replies', gpInt(m.replies)], ['Positive replies', gpInt(m.positive)], ['Booked calls', gpInt(m.booked)], ['Conversion', gpPct(m.conversion)]];
       B.push({ t: 'table', headers: ['Metric', 'Expected/mo'], rows });
+      const need = computeTargetNeed(ch, g.assumptions[ch], T);
+      const targetRows = [['Book-in target', gpInt(T) + ' calls']];
+      if (ch === 'email') { targetRows.push(['Leads to scrape', gpInt(need.leadsNeeded)], ['Sending target (emails)', gpInt(need.sendsNeeded)]); }
+      else targetRows.push(['Connection requests', gpInt(need.connectsNeeded)]);
+      targetRows.push(['Gemini personalization for target', gpMoney(gpGeminiCostFor(need.leadsNeeded)) + '/mo']);
+      B.push({ t: 'table', headers: ['🎯 To hit the target', 'Needed/mo'], rows: targetRows });
     });
     const costRows = gpCostRows();
+    const infra = gpInfraRows(per);
+    const grand = costRows.reduce((s, r) => s + r.cost, 0) + infra.reduce((s, r) => s + r.cost, 0);
     B.push({ t: 'h2', text: '🧰 Tech stack & cost' });
-    B.push({ t: 'table', headers: ['Tool', 'Why', '$/mo'], rows: costRows.map(r => [r.tool.name, r.tool.why, gpMoney(r.cost)]).concat([['Total', '', gpMoney(costRows.reduce((s, r) => s + r.cost, 0)) + '/mo']]) });
+    B.push({ t: 'table', headers: ['Line item', 'Why', '$/mo'], rows: costRows.map(r => [r.tool.name, r.tool.why, gpMoney(r.cost)]).concat(infra.map(r => [r.name, r.why, gpMoney(r.cost)])).concat([['Total', '', gpMoney(grand) + '/mo']]) });
     B.push({ t: 'h2', text: 'Next steps' });
     B.push({ t: 'todo', text: 'Verbal agreement on the target niche(s)' });
     B.push({ t: 'todo', text: 'Verbal agreement on the scripts to test' });
@@ -4136,9 +4332,13 @@ function gpBuildBlocks() {
     });
     const agg = { leads: leadsAll, verified: leadsAll * (g.assumptions.email.verifyRate || 0.65) };
     const costRows = gpIncludedTools().map(t => ({ tool: t, cost: toolMonthlyCost(t, agg, g.assumptions.personalization) }));
-    const total = costRows.reduce((s, r) => s + r.cost, 0);
+    const perScale = {};
+    if (g.channels.includes('email')) perScale.email = { outreaches: leadsAll * (g.assumptions.email.verifyRate || 0.65) * (g.assumptions.email.sendsPerLead || 1) };
+    if (g.channels.includes('linkedin')) perScale.linkedin = { outreaches: 1 };
+    const infra = gpInfraRows(perScale);
+    const total = costRows.reduce((s, r) => s + r.cost, 0) + infra.reduce((s, r) => s + r.cost, 0);
     B.push({ t: 'h2', text: '🧰 Cost to scale' });
-    B.push({ t: 'table', headers: ['Tool', '$/mo'], rows: costRows.map(r => [r.tool.name, gpMoney(r.cost)]).concat([['Total', gpMoney(total) + '/mo'], ['Cost per booking', gpMoney(g.targetBookings ? total / g.targetBookings : 0)]]) });
+    B.push({ t: 'table', headers: ['Line item', '$/mo'], rows: costRows.map(r => [r.tool.name, gpMoney(r.cost)]).concat(infra.map(r => [r.name, gpMoney(r.cost)])).concat([['Total', gpMoney(total) + '/mo'], ['Cost per booking', gpMoney(g.targetBookings ? total / g.targetBookings : 0)]]) });
     B.push({ t: 'h2', text: 'Next steps' });
     B.push({ t: 'todo', text: 'Confirm the niche pains added to the script' });
     B.push({ t: 'todo', text: `Bulk order ${gpInt(leadsAll)} leads` });

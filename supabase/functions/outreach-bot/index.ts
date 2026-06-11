@@ -67,10 +67,17 @@ function toNotionBlock(b: { t: string; text?: string; headers?: string[]; rows?:
     case "table": {
       const headers = b.headers ?? [];
       const rows = b.rows ?? [];
-      const width = headers.length || (rows[0]?.length ?? 1);
+      const width = Math.max(1, headers.length || (rows[0]?.length ?? 1));
+      // Notion rejects any table_row whose cell count != table_width, so pad/trim every row.
+      const norm = (cells: string[]) => {
+        const a = (cells || []).slice(0, width).map((c) => nRich(c));
+        while (a.length < width) a.push(nRich(""));
+        return a;
+      };
       const tableRows: unknown[] = [];
-      if (headers.length) tableRows.push({ type: "table_row", table_row: { cells: headers.map((h) => nRich(h)) } });
-      rows.forEach((r) => tableRows.push({ type: "table_row", table_row: { cells: (r || []).map((c) => nRich(c)) } }));
+      if (headers.length) tableRows.push({ type: "table_row", table_row: { cells: norm(headers) } });
+      rows.forEach((r) => tableRows.push({ type: "table_row", table_row: { cells: norm(r) } }));
+      if (!tableRows.length) tableRows.push({ type: "table_row", table_row: { cells: norm([""]) } });
       return { object: "block", type: "table", table: { table_width: width, has_column_header: headers.length > 0, has_row_header: false, children: tableRows } };
     }
     default: return { object: "block", type: "paragraph", paragraph: { rich_text: nRich(b.text ?? "") } };
@@ -745,7 +752,9 @@ Deno.serve(async (req) => {
           return json({ ok: true, title: title || "(page found)" });
         }
 
-        const blocks = Array.isArray(body.blocks) ? (body.blocks as Array<{ t: string }>).map(toNotionBlock) : [];
+        const blocks = Array.isArray(body.blocks) && body.blocks.length
+          ? (body.blocks as Array<{ t: string }>).map(toNotionBlock)
+          : [{ object: "block", type: "paragraph", paragraph: { rich_text: nRich("(empty plan)") } }];
         const createRes = await fetch("https://api.notion.com/v1/pages", {
           method: "POST",
           headers,
