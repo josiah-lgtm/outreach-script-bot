@@ -673,6 +673,56 @@
   .doc .opt-card .oc-title { font-weight: 700; font-size: 12px; margin-bottom: 4px; }
   .doc-empty { color: var(--muted); text-align: center; padding: 90px 24px; font-size: 13px; line-height: 1.6; }
   .doc-actions { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; justify-content: flex-end; padding: 11px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); }
+
+  /* ── ANGLE COMPOSER (mixing board) ── */
+  .mix-chip { border-radius: 14px; }
+  .mix-chip.k-pain.on, .mix-chip.k-pain:hover { border-color: rgba(239,68,68,.5); }
+  .mix-chip.k-pain.on { background: rgba(239,68,68,.12); color: #fca5a5; }
+  .mix-chip.k-outcome.on, .mix-chip.k-outcome:hover { border-color: rgba(16,185,129,.5); }
+  .mix-chip.k-outcome.on { background: rgba(16,185,129,.12); color: var(--green); }
+  .mix-chip.k-guarantee.on, .mix-chip.k-guarantee:hover { border-color: rgba(245,158,11,.5); }
+  .mix-chip.k-guarantee.on { background: rgba(245,158,11,.12); color: var(--amber); }
+  .mix-chip.k-offer.on, .mix-chip.k-offer:hover { border-color: rgba(37,99,235,.55); }
+  .mix-chip.k-offer.on { background: rgba(37,99,235,.14); color: var(--accent2); }
+  .mix-tray {
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 34px;
+    border: 1px dashed var(--border); border-radius: 9px; padding: 7px 10px; margin: 10px 0 8px;
+    background: var(--bg);
+  }
+  .mix-tray .tray-pill {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 11px; padding: 3px 9px;
+    border-radius: 12px; background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+  }
+  .mix-tray .tray-pill b { cursor: pointer; opacity: .6; }
+  .mix-tray .tray-pill b:hover { opacity: 1; color: var(--red); }
+  .mix-tray .tray-empty { font-size: 11px; color: var(--muted); }
+
+  /* ── EDITABLE DOC + FLOATING FORMAT/AI BAR ── */
+  .doc[contenteditable="true"] { outline: none; caret-color: var(--accent2); }
+  .doc[contenteditable="true"] .scriptbox:focus-within { border-color: var(--accent); }
+  .edit-note {
+    display: flex; align-items: center; gap: 8px; justify-content: center;
+    font-size: 11px; color: var(--amber); background: rgba(245,158,11,.07);
+    border-bottom: 1px solid rgba(245,158,11,.25); padding: 7px 14px;
+  }
+  .edit-note a { color: var(--accent2); cursor: pointer; text-decoration: underline; }
+  .fmt-bar {
+    position: fixed; z-index: 1300; display: none; align-items: center; gap: 2px;
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+    padding: 4px; box-shadow: 0 10px 36px rgba(0,0,0,.55);
+  }
+  .fmt-bar.show { display: flex; }
+  .fmt-bar button {
+    background: transparent; border: none; color: var(--subtle); font: 600 12px 'Inter', sans-serif;
+    padding: 6px 10px; border-radius: 7px; cursor: pointer; transition: .1s; line-height: 1;
+  }
+  .fmt-bar button:hover { background: var(--bg2); color: var(--text); }
+  .fmt-bar .sep { width: 1px; height: 18px; background: var(--border); margin: 0 3px; }
+  .fmt-bar input {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 7px; outline: none;
+    color: var(--text); font: 400 12px 'Inter', sans-serif; padding: 6px 10px; width: 240px;
+  }
+  .fmt-bar input:focus { border-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -825,6 +875,24 @@
 </div>
 
 <div class="notif" id="notif"></div>
+
+<!-- Floating format + AI bar for the editable growth-plan doc -->
+<div class="fmt-bar" id="fmtBar">
+  <button onmousedown="event.preventDefault()" onclick="fmtCmd('bold')"><b>B</b></button>
+  <button onmousedown="event.preventDefault()" onclick="fmtCmd('italic')"><i>I</i></button>
+  <span class="sep"></span>
+  <button onmousedown="event.preventDefault()" onclick="fmtBlock('h2')">H2</button>
+  <button onmousedown="event.preventDefault()" onclick="fmtBlock('h3')">H3</button>
+  <button onmousedown="event.preventDefault()" onclick="fmtBlock('p')">¶</button>
+  <button onmousedown="event.preventDefault()" onclick="fmtCmd('insertUnorderedList')">• List</button>
+  <span class="sep"></span>
+  <button onmousedown="event.preventDefault()" onclick="fmtAiOpen()" style="color:var(--accent2)">✨ AI</button>
+</div>
+<div class="fmt-bar" id="fmtAiBar">
+  <button onmousedown="event.preventDefault()" onclick="fmtAiClose()">←</button>
+  <input id="fmtAiInput" placeholder="summarize · analyze · expand · add…" onkeydown="if(event.key==='Enter'){event.preventDefault();fmtAiRun()}">
+  <button onmousedown="event.preventDefault()" onclick="fmtAiRun()" id="fmtAiGo" style="color:var(--accent2)">↑</button>
+</div>
 
 <!-- SCRIPT EDIT MODAL — version rail + clean AI composer -->
 <div class="modal-overlay" id="editModal" onclick="if(event.target===this)closeEditModal()">
@@ -1009,6 +1077,8 @@ let state = {
   emphTab: 'pains',            // active tab in the Emphasis & proof fold
   selectedIcpId: null,         // saved ICP the scripts are personalized to
   growth: null,                // working growth-plan object (built in initGrowth)
+  angleMix: [],                // ingredients picked in the angle composer [{kind,text}]
+  angleMixOpen: false,         // composer fold open?
 };
 let scriptIndex = []; // flat ordered list built during renderOutput; each {framework,angle,label,script,nicheId}
 
@@ -1151,6 +1221,7 @@ function showScreen(s) {
   document.getElementById('panelGrowth').style.display  = growthMode ? 'flex' : 'none';
   document.getElementById('main').classList.toggle('admin-mode', adminMode);
   document.getElementById('main').classList.toggle('growth-mode', growthMode);
+  fmtHide();
   if (adminMode) renderAdmin();
   if (growthMode) openGrowth();
 }
@@ -1285,7 +1356,9 @@ function renderBuilder() {
   (n?.angles || []).forEach(a => pushAngle(a, '🎯', 'Niche angle'));
   (c?.transcripts || []).forEach(t => (t.angles || []).forEach(a => pushAngle(a, '📞', `Call transcript: ${t.title || 'untitled'}`)));
   (c?.savedAngles || []).filter(x => !x.nicheId || x.nicheId === state.nicheId)
-    .forEach(x => pushAngle(x.text, x.src === 'ai' ? '✨' : '✍️', x.src === 'ai' ? 'AI suggested (saved)' : 'Saved custom angle'));
+    .forEach(x => pushAngle(x.text,
+      x.src === 'composed' ? '🤚' : x.src === 'ai' ? '✨' : '✍️',
+      x.src === 'composed' ? 'Composed by us from pains/outcomes/offers' : x.src === 'ai' ? 'AI suggested (saved)' : 'Saved custom angle'));
 
   const angleChips = angleItems.map(it =>
     `<div class="chip ${state.angles.has(it.text) ? 'on' : ''}" onclick="toggleAngle(this)" data-a="${esc(it.text)}">${esc(it.text)}<span class="src-ico" title="${esc(it.label)}">${it.ico}</span></div>`).join('');
@@ -1302,6 +1375,7 @@ function renderBuilder() {
       <button class="mini-btn" onclick="saveCurrentAngles()" title="Save current selection as custom angles for this client">💾 Save</button>
     </div>
     ${suggestPills ? `<div class="suggest-pills" id="suggestPills">${suggestPills}</div>` : ''}
+    ${angleComposerHtml(c)}
   `;
 
   renderProofSection(c);
@@ -1626,6 +1700,93 @@ function toggleIcp(id) {
     }
   }
   renderBuilder();
+}
+
+// ── Angle composer — click pains/outcomes/guarantees/offers, fuse into an
+// angle of our own (saved with the 🤚 mark). ──
+const MIX_KINDS = [
+  { kind: 'pain',      label: '🔴 Pains',      get: c => clientPains(c) },
+  { kind: 'outcome',   label: '🟢 Outcomes',   get: c => clientDesires(c) },
+  { kind: 'guarantee', label: '✅ Guarantees', get: c => (c?.guarantees || []).map(g => g.text) },
+  { kind: 'offer',     label: '💡 Offers',     get: c => clientOffers(c) },
+];
+
+function angleComposerHtml(c) {
+  if (!c) return '';
+  const mixOn = (kind, text) => state.angleMix.some(m => m.kind === kind && m.text === text);
+  const groups = MIX_KINDS.map(({ kind, label, get }) => {
+    const items = get(c);
+    if (!items.length) return '';
+    return `<div class="gp-sub">${label}</div><div class="chips">${items.map(t =>
+      `<div class="chip mix-chip k-${kind} ${mixOn(kind, t) ? 'on' : ''}" onclick="mixToggle('${kind}','${b64(t)}')">${esc(t)}</div>`).join('')}</div>`;
+  }).join('');
+
+  const tray = state.angleMix.length
+    ? state.angleMix.map((m, i) => `<span class="tray-pill">${{ pain: '🔴', outcome: '🟢', guarantee: '✅', offer: '💡' }[m.kind] || ''} ${esc(m.text)}<b onclick="mixRemove(${i})">×</b></span>`).join('')
+    : '<span class="tray-empty">Click ingredients above — 1, 2, 3, however many makes the angle solid.</span>';
+
+  return `
+  <details class="personalize" style="margin-top:10px" ${state.angleMixOpen ? 'open' : ''} ontoggle="state.angleMixOpen=this.open">
+    <summary>🤚 Compose your own angle — click pains, outcomes, guarantees, offers</summary>
+    <div class="inner">
+      ${groups || '<div class="proof-empty">Nothing on file yet — scrape the site or extract a transcript first.</div>'}
+      <div class="mix-tray">${tray}</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="mini-btn" id="mixFuseBtn" onclick="mixFuse()">✨ Fuse into an angle</button>
+        <button class="mini-btn" onclick="mixUseRaw()">➕ Use as-is</button>
+        ${state.angleMix.length ? `<button class="mini-btn" onclick="state.angleMix=[];renderBuilder()">Clear</button>` : ''}
+      </div>
+    </div>
+  </details>`;
+}
+
+function mixToggle(kind, b) {
+  const text = decodeURIComponent(escape(atob(b)));
+  const i = state.angleMix.findIndex(m => m.kind === kind && m.text === text);
+  if (i === -1) state.angleMix.push({ kind, text }); else state.angleMix.splice(i, 1);
+  renderBuilder();
+}
+function mixRemove(i) { state.angleMix.splice(i, 1); renderBuilder(); }
+
+function mixSave(angleText) {
+  const c = client(state.clientId); if (!c) return;
+  const t = String(angleText).trim(); if (!t) return;
+  if (!c.savedAngles.some(x => x.text === t)) {
+    c.savedAngles.push({ id: uid('ang'), text: t, nicheId: state.nicheId, src: 'composed' });
+    persistConfig();
+  }
+  state.angles.add(t);
+  state.angleMix = [];
+  renderBuilder(); updateMatrix();
+  showNotif('🤚 Angle added');
+}
+
+// Join the ingredients verbatim — quick and literal.
+function mixUseRaw() {
+  if (!state.angleMix.length) return showNotif('Pick at least one ingredient', true);
+  mixSave(state.angleMix.map(m => m.text).join(' + '));
+}
+
+// Let AI fuse the ingredients into one tight hook.
+async function mixFuse() {
+  if (!state.angleMix.length) return showNotif('Pick at least one ingredient', true);
+  if (!adminKey) return showNotif('No admin key', true);
+  const c = client(state.clientId);
+  const btn = document.getElementById('mixFuseBtn');
+  if (btn) { btn.textContent = '✨ Fusing…'; btn.disabled = true; }
+  try {
+    const r = await api({
+      action: 'fuse_angle',
+      ingredients: state.angleMix,
+      niche: niche(state.nicheId)?.name || '',
+      clientContext: [c?.name, c?.caseStudy?.mechanism].filter(Boolean).join(' — ')
+    });
+    if (!r.angle) throw new Error('no angle returned');
+    mixSave(r.angle);
+  } catch (e) {
+    showNotif('Fuse failed: ' + e.message, true);
+    if (btn) { btn.textContent = '✨ Fuse into an angle'; btn.disabled = false; }
+  }
 }
 
 // ── Proof & emphasis: case studies, pains, desires, offers, guarantee ──
@@ -3438,7 +3599,7 @@ function gpToolCostLabel(t) {
 
 // ── form interaction ──
 function gpSetClient(id) { initGrowth(id, state.growth.mode); renderGrowth(); }
-function gpSetMode(m) { if (state.growth.mode !== m) state.growth.narrative = null; state.growth.mode = m; renderGrowth(); }
+function gpSetMode(m) { if (state.growth.mode !== m) { state.growth.narrative = null; state.growth.docHtml = null; } state.growth.mode = m; renderGrowth(); }
 function gpToggleChannel(ch) {
   const g = state.growth, i = g.channels.indexOf(ch);
   if (i === -1) g.channels.push(ch); else if (g.channels.length > 1) g.channels.splice(i, 1);
@@ -3492,10 +3653,143 @@ function funnelTable(channel, m) {
 function renderGrowthPreview() {
   const el = document.getElementById('growthPreview'); if (!el) return;
   const g = state.growth, c = gpClient();
+  const edited = g.docHtml != null;
   const actions = `<div class="doc-actions">
+      ${edited ? '' : `<button class="mini-btn" onclick="gpEnterEdit()">✏️ Edit doc</button>`}
       <button class="mini-btn" onclick="gpSavePlan()">💾 Save</button>
       <button class="mini-btn" onclick="gpExportNotion()">📤 Export to Notion</button></div>`;
-  el.innerHTML = actions + (g.mode === 'strategy' ? gpPreviewStrategy(c) : gpPreviewGrowth(c));
+  if (edited) {
+    // The edited copy is the source of truth — form changes no longer overwrite it.
+    el.innerHTML = actions +
+      `<div class="edit-note">✏️ Editing the doc — select text to format or ask AI. Form changes are paused. <a onclick="gpRegenDoc()">↺ Regenerate from form</a></div>` +
+      `<div class="doc" contenteditable="true" id="gpDoc" oninput="gpDocInput()" onmouseup="gpDocSel()" onkeyup="gpDocSel()">${g.docHtml}</div>`;
+  } else {
+    el.innerHTML = actions + (g.mode === 'strategy' ? gpPreviewStrategy(c) : gpPreviewGrowth(c));
+  }
+}
+
+// ── editable doc: Notion-style inline editing + AI on highlight ──
+function gpEnterEdit() {
+  const d = document.querySelector('#growthPreview .doc');
+  state.growth.docHtml = d ? d.innerHTML : '';
+  renderGrowthPreview();
+  setTimeout(() => document.getElementById('gpDoc')?.focus(), 50);
+}
+
+function gpRegenDoc() {
+  if (!confirm('Discard your edits and regenerate the doc from the form?')) return;
+  state.growth.docHtml = null;
+  fmtHide();
+  renderGrowthPreview();
+}
+
+let gpDocTimer = null;
+function gpDocInput() {
+  clearTimeout(gpDocTimer);
+  gpDocTimer = setTimeout(() => {
+    const d = document.getElementById('gpDoc');
+    if (d && state.growth) state.growth.docHtml = d.innerHTML;
+  }, 350);
+}
+
+// Floating bar: shows above any non-collapsed selection inside the editable doc.
+let fmtRange = null;
+function gpDocSel() {
+  const sel = window.getSelection();
+  const doc = document.getElementById('gpDoc');
+  if (!sel || sel.isCollapsed || !doc || !sel.rangeCount || !doc.contains(sel.anchorNode)) { fmtHide(); return; }
+  fmtRange = sel.getRangeAt(0).cloneRange();
+  const r = fmtRange.getBoundingClientRect();
+  const bar = document.getElementById('fmtBar');
+  bar.classList.add('show');
+  document.getElementById('fmtAiBar').classList.remove('show');
+  const top = Math.max(8, r.top - 46);
+  const left = Math.min(Math.max(8, r.left + r.width / 2 - bar.offsetWidth / 2), window.innerWidth - bar.offsetWidth - 8);
+  bar.style.top = top + 'px'; bar.style.left = left + 'px';
+}
+
+function fmtHide() {
+  document.getElementById('fmtBar')?.classList.remove('show');
+  document.getElementById('fmtAiBar')?.classList.remove('show');
+}
+
+function fmtRestore() {
+  if (!fmtRange) return;
+  const sel = window.getSelection();
+  sel.removeAllRanges(); sel.addRange(fmtRange);
+}
+
+function fmtCmd(cmd) { fmtRestore(); document.execCommand(cmd); gpDocInput(); }
+function fmtBlock(tag) { fmtRestore(); document.execCommand('formatBlock', false, tag); gpDocInput(); }
+
+function fmtAiOpen() {
+  const bar = document.getElementById('fmtBar');
+  const ai = document.getElementById('fmtAiBar');
+  ai.style.top = bar.style.top; ai.style.left = bar.style.left;
+  bar.classList.remove('show'); ai.classList.add('show');
+  setTimeout(() => document.getElementById('fmtAiInput').focus(), 30);
+}
+function fmtAiClose() {
+  document.getElementById('fmtAiBar').classList.remove('show');
+  document.getElementById('fmtBar').classList.add('show');
+}
+
+async function fmtAiRun() {
+  const input = document.getElementById('fmtAiInput');
+  const instruction = input.value.trim();
+  if (!instruction) return showNotif('Tell the AI what to do with the selection', true);
+  if (!adminKey) return showNotif('No admin key', true);
+  if (!fmtRange) return fmtHide();
+  const selected = fmtRange.toString();
+  const docText = document.getElementById('gpDoc')?.innerText.slice(0, 6000) || '';
+  const go = document.getElementById('fmtAiGo');
+  go.textContent = '…'; go.disabled = true;
+  try {
+    const r = await api({ action: 'ai_edit_text', text: selected, instruction, context: docText });
+    fmtRestore();
+    document.execCommand('insertText', false, r.text || selected);
+    input.value = '';
+    fmtHide();
+    gpDocInput();
+    showNotif('✨ Applied');
+  } catch (e) { showNotif('AI edit failed: ' + e.message, true); }
+  go.textContent = '↑'; go.disabled = false;
+}
+
+// Convert the edited doc's HTML back into portable blocks so the Notion
+// export matches exactly what was edited on screen.
+function gpBlocksFromDocHtml(html) {
+  const tmp = document.createElement('div'); tmp.innerHTML = html;
+  const B = [];
+  const flat = s => String(s || '').replace(/\s+/g, ' ').trim();
+  const walk = nodes => {
+    for (const el of nodes) {
+      if (el.nodeType === 3) { const t = flat(el.textContent); if (t) B.push({ t: 'p', text: t }); continue; }
+      if (el.nodeType !== 1) continue;
+      const tag = el.tagName.toLowerCase();
+      const text = el.innerText?.trim() || '';
+      if (!text && tag !== 'table') continue;
+      if (tag === 'h1') B.push({ t: 'h1', text: flat(text) });
+      else if (tag === 'h2') B.push({ t: 'h2', text: flat(text) });
+      else if (tag === 'h3') B.push({ t: 'h3', text: flat(text) });
+      else if (tag === 'ul' || tag === 'ol') el.querySelectorAll(':scope > li').forEach(li => B.push({ t: 'bullet', text: flat(li.innerText) }));
+      else if (tag === 'table') {
+        const rows = [...el.querySelectorAll('tr')].map(tr => [...tr.children].map(td => flat(td.innerText)));
+        if (rows.length) B.push({ t: 'table', headers: rows[0], rows: rows.slice(1) });
+      }
+      else if (el.classList.contains('scriptbox')) B.push({ t: 'code', text });
+      else if (el.classList.contains('callout')) B.push({ t: 'callout', text: flat(text) });
+      else if (tag === 'p' || tag === 'div' || tag === 'section') {
+        // containers (stat rows, option cards, wrappers): recurse if they hold
+        // block children, otherwise emit as a paragraph
+        const hasBlocks = [...el.children].some(ch => /^(H1|H2|H3|UL|OL|TABLE|P|DIV|SECTION)$/.test(ch.tagName) || ch.classList?.contains('scriptbox') || ch.classList?.contains('callout'));
+        if (hasBlocks) walk(el.childNodes);
+        else B.push({ t: 'p', text: flat(text) });
+      }
+    }
+  };
+  walk(tmp.childNodes);
+  return B;
 }
 
 function gpPreviewStrategy(c) {
@@ -3650,13 +3944,21 @@ function gpSnapshot() {
     winningScript: g.winningScript ? structuredClone(g.winningScript) : null,
     observed: structuredClone(g.observed), nicheSize: g.nicheSize, targetBookings: g.targetBookings,
     narrative: g.narrative ? structuredClone(g.narrative) : null,
+    docHtml: g.docHtml ?? null,
     notionUrl: g._notionUrl || '',
     createdAt: new Date().toISOString().slice(0, 10),
   };
 }
 
+// Flush any in-flight edits from the live doc (the oninput sync is debounced).
+function gpDocFlush() {
+  const d = document.getElementById('gpDoc');
+  if (d && state.growth && state.growth.docHtml != null) state.growth.docHtml = d.innerHTML;
+}
+
 function gpSavePlan() {
   const c = gpClient(); if (!c) return;
+  gpDocFlush();
   const snap = gpSnapshot();
   c.growthPlans = c.growthPlans || [];
   const i = c.growthPlans.findIndex(p => p.id === snap.id);
@@ -3678,6 +3980,7 @@ function gpLoadPlan(id) {
     observed: structuredClone(p.observed || { email: {}, linkedin: {} }),
     nicheSize: p.nicheSize || '', targetBookings: p.targetBookings || 10,
     narrative: p.narrative ? structuredClone(p.narrative) : null, _notionUrl: p.notionUrl || '',
+    docHtml: p.docHtml ?? null,
   };
   renderGrowth(); showNotif('Plan loaded');
 }
@@ -3754,6 +4057,7 @@ function gpBuildBlocks() {
 async function gpExportNotion() {
   if (!adminKey) return showNotif('No admin key', true);
   const c = gpClient(); if (!c) return;
+  gpDocFlush();
   gpSavePlan();
   showNotif('Exporting to Notion…');
   try {
@@ -3761,7 +4065,8 @@ async function gpExportNotion() {
       action: 'export_notion',
       parentId: config.settings.notionParentId,
       title: `Growth Plan — ${c.name} — ${state.growth.mode === 'strategy' ? 'Strategy' : 'Scaling'} — ${new Date().toISOString().slice(0, 10)}`,
-      blocks: gpBuildBlocks(),
+      // An edited doc exports exactly as edited; otherwise build from the form.
+      blocks: state.growth.docHtml != null ? gpBlocksFromDocHtml(state.growth.docHtml) : gpBuildBlocks(),
     });
     state.growth._notionUrl = r.url || '';
     const c2 = gpClient(); const p = (c2.growthPlans || []).find(x => x.id === state.growth.planId);
@@ -3810,6 +4115,11 @@ async function loadConfigAndRender() {
     }
   }
 }
+
+// Hide the floating format bar when clicking anywhere outside it / the doc.
+document.addEventListener('mousedown', e => {
+  if (!e.target.closest('#fmtBar') && !e.target.closest('#fmtAiBar') && !e.target.closest('#gpDoc')) fmtHide();
+});
 
 loadConfigAndRender();
 </script>

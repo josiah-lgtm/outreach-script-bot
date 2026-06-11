@@ -650,6 +650,51 @@ Deno.serve(async (req) => {
         return json({ ok: true, ...parsed });
       }
 
+      case "fuse_angle": {
+        const ingredients = Array.isArray(body.ingredients) ? body.ingredients as Array<{ kind: string; text: string }> : [];
+        if (!ingredients.length) return json({ ok: false, error: "ingredients required" }, 400);
+        const res = await claudeMessages({
+          model: CLAUDE_HAIKU,
+          max_tokens: 300,
+          system:
+            `You fuse hand-picked ingredients (pains, desired outcomes, guarantees, offers) into ONE cold-email angle hook. ` +
+            `5-14 words, specific, written the way the prospect would say it, sendable as an email opener's theme. ` +
+            `Use the ingredients' substance — don't just concatenate them. The angle must make immediate sense to the prospect: ` +
+            `frame the PAIN as their situation and the outcome/guarantee as the tension or promise.\n` +
+            `Example — pain: "leads go cold before we follow up" + outcome: "predictable booked calls" → {"angle":"Leads going cold while the calendar stays empty"}\n` +
+            `NEVER invent numbers or claims: only numbers that appear verbatim in the ingredients may be used.\n` +
+            `Return valid JSON only: {"angle":"the fused angle"}`,
+          messages: [{
+            role: "user",
+            content: ingredients.map((i) => `${i.kind}: ${i.text}`).join("\n") +
+              (body.niche ? `\nNiche: ${body.niche}` : "") +
+              (body.clientContext ? `\nClient: ${body.clientContext}` : ""),
+          }],
+        });
+        const parsed = parseJson(textOf(res.content), { angle: "" });
+        if (!parsed.angle) return json({ ok: false, error: "could not fuse — try again" }, 422);
+        return json({ ok: true, angle: parsed.angle });
+      }
+
+      case "ai_edit_text": {
+        const text = String(body.text ?? "").trim();
+        const instruction = String(body.instruction ?? "").trim();
+        if (!text || !instruction) return json({ ok: false, error: "text and instruction required" }, 400);
+        const res = await claudeMessages({
+          model: CLAUDE_HAIKU,
+          max_tokens: 1000,
+          system:
+            `You edit text inside a client-facing outbound growth plan. The user highlighted a passage and gave an instruction ` +
+            `(summarize, analyze, expand, rewrite, add to it, etc.). Apply it. Keep the document's confident, plain-English tone. ` +
+            `Return ONLY the replacement text for the highlighted passage — plain text, no quotes, no markdown, no commentary.`,
+          messages: [{
+            role: "user",
+            content: `DOCUMENT (context):\n${String(body.context ?? "").slice(0, 8000)}\n\nHIGHLIGHTED PASSAGE:\n${text}\n\nINSTRUCTION: ${instruction}`,
+          }],
+        });
+        return json({ ok: true, text: textOf(res.content).trim() });
+      }
+
       case "compose_growth_plan": {
         const mode = String(body.mode ?? "strategy");
         const ctx = JSON.stringify({

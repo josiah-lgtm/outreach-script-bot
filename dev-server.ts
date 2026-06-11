@@ -187,6 +187,17 @@ async function handle(req: Request): Promise<Response> {
         insights: "(mock) Start with ICP 1 — proof transfers cleanly and the ~34K market is the outbound sweet spot. ICP 2 is the high-ACV expansion play.",
       }, cors);
     }
+    if (body.action === "fuse_angle") {
+      await new Promise((r) => setTimeout(r, 600));
+      const ing = Array.isArray(body.ingredients) ? body.ingredients as Array<{ text: string }> : [];
+      return json({ ok: true, angle: `(fused) ${ing.map((i) => i.text.split(" ").slice(0, 3).join(" ")).join(" → ")}` }, cors);
+    }
+    if (body.action === "ai_edit_text") {
+      await new Promise((r) => setTimeout(r, 600));
+      const instruction = String(body.instruction || "");
+      const text = String(body.text || "");
+      return json({ ok: true, text: `[mock ${instruction}] ${text.split(" ").slice(0, 6).join(" ")}…` }, cors);
+    }
     if (body.action === "compose_growth_plan") {
       await new Promise((r) => setTimeout(r, 900));
       const targets = Array.isArray(body.targets) ? body.targets : [];
