@@ -1146,6 +1146,7 @@ function migrateConfig(cfg) {
   cfg.winningScripts = cfg.winningScripts || [];
   cfg.settings = cfg.settings || {};
   cfg.settings.notionParentId = cfg.settings.notionParentId || '33a4fd2a4cfe81fdaab6e17031fa93be';
+  cfg.settings.growthRules = cfg.settings.growthRules || '';
   cfg.settings.planDefaults = cfg.settings.planDefaults || structuredClone(DEFAULT_CONFIG.settings.planDefaults);
   // Tools knowledge base — what we use, why, cost. Seed sensible defaults once.
   if (!Array.isArray(cfg.toolsKB) || !cfg.toolsKB.length) cfg.toolsKB = structuredClone(DEFAULT_TOOLS_KB);
@@ -2110,6 +2111,7 @@ function renderReservoir(body) {
         </div>
         <div style="display:flex;gap:4px">
           <button class="copy-btn" onclick="navigator.clipboard.writeText(this.closest('.res-card').querySelector('.res-card-body').innerText);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1800)">Copy</button>
+          <button class="copy-btn" onclick="sendToGrowth('${c.id}','${s.id}')" style="color:var(--accent2);border-color:rgba(37,99,235,.4)" title="Add this script to a growth plan, carrying the niche + angles over">📈 Growth</button>
           <button class="copy-btn danger" onclick="deleteReservoirScript('${c.id}','${s.id}')" style="color:var(--red);border-color:rgba(239,68,68,.35)">Del</button>
         </div>
       </div>
@@ -3184,6 +3186,12 @@ function adminSettings() {
       <div style="margin-top:8px"><button class="mini-btn" onclick="saveSettings()">💾 Save rules</button></div>
     </div>
     <div class="info-block">
+      <div class="info-title">📈 Growth plan system prompt (language rules for plan writing)</div>
+      <div class="hint" style="margin-bottom:8px">Injected into every growth-plan AI call — the narrative drafter AND the ✨ highlight-edit in the doc. Put your house language here: words to use/avoid, tone, how to talk about guarantees, emoji habits, etc.</div>
+      <textarea class="form-textarea" id="es-growthrules" style="min-height:110px" placeholder="e.g. Always say 'booked calls', never 'meetings'. Refer to us as 'we', the client as 'you'. Keep sentences under 20 words. One emoji per section header, none in body text.">${esc(config.settings?.growthRules || '')}</textarea>
+      <div style="margin-top:8px"><button class="mini-btn" onclick="saveGrowthRules()">💾 Save growth rules</button></div>
+    </div>
+    <div class="info-block">
       <div class="info-title">📤 Notion export (Growth Plan Builder)</div>
       <div class="hint" style="margin-bottom:8px">Growth plans export as a page under this Notion page. Create an internal integration at notion.so/my-integrations, share the destination page with it, then deploy with <b>NOTION_API_KEY</b> set. Paste the destination page ID or URL below.</div>
       <div style="display:flex;gap:8px">
@@ -3252,6 +3260,11 @@ function saveSettings() {
   config.settings = config.settings || {};
   config.settings.globalRules = document.getElementById('es-rules').value;
   persistConfig(); showNotif('Rules saved');
+}
+
+function saveGrowthRules() {
+  config.settings.growthRules = document.getElementById('es-growthrules').value;
+  persistConfig(); showNotif('Growth plan rules saved');
 }
 
 // Accept a Notion page URL or raw ID; store the 32-char id.
@@ -3375,6 +3388,37 @@ function openGrowth() {
   renderGrowth();
 }
 
+// Builder → Growth: send a reservoir script to the growth plan, carrying the
+// builder's context (niche, selected angles, the script) along as a seed.
+function sendToGrowth(clientId, scriptId) {
+  const c = client(clientId);
+  const s = (c?.scriptReservoir || []).find(x => x.id === scriptId);
+  if (!s) return;
+  // Winning scripts head to a scaling plan; everything else seeds a POC test.
+  const mode = s.status === 'winning' ? 'growth' : 'strategy';
+  if (!state.growth || state.growth.clientId !== clientId) initGrowth(clientId, mode);
+  const g = state.growth;
+  if (!g.planId) g.mode = mode; // don't yank an opened saved plan to another mode
+  g.seed = {
+    nicheName: niche(state.nicheId)?.name || '',
+    angles: [...state.angles].slice(0, 4),
+    script: { label: s.label || `${s.framework} · ${s.angle}`, text: s.script, note: s.note || '', status: s.status }
+  };
+  if (g.mode === 'growth') {
+    g.winningScript = { label: g.seed.script.label, text: s.script, note: s.note || '' };
+  } else if (g.targets.length) {
+    // Already building targets — attach the script to the first one
+    const t = g.targets[0];
+    if (!t.scripts.some(x => x.text === s.script)) {
+      if (t.scripts.length >= 2) t.scripts.shift();
+      t.scripts.push({ label: g.seed.script.label, text: s.script });
+    }
+    if (g.seed.angles.length) t.angles = g.seed.angles.slice(0, 2);
+  }
+  showScreen('growth');
+  showNotif('📈 Sent to Growth — niche, angles and script carried over');
+}
+
 // ── compute (deterministic — never the model) ──
 function computeChannel(channel, a) {
   if (channel === 'email') {
@@ -3437,6 +3481,21 @@ function renderGrowthForm() {
       <div class="mode-btn ${g.mode === 'growth' ? 'on' : ''}" onclick="gpSetMode('growth')">
         <div class="mt-title">📈 Growth</div><div class="mt-sub">Scaling — proven script, scale to X bookings</div></div>
     </div>`;
+
+  // Context carried over from the Builder/Reservoir
+  if (g.seed) {
+    html += `<div class="info-block" style="border-color:rgba(37,99,235,.45)">
+      <div class="info-title">📥 From the Builder</div>
+      <div style="font-size:12px;color:var(--subtle);line-height:1.9">
+        ${g.seed.nicheName ? `Niche: <b style="color:var(--text)">${esc(g.seed.nicheName)}</b><br>` : ''}
+        ${g.seed.angles.length ? `Angles: ${g.seed.angles.map(a => `<span class="title-chip">${esc(a)}</span>`).join('')}<br>` : ''}
+        Script: <b style="color:var(--text)">${esc(g.seed.script.label)}</b>
+        <span class="gp-badge ${g.seed.script.status === 'winning' ? 'growth' : 'strategy'}">${esc(g.seed.script.status || 'idea')}</span>
+        ${g.seed.script.note ? `<span class="hint"> · ${esc(g.seed.script.note)}</span>` : ''}
+      </div>
+      <div class="hint" style="margin-top:5px">${g.mode === 'growth' ? 'Set as the winning script below.' : 'New targets pick these angles + this script automatically.'} <a onclick="state.growth.seed=null;renderGrowthForm()" style="color:var(--accent2);cursor:pointer">Dismiss</a></div>
+    </div>`;
+  }
 
   if (plans.length) {
     html += `<div class="gp-sub">Saved plans for ${esc(c.name)}</div>` + plans.map(p => `
@@ -3617,9 +3676,11 @@ function gpToggleTarget(icpId) {
   const icp = (c.icps || []).find(x => x.id === icpId);
   const pains = (c.favorites?.pains || []).filter(Boolean).slice(0, 4);
   const realPains = pains.length ? pains : clientPains(c).slice(0, 3);
-  const angles = clientAnglePool(c).slice(0, 2);
+  // Seed from the Builder (via Reservoir → 📈 Growth) wins over the generic pools
+  const angles = (g.seed?.angles?.length ? g.seed.angles : clientAnglePool(c)).slice(0, 2);
+  const scripts = g.seed?.script ? [{ label: g.seed.script.label, text: g.seed.script.text }] : [];
   const offers = clientOffers(c);
-  g.targets.push({ icpId, title: icp.title, niche: icp.niche, marketSize: icp.marketSize || '', pains: realPains, angles, scripts: [], offer: offers[0] || '', why: icp.why || '' });
+  g.targets.push({ icpId, title: icp.title, niche: icp.niche, marketSize: icp.marketSize || '', pains: realPains, angles, scripts, offer: offers[0] || '', why: icp.why || '' });
   renderGrowth();
 }
 function gpToggleTargetItem(icpId, kind, b) {
@@ -3734,6 +3795,28 @@ function fmtAiClose() {
   document.getElementById('fmtBar').classList.add('show');
 }
 
+// Strip the AI's HTML down to clean semantic tags so inserted content always
+// inherits the doc's own font and styling (no rogue inline styles or scripts).
+const AI_HTML_ALLOWED = new Set(['P', 'UL', 'OL', 'LI', 'B', 'STRONG', 'I', 'EM', 'BR', 'H3']);
+function sanitizeAiHtml(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = String(html || '');
+  (function clean(node) {
+    [...node.childNodes].forEach(ch => {
+      if (ch.nodeType !== 1) return;
+      if (ch.tagName === 'SCRIPT' || ch.tagName === 'STYLE') { node.removeChild(ch); return; }
+      clean(ch);
+      if (!AI_HTML_ALLOWED.has(ch.tagName)) {
+        while (ch.firstChild) node.insertBefore(ch.firstChild, ch);
+        node.removeChild(ch);
+        return;
+      }
+      [...ch.attributes].forEach(a => ch.removeAttribute(a.name));
+    });
+  })(tmp);
+  return tmp.innerHTML;
+}
+
 async function fmtAiRun() {
   const input = document.getElementById('fmtAiInput');
   const instruction = input.value.trim();
@@ -3745,9 +3828,16 @@ async function fmtAiRun() {
   const go = document.getElementById('fmtAiGo');
   go.textContent = '…'; go.disabled = true;
   try {
-    const r = await api({ action: 'ai_edit_text', text: selected, instruction, context: docText });
+    const r = await api({ action: 'ai_edit_text', text: selected, instruction, context: docText, rules: config.settings?.growthRules || '' });
     fmtRestore();
-    document.execCommand('insertText', false, r.text || selected);
+    const raw = r.html ?? r.text ?? '';
+    if (/<\w+[^>]*>/.test(raw)) {
+      // Structured replacement (bullets, paragraphs, emojis) — insert as clean HTML
+      document.execCommand('insertHTML', false, sanitizeAiHtml(raw));
+    } else {
+      // Inline phrase — plain text inherits the surrounding formatting
+      document.execCommand('insertText', false, raw || selected);
+    }
     input.value = '';
     fmtHide();
     gpDocInput();
@@ -3922,6 +4012,7 @@ async function gpComposeNarrative() {
       client: { name: c.name, proofLine: c.caseStudy?.proofLine || '', mechanism: c.caseStudy?.mechanism || '' },
       targets: g.targets.map(t => ({ title: t.title, niche: t.niche, pains: t.pains, angles: t.angles, offer: t.offer })),
       numbers, channels: g.channels, targetBookings: g.targetBookings, nicheSize: g.nicheSize,
+      rules: config.settings?.growthRules || '',
     });
     g.narrative = { execSummary: r.execSummary || '', targetRationales: r.targetRationales || [], closing: r.closing || '' };
     renderGrowthPreview();

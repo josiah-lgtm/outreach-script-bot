@@ -196,7 +196,10 @@ async function handle(req: Request): Promise<Response> {
       await new Promise((r) => setTimeout(r, 600));
       const instruction = String(body.instruction || "");
       const text = String(body.text || "");
-      return json({ ok: true, text: `[mock ${instruction}] ${text.split(" ").slice(0, 6).join(" ")}…` }, cors);
+      return json({
+        ok: true,
+        html: `<p>📌 [mock ${instruction}] ${text.split(" ").slice(0, 6).join(" ")}…</p><ul><li>✅ point one</li><li style="color:red" onclick="alert(1)">point two (attrs must be stripped)</li></ul><script>bad()</script>`,
+      }, cors);
     }
     if (body.action === "compose_growth_plan") {
       await new Promise((r) => setTimeout(r, 900));

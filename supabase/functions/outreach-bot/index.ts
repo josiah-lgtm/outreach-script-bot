@@ -680,23 +680,30 @@ Deno.serve(async (req) => {
         const text = String(body.text ?? "").trim();
         const instruction = String(body.instruction ?? "").trim();
         if (!text || !instruction) return json({ ok: false, error: "text and instruction required" }, 400);
+        const rules = String(body.rules ?? "").trim();
         const res = await claudeMessages({
           model: CLAUDE_HAIKU,
-          max_tokens: 1000,
+          max_tokens: 1200,
           system:
-            `You edit text inside a client-facing outbound growth plan. The user highlighted a passage and gave an instruction ` +
-            `(summarize, analyze, expand, rewrite, add to it, etc.). Apply it. Keep the document's confident, plain-English tone. ` +
-            `Return ONLY the replacement text for the highlighted passage — plain text, no quotes, no markdown, no commentary.`,
+            `You edit text inside a client-facing outbound growth plan document. The user highlighted a passage and gave an instruction ` +
+            `(summarize, analyze, expand, rewrite, add to it, etc.). Apply it.\n` +
+            `STYLE — stay congruent with the document: same confident plain-English tone, same tense, same level of formality. ` +
+            `Use emojis the way the document does (sparing, section-level: 🎯 📊 ✅ 📈). Use bullet points for any list of 3+ items.\n` +
+            (rules ? `HOUSE LANGUAGE RULES (always obey):\n${rules}\n` : "") +
+            `OUTPUT — return ONLY the replacement as a minimal HTML fragment using ONLY these tags: <p>, <ul>, <li>, <b>, <i>, <br>, <h3>. ` +
+            `Never include style attributes, classes, font tags, markdown, or commentary. ` +
+            `If the highlighted passage is a short inline phrase (part of a sentence), return plain text with no tags at all.`,
           messages: [{
             role: "user",
             content: `DOCUMENT (context):\n${String(body.context ?? "").slice(0, 8000)}\n\nHIGHLIGHTED PASSAGE:\n${text}\n\nINSTRUCTION: ${instruction}`,
           }],
         });
-        return json({ ok: true, text: textOf(res.content).trim() });
+        return json({ ok: true, html: textOf(res.content).trim() });
       }
 
       case "compose_growth_plan": {
         const mode = String(body.mode ?? "strategy");
+        const rules = String(body.rules ?? "").trim();
         const ctx = JSON.stringify({
           client: body.client, targets: body.targets, numbers: body.numbers,
           channels: body.channels, targetBookings: body.targetBookings, nicheSize: body.nicheSize,
@@ -707,6 +714,7 @@ Deno.serve(async (req) => {
           system:
             `You are a senior outbound strategist writing a client-facing growth plan. Write crisp, confident, plain-English prose — no fluff, no hype. ` +
             `The numbers are already computed and given to you; never invent or change them, reference them naturally.\n` +
+            (rules ? `HOUSE LANGUAGE RULES (always obey these):\n${rules}\n` : "") +
             `Return valid JSON only, no markdown fences:\n` +
             `{"execSummary":"2-3 sentences framing the plan and the goal",` +
             (mode === "strategy"
