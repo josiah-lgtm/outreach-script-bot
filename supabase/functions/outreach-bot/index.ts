@@ -501,6 +501,26 @@ Deno.serve(async (req) => {
         return json({ ok: true, script: textOf(res.content).trim() });
       }
 
+      case "refine_selection": {
+        const script = String(body.script ?? "").trim();
+        const selection = String(body.selection ?? "").trim();
+        const prompt = String(body.prompt ?? "").trim();
+        if (!script || !selection || !prompt) return json({ ok: false, error: "script, selection and prompt required" }, 400);
+        const res = await claudeMessages({
+          model: CLAUDE_HAIKU,
+          max_tokens: 400,
+          system:
+            `You are a cold email editor. The user highlighted ONE EXCERPT of a script and wants only that excerpt rewritten. ` +
+            `Rewrite the excerpt per the instruction so it fits seamlessly back into the surrounding script (tone, tense, flow). ` +
+            `Return ONLY the replacement text for the excerpt — no commentary, no quotes, no markdown, and do NOT return the rest of the script.`,
+          messages: [{
+            role: "user",
+            content: `FULL SCRIPT (context):\n${script}\n\nHIGHLIGHTED EXCERPT TO REWRITE:\n${selection}\n\nINSTRUCTION: ${prompt}`,
+          }],
+        });
+        return json({ ok: true, replacement: textOf(res.content).trim() });
+      }
+
       case "extract_transcript": {
         const text = String(body.text ?? "").slice(0, 30_000);
         if (!text.trim()) return json({ ok: false, error: "transcript text required" }, 400);

@@ -112,6 +112,11 @@ async function handle(req: Request): Promise<Response> {
       else refined = script + "\n\n(mock refinement applied)";
       return json({ ok: true, script: refined }, cors);
     }
+    if (body.action === "refine_selection") {
+      await new Promise((r) => setTimeout(r, 600));
+      const prompt = String(body.prompt || "");
+      return json({ ok: true, replacement: `[mock rewrite of selection per "${prompt}"]` }, cors);
+    }
     if (body.action === "extract_transcript") {
       await new Promise((r) => setTimeout(r, 1400));
       return json({

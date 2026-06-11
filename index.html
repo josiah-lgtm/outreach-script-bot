@@ -453,14 +453,17 @@
   .transcript-title { font: 600 12px 'Inter', sans-serif; margin-bottom: 4px; }
   .transcript-meta { font: 500 10px 'Inter', sans-serif; color: var(--muted); }
 
-  /* ── PROOF & EMPHASIS (builder step) — favoritable chips/rows ── */
-  .proof-sub {
-    font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: .6px;
-    text-transform: uppercase; margin: 13px 0 7px; display: flex; align-items: center; gap: 7px;
+  /* ── EMPHASIS (builder step) — favoritable chips with source tags ── */
+  .proof-empty { font-size: 11px; color: var(--muted); padding: 6px 0; }
+  .etabs { display: flex; gap: 3px; margin-bottom: 10px; flex-wrap: wrap; }
+  .etab {
+    padding: 5px 11px; border-radius: 6px; border: none; background: transparent;
+    color: var(--muted); font: 600 11px 'Inter', sans-serif; cursor: pointer; transition: .12s;
   }
-  .proof-sub:first-child { margin-top: 0; }
-  .proof-sub .cnt { color: var(--amber); font-weight: 700; }
-  .proof-empty { font-size: 11px; color: var(--muted); padding: 2px 0 4px; }
+  .etab:hover { color: var(--text); background: var(--bg3); }
+  .etab.active { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+  .etab .n { color: var(--amber); font-weight: 700; margin-left: 3px; }
+  .src-ico { font-size: 10px; opacity: .75; margin-left: 5px; cursor: help; }
   .fav-chip {
     display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px;
     border-radius: 16px; border: 1px solid var(--border); background: var(--bg2);
@@ -548,6 +551,25 @@
   .ai-send:hover { background: var(--accent2); }
   .ai-send:disabled { opacity: .5; cursor: default; }
   .modal-foot { display: flex; gap: 8px; align-items: center; padding: 12px 18px; border-top: 1px solid var(--border); flex-shrink: 0; }
+
+  /* selection-aware AI editing */
+  .sel-chip {
+    display: none; align-items: center; gap: 8px; margin: 0 16px;
+    padding: 6px 12px; border: 1px dashed var(--accent); border-radius: 9px;
+    background: rgba(37,99,235,.08); font: 500 11px 'Inter', sans-serif; color: var(--accent2);
+  }
+  .sel-chip.show { display: flex; }
+  .sel-chip .sel-text {
+    flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-family: 'Courier Prime', monospace; color: var(--text); opacity: .85;
+  }
+  .sel-chip b { cursor: pointer; opacity: .7; }
+  .sel-chip b:hover { opacity: 1; color: var(--red); }
+
+  /* footer: variants inline with matrix */
+  .foot-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; }
+  .foot-row .seg button { padding: 6px 14px; }
+  .foot-label { font-size: 11px; color: var(--muted); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -585,27 +607,20 @@
         </div>
 
         <div class="step">
-          <div class="step-head"><span class="step-title"><span class="step-num">2</span>Angles</span><span class="step-count" id="angleCount"></span></div>
+          <div class="step-head"><span class="step-title"><span class="step-num">2</span>Angles — what the email leads with</span><span class="step-count" id="angleCount"></span></div>
           <div id="angleSection"></div>
         </div>
 
         <div class="step">
-          <div class="step-head"><span class="step-title"><span class="step-num">3</span>Proof &amp; emphasis</span><span class="step-count" id="proofCount"></span></div>
-          <div id="proofSection"></div>
+          <details class="personalize" id="emphFold">
+            <summary><span><span class="step-num" style="margin-right:8px">3</span><b>Emphasis &amp; proof</b> — optional, star what the scripts should push</span><span class="step-count" id="proofCount" style="margin-left:auto;padding-right:8px"></span></summary>
+            <div class="inner" id="proofSection"></div>
+          </details>
         </div>
 
         <div class="step">
-          <div class="step-head"><span class="step-title"><span class="step-num">4</span>Frameworks</span><span class="step-count" id="fwCount"></span></div>
+          <div class="step-head"><span class="step-title"><span class="step-num">4</span>Frameworks — the script structures</span><span class="step-count" id="fwCount"></span></div>
           <div class="chips" id="fwChips"></div>
-        </div>
-
-        <div class="step">
-          <div class="step-head"><span class="step-title"><span class="step-num">5</span>Variants per combo</span></div>
-          <div class="seg" id="variantSeg">
-            <button class="on" onclick="setVariants(1, this)">1</button>
-            <button onclick="setVariants(2, this)">2</button>
-            <button onclick="setVariants(3, this)">3</button>
-          </div>
         </div>
 
         <details class="personalize">
@@ -646,6 +661,14 @@
       </div>
 
       <div class="build-footer">
+        <div class="foot-row">
+          <span class="foot-label">Variants per combo</span>
+          <div class="seg" id="variantSeg">
+            <button class="on" onclick="setVariants(1, this)">1</button>
+            <button onclick="setVariants(2, this)">2</button>
+            <button onclick="setVariants(3, this)">3</button>
+          </div>
+        </div>
         <div class="matrix-line" id="matrixLine"></div>
         <button class="btn btn-primary" id="generateBtn" onclick="generate()">Generate Matrix →</button>
       </div>
@@ -702,7 +725,11 @@
         <div class="version-list" id="versionList"></div>
       </div>
       <div class="editor-pane">
-        <textarea class="modal-textarea" id="modalScript" spellcheck="true"></textarea>
+        <textarea class="modal-textarea" id="modalScript" spellcheck="true"
+          onselect="trackModalSelection()" onkeyup="trackModalSelection()" onmouseup="trackModalSelection()" oninput="clearModalSelection()"></textarea>
+        <div class="sel-chip" id="selChip">
+          <span>✂️ Rewriting only:</span><span class="sel-text" id="selChipText"></span><b onclick="clearModalSelection()">✕</b>
+        </div>
         <div class="ai-composer">
           <span class="ai-composer-icon">✨</span>
           <div class="ai-composer-wrap">
@@ -858,6 +885,7 @@ let state = {
   reservoirFilter: 'all',      // 'all'|'idea'|'testing'|'winning'
   selectedGuarantee: null,     // string | null — guarantee chip selected in builder
   suggestedAngles: [],         // AI-suggested angles awaiting user tap
+  emphTab: 'pains',            // active tab in the Emphasis & proof fold
 };
 let scriptIndex = []; // flat ordered list built during renderOutput; each {framework,angle,label,script,nicheId}
 
@@ -877,6 +905,30 @@ function clientDesires(c)     { return dedupeStr([...(c?.caseStudy?.desires || [
 function clientOffers(c)      { return dedupeStr([...(c?.caseStudy?.offers || []),  ...(c?.transcripts || []).flatMap(t => t.offers || [])]); }
 function clientCaseStudies(c) { return dedupeStr(c?.caseStudy?.caseStudies || []); }
 
+// Where did this piece of intel come from? Transcripts are checked first
+// (they carry their own provenance), then the recorded sources map; anything
+// untracked was typed in by hand.
+const SRC_META = {
+  transcript: { ico: '📞', label: 'Call transcript' },
+  site:       { ico: '🌐', label: 'Client website (scraped)' },
+  research:   { ico: '🔍', label: 'Web research' },
+  ai:         { ico: '✨', label: 'AI suggested' },
+  competitor: { ico: '🏁', label: 'Competitor intel' },
+  manual:     { ico: '✍️', label: 'Manually added' },
+};
+function srcOf(c, kind, text) {
+  const t = (c?.transcripts || []).find(tr => (tr[kind === 'caseStudies' ? 'offers' : kind] || []).includes(text))
+         || (c?.transcripts || []).find(tr => ['pains', 'desires', 'angles', 'offers'].some(k => (tr[k] || []).includes(text)));
+  if (t) return { ...SRC_META.transcript, label: `Call transcript: ${t.title || 'untitled'}` };
+  const rec = c?.sources?.[text];
+  if (rec && SRC_META[rec.type]) return { ...SRC_META[rec.type], label: rec.label ? `${SRC_META[rec.type].label} — ${rec.label}` : SRC_META[rec.type].label };
+  return SRC_META.manual;
+}
+const srcIco = (c, kind, text) => {
+  const s = srcOf(c, kind, text);
+  return `<span class="src-ico" title="${esc(s.label)}">${s.ico}</span>`;
+};
+
 // Migrate older configs: clients used a single nicheId; v3 clients target many.
 function migrateConfig(cfg) {
   (cfg.clients || []).forEach(c => {
@@ -893,6 +945,7 @@ function migrateConfig(cfg) {
     c.transcripts = c.transcripts || [];
     c.favorites = c.favorites || { pains: [], desires: [], caseStudies: [], offers: [] };
     ['pains', 'desires', 'caseStudies', 'offers'].forEach(k => { if (!Array.isArray(c.favorites[k])) c.favorites[k] = []; });
+    c.sources = c.sources || {};   // text → {type:'site'|'transcript'|'research'|'ai'|'competitor', label}
   });
   (cfg.frameworks || []).forEach(f => { f.nicheIds = f.nicheIds || []; });
   cfg.winningScripts = cfg.winningScripts || [];
@@ -1053,32 +1106,32 @@ function renderBuilder() {
     (mine.length ? `<optgroup label="${esc(c.name)}'s niches">${mine.map(opt).join('')}</optgroup>` : '') +
     (others.length ? `<optgroup label="${mine.length ? 'Other niches' : 'All niches'}">${others.map(opt).join('')}</optgroup>` : '');
 
-  // Angle section — the email hooks: niche angles, transcript-derived, custom, AI
+  // Angle section — ONE cloud of hooks; the little icon on each chip says
+  // where it came from (🎯 niche · 📞 transcript · ✨ AI · ✍️ manual).
   const as = document.getElementById('angleSection');
 
-  const chipHtml = (a, extra = '') =>
-    `<div class="chip ${state.angles.has(a) ? 'on' : ''} ${extra}" onclick="toggleAngle(this)" data-a="${esc(a)}">${esc(a)}</div>`;
+  const angleItems = [];
+  const seen = new Set();
+  const pushAngle = (text, ico, label) => {
+    const t = String(text).trim();
+    if (!t || seen.has(t)) return;
+    seen.add(t);
+    angleItems.push({ text: t, ico, label });
+  };
+  (n?.angles || []).forEach(a => pushAngle(a, '🎯', 'Niche angle'));
+  (c?.transcripts || []).forEach(t => (t.angles || []).forEach(a => pushAngle(a, '📞', `Call transcript: ${t.title || 'untitled'}`)));
+  (c?.savedAngles || []).filter(x => !x.nicheId || x.nicheId === state.nicheId)
+    .forEach(x => pushAngle(x.text, x.src === 'ai' ? '✨' : '✍️', x.src === 'ai' ? 'AI suggested (saved)' : 'Saved custom angle'));
 
-  const nicheChips = (n?.angles || []).map(a => chipHtml(a)).join('');
-
-  // Angles surfaced from this client's call transcripts (tappable as angles)
-  const transcriptAngles = dedupeStr((c?.transcripts || []).flatMap(t => t.angles || []));
-  const transcriptChips = transcriptAngles.map(a =>
-    `<div class="chip ${state.angles.has(a) ? 'on' : ''}" style="border-color:rgba(245,158,11,.3)" onclick="toggleAngle(this)" data-a="${esc(a)}">${esc(a)}</div>`).join('');
-
-  // Saved custom angles for this niche
-  const customAngles = (c?.savedAngles || []).filter(x => !x.nicheId || x.nicheId === state.nicheId);
-  const customChips = customAngles.map(x =>
-    `<div class="chip ${state.angles.has(x.text) ? 'on' : ''}" style="border-style:dashed" onclick="toggleAngle(this)" data-a="${esc(x.text)}">${esc(x.text)}</div>`).join('');
+  const angleChips = angleItems.map(it =>
+    `<div class="chip ${state.angles.has(it.text) ? 'on' : ''}" onclick="toggleAngle(this)" data-a="${esc(it.text)}">${esc(it.text)}<span class="src-ico" title="${esc(it.label)}">${it.ico}</span></div>`).join('');
 
   // AI suggested angles (pending taps)
   const suggestPills = state.suggestedAngles.map(a =>
     `<span class="suggest-pill" onclick="addSuggestedAngle(this)" data-a="${esc(a)}">${esc(a)} +</span>`).join('');
 
   as.innerHTML = `
-    ${nicheChips ? `<div class="section-label" style="margin-top:0">Niche angles</div><div class="chips">${nicheChips}</div>` : '<div class="hint">No niche angles — add in Admin → Niches.</div>'}
-    ${transcriptChips ? `<div class="section-label" style="margin-top:10px">📞 From call transcripts</div><div class="chips">${transcriptChips}</div>` : ''}
-    ${customChips ? `<div class="section-label" style="margin-top:10px">Saved custom angles <span style="font-size:10px;color:var(--muted)">─ dashed</span></div><div class="chips">${customChips}</div>` : ''}
+    ${angleChips ? `<div class="chips">${angleChips}</div>` : '<div class="hint">No angles yet — research the niche in the client profile, or ask AI below.</div>'}
     <div class="suggest-bar">
       <input class="form-input" id="suggestInput" placeholder="✨ AI: suggest angles focused on…" />
       <button class="mini-btn" onclick="suggestAnglesAI()">→</button>
@@ -1406,46 +1459,53 @@ const b64 = s => btoa(unescape(encodeURIComponent(String(s))));
 function renderProofSection(c) {
   const el = document.getElementById('proofSection'); if (!el) return;
   if (!c) { el.innerHTML = '<div class="proof-empty">Select a client.</div>'; return; }
-  const cs = c.caseStudy || {};
   const fav = c.favorites || { pains: [], desires: [], caseStudies: [], offers: [] };
-
-  const caseStudies = clientCaseStudies(c);
-  const pains = clientPains(c);
-  const desires = clientDesires(c);
-  const offers = clientOffers(c);
   const guarantees = c.guarantees || [];
 
-  const favChip = (kind, text, cls = 'fav-chip') =>
-    `<div class="${cls} ${favOn(c, kind, text) ? 'on' : ''}" onclick="toggleFav('${kind}','${b64(text)}')"><span class="fav-star">${favOn(c, kind, text) ? '★' : '☆'}</span>${esc(text)}</div>`;
+  const data = {
+    pains:       { title: 'Pains',        items: clientPains(c) },
+    desires:     { title: 'Desires',      items: clientDesires(c) },
+    offers:      { title: 'Offers',       items: clientOffers(c) },
+    caseStudies: { title: 'Case studies', items: clientCaseStudies(c) },
+    guarantee:   { title: 'Guarantee',    items: guarantees.map(g => g.text) },
+  };
+  if (!data[state.emphTab]) state.emphTab = 'pains';
+  const tab = state.emphTab;
 
-  const csRow = (text) =>
-    `<div class="cs-row ${favOn(c, 'caseStudies', text) ? 'on' : ''}" onclick="toggleFav('caseStudies','${b64(text)}')"><span class="fav-star">${favOn(c, 'caseStudies', text) ? '★' : '☆'}</span><span>${esc(text)}</span></div>`;
+  const tabBtn = (key) => {
+    const starred = key === 'guarantee' ? (state.selectedGuarantee ? 1 : 0) : (fav[key] || []).length;
+    return `<button class="etab ${tab === key ? 'active' : ''}" onclick="state.emphTab='${key}';renderProofSection(client(state.clientId))">${data[key].title}${starred ? `<span class="n">★${starred}</span>` : ''}</button>`;
+  };
 
-  const guarChips = guarantees.map(g =>
-    `<div class="chip guar-chip ${state.selectedGuarantee === g.text ? 'on' : ''}" onclick="toggleGuarantee(this)" data-g="${esc(g.text)}">${esc(g.text)}</div>`).join('');
-
-  const counted = (label, n) => `${label}${n ? ` <span class="cnt">★ ${n}</span>` : ''}`;
+  let body;
+  if (tab === 'guarantee') {
+    body = guarantees.length
+      ? `<div class="chips">${guarantees.map(g =>
+          `<div class="chip guar-chip ${state.selectedGuarantee === g.text ? 'on' : ''}" onclick="toggleGuarantee(this)" data-g="${esc(g.text)}">${esc(g.text)}</div>`).join('')}</div>
+         <div class="hint" style="margin-top:7px">Pick one — it gets woven into the scripts as the risk reversal.</div>`
+      : '<div class="proof-empty">No guarantees on file — add them in the client profile (✏️ Edit profile above).</div>';
+  } else if (tab === 'caseStudies') {
+    body = data.caseStudies.items.length
+      ? data.caseStudies.items.map(text =>
+          `<div class="cs-row ${favOn(c, 'caseStudies', text) ? 'on' : ''}" onclick="toggleFav('caseStudies','${b64(text)}')"><span class="fav-star">${favOn(c, 'caseStudies', text) ? '★' : '☆'}</span><span>${esc(text)}${srcIco(c, 'caseStudies', text)}</span></div>`).join('') +
+        '<div class="hint" style="margin-top:5px">Starred case studies become the ONLY proof the scripts may cite.</div>'
+      : '<div class="proof-empty">No case studies yet — scrape the client site or add them in the profile.</div>';
+  } else {
+    const kind = tab;
+    body = data[kind].items.length
+      ? `<div class="chips">${data[kind].items.map(text =>
+          `<div class="fav-chip ${kind === 'offers' ? 'offer-chip' : ''} ${favOn(c, kind, text) ? 'on' : ''}" onclick="toggleFav('${kind}','${b64(text)}')"><span class="fav-star">${favOn(c, kind, text) ? '★' : '☆'}</span>${esc(text)}<span style="pointer-events:auto">${srcIco(c, kind, text)}</span></div>`).join('')}</div>`
+      : `<div class="proof-empty">Nothing on file yet — scrape the site, extract a transcript, or add manually in the profile.</div>`;
+  }
 
   el.innerHTML = `
-    <div class="proof-sub">${counted('📂 Case studies — star which to use as proof', fav.caseStudies.length)}</div>
-    ${caseStudies.length ? caseStudies.map(csRow).join('') : '<div class="proof-empty">No case studies yet — add them in the client profile or extract from a transcript.</div>'}
-
-    <div class="proof-sub">${counted('🔴 Pains to emphasize', fav.pains.length)}</div>
-    ${pains.length ? `<div class="chips">${pains.map(p => favChip('pains', p)).join('')}</div>` : '<div class="proof-empty">No pains on file.</div>'}
-
-    <div class="proof-sub">${counted('🟢 Desires to emphasize', fav.desires.length)}</div>
-    ${desires.length ? `<div class="chips">${desires.map(d => favChip('desires', d)).join('')}</div>` : '<div class="proof-empty">No desires on file.</div>'}
-
-    <div class="proof-sub">${counted('💡 Offers — star which to pitch', fav.offers.length)}</div>
-    ${offers.length ? `<div class="chips">${offers.map(o => favChip('offers', o, 'fav-chip offer-chip')).join('')}</div>` : '<div class="proof-empty">No offers on file.</div>'}
-
-    <div class="proof-sub">✅ Guarantee / risk reversal <span style="text-transform:none;font-weight:400;color:var(--muted)">— pick one to weave in</span></div>
-    ${guarantees.length ? `<div class="chips">${guarChips}</div>` : '<div class="proof-empty">No guarantees on file — add them in the client profile.</div>'}
+    <div class="etabs">${Object.keys(data).map(tabBtn).join('')}</div>
+    ${body}
   `;
 
   const total = fav.caseStudies.length + fav.pains.length + fav.desires.length + fav.offers.length + (state.selectedGuarantee ? 1 : 0);
   const pc = document.getElementById('proofCount');
-  if (pc) pc.textContent = total ? `(${total} starred)` : '';
+  if (pc) pc.textContent = total ? `★ ${total} starred` : '';
 }
 
 async function suggestAnglesAI() {
@@ -1474,7 +1534,7 @@ function addSuggestedAngle(el) {
   // Save it as a custom angle for this client/niche
   const c = client(state.clientId);
   if (c && !c.savedAngles.some(x => x.text === a)) {
-    c.savedAngles.push({ id: uid('ang'), text: a, nicheId: state.nicheId });
+    c.savedAngles.push({ id: uid('ang'), text: a, nicheId: state.nicheId, src: 'ai' });
     persistConfig();
   }
   renderBuilder(); updateMatrix();
@@ -1526,9 +1586,34 @@ function openEditModal(idx) {
   document.getElementById('modalAiInput').value = '';
   const active = s.vref?._activeVersion ?? 0;
   document.getElementById('modalScript').value = (s.vref?._versions?.[active]?.text) ?? s.script;
+  clearModalSelection();
   renderVersionList();
   document.getElementById('editModal').classList.add('show');
   setTimeout(() => document.getElementById('modalScript').focus(), 60);
+}
+
+// ── Highlight-to-edit: select part of the script, then the AI composer
+// rewrites ONLY that part. ──
+let modalSel = null; // {start, end} into the textarea value
+
+function trackModalSelection() {
+  const ta = document.getElementById('modalScript');
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  if (end - start >= 3) {
+    modalSel = { start, end };
+    const text = ta.value.slice(start, end).replace(/\n+/g, ' ');
+    document.getElementById('selChipText').textContent = '“' + text.slice(0, 80) + (text.length > 80 ? '…' : '') + '”';
+    document.getElementById('selChip').classList.add('show');
+    document.getElementById('modalAiInput').placeholder = 'Rewrite just this part — “turn it into a question”, “add a number”…';
+  }
+}
+
+function clearModalSelection() {
+  modalSel = null;
+  const chip = document.getElementById('selChip');
+  if (chip) chip.classList.remove('show');
+  const input = document.getElementById('modalAiInput');
+  if (input) input.placeholder = 'Ask AI to rewrite — “make it shorter”, “add a stat”, “warmer tone”…';
 }
 
 function closeEditModal() {
@@ -1551,9 +1636,9 @@ function renderVersionList() {
 
 function loadVersion(i) {
   const s = scriptIndex[modalIdx]; if (!s?.vref?._versions?.[i]) return;
-  // Preserve any unsaved working edits as a snapshot before switching away
   s.vref._activeVersion = i;
   document.getElementById('modalScript').value = s.vref._versions[i].text;
+  clearModalSelection();
   renderVersionList();
 }
 
@@ -1578,13 +1663,24 @@ async function modalAiRefine() {
   const prompt = input.value.trim();
   if (!prompt) return showNotif('Tell the AI what to change', true);
   if (!adminKey) return showNotif('No admin key', true);
-  const script = document.getElementById('modalScript').value;
+  const ta = document.getElementById('modalScript');
+  const script = ta.value;
   const btn = document.getElementById('modalAiBtn');
   btn.textContent = '…'; btn.disabled = true;
   try {
-    const r = await api({ action: 'refine_script', script, prompt });
-    pushVersion(prompt, 'ai', r.script);
-    document.getElementById('modalScript').value = r.script;
+    if (modalSel && modalSel.end <= script.length) {
+      // Rewrite only the highlighted part, splice it back in
+      const selection = script.slice(modalSel.start, modalSel.end);
+      const r = await api({ action: 'refine_selection', script, selection, prompt });
+      const replaced = script.slice(0, modalSel.start) + r.replacement + script.slice(modalSel.end);
+      pushVersion('✂️ ' + prompt, 'ai', replaced);
+      ta.value = replaced;
+      clearModalSelection();
+    } else {
+      const r = await api({ action: 'refine_script', script, prompt });
+      pushVersion(prompt, 'ai', r.script);
+      ta.value = r.script;
+    }
     input.value = '';
   } catch (e) { showNotif('Refine failed: ' + e.message, true); }
   btn.textContent = '↑'; btn.disabled = false;
@@ -2039,7 +2135,8 @@ function adminClients() {
         competitorIntel: structuredClone(c.competitorIntel || []),
         candidates: [],
         transcripts: structuredClone(c.transcripts || []),
-        suggestedOffers: []
+        suggestedOffers: [],
+        sources: structuredClone(c.sources || {})
       };
       pendingTags['ec-pains'] = { arr: structuredClone(cs.pains || []), placeholder: 'add pain + Enter' };
       pendingTags['ec-objections'] = { arr: structuredClone(cs.objections || []), placeholder: 'add objection + Enter' };
@@ -2204,6 +2301,16 @@ function addCompetitor(jsonStr) {
 
 // — AI onboarding actions —
 let aiBusy = false;
+
+// Remember where a piece of intel came from so the builder can show it.
+function recordSrc(items, type, label) {
+  if (!editClient) return;
+  editClient.sources = editClient.sources || {};
+  (items || []).forEach(v => {
+    const t = String(v).trim();
+    if (t && !editClient.sources[t]) editClient.sources[t] = { type, label: label || '' };
+  });
+}
 function aiStatus(msg) {
   const el = document.getElementById('ec-ai-status');
   if (el) el.innerHTML = msg;
@@ -2245,6 +2352,8 @@ async function scrapeClientSite() {
     mergeTags('ec-pains', r.pains);
     mergeTags('ec-desires', r.desires);
     mergeTags('ec-objections', r.objections);
+    const dom = String(r.url || url).replace(/^https?:\/\//, '').replace(/\/.*/, '');
+    ['offers', 'caseStudies', 'pains', 'desires', 'objections'].forEach(k => recordSrc(r[k], 'site', dom));
     if (r.niche_guess && !document.getElementById('ec-newniche').value.trim()) {
       document.getElementById('ec-newniche').value = r.niche_guess;
     }
@@ -2278,6 +2387,7 @@ async function researchNicheCreate() {
     mergeTags('ec-pains', r.pains);
     mergeTags('ec-desires', r.desires);
     mergeTags('ec-objections', r.objections);
+    ['pains', 'desires', 'objections'].forEach(k => recordSrc(r[k], 'research', name));
     persistConfig();
     captureOverrides(); renderEditNiches(); renderOverrideBoxes();
     document.getElementById('ec-newniche').value = '';
@@ -2322,6 +2432,15 @@ function renderTranscripts() {
     </div>`).join('');
 }
 
+// Transcripts write through to the real client record immediately (when
+// editing an existing client) so the intel survives even without hitting Save.
+function syncTranscriptsToClient() {
+  const id = state.editing?.id;
+  if (!id || id === '__new__') return;
+  const c = client(id);
+  if (c) { c.transcripts = structuredClone(editClient.transcripts); persistConfig(); }
+}
+
 function addTranscript() {
   const title = document.getElementById('ec-tr-title')?.value.trim();
   const text = document.getElementById('ec-tr-text')?.value.trim();
@@ -2329,12 +2448,14 @@ function addTranscript() {
   editClient.transcripts.push({ id: uid('tr'), title: title || 'Untitled', text, extractedAt: '', pains: [], desires: [], angles: [], offers: [] });
   document.getElementById('ec-tr-title').value = '';
   document.getElementById('ec-tr-text').value = '';
+  syncTranscriptsToClient();
   renderTranscripts();
   showNotif('Transcript saved');
 }
 
 function deleteTranscript(i) {
   editClient.transcripts.splice(i, 1);
+  syncTranscriptsToClient();
   renderTranscripts();
 }
 
@@ -2352,12 +2473,13 @@ async function extractTranscript() {
     // Add transcript to list with extracted data
     const tr = { id: uid('tr'), title: title || 'Untitled', text, extractedAt: new Date().toISOString().slice(0,10), pains: r.pains||[], desires: r.desires||[], angles: r.angles||[], offers: r.offers||[] };
     editClient.transcripts.push(tr);
+    syncTranscriptsToClient();
     // Merge into tag editors
     mergeTags('ec-pains', r.pains);
     mergeTags('ec-desires', r.desires);
-    mergeTags('ec-objections', []);  // keep existing
     // Append offers into textarea
     appendLines('ec-offers', r.offers);
+    ['pains', 'desires', 'offers'].forEach(k => recordSrc(r[k], 'transcript', tr.title));
     document.getElementById('ec-tr-title').value = '';
     document.getElementById('ec-tr-text').value = '';
     if (status) status.innerHTML = `✅ Extracted: ${(r.pains||[]).length} pains, ${(r.desires||[]).length} desires, ${(r.angles||[]).length} angles, ${(r.offers||[]).length} offers. All merged into profile.<br>${r.insights ? '<i>' + esc(r.insights) + '</i>' : ''}`;
@@ -2413,6 +2535,7 @@ function addSuggestedOffer(i) {
   if (!offer) return;
   const text = typeof offer === 'string' ? offer : (offer.name && offer.description ? `${offer.name} — ${offer.description}` : offer.name || offer.description || '');
   appendLines('ec-offers', [text]);
+  recordSrc([text], 'ai', 'offer suggestion');
   editClient.suggestedOffers.splice(i, 1);
   renderSuggestedOffers();
 }
@@ -2444,6 +2567,7 @@ function saveClient(isNew) {
     avoid: document.getElementById('ec-avoid').__arr,
     guarantees: (document.getElementById('ec-guarantees').__arr || []).map(t => ({ id: uid('g'), text: String(t).trim() })).filter(g => g.text),
     transcripts: editClient.transcripts,
+    sources: editClient.sources || {},
     scriptReservoir: (client(isNew ? null : state.editing?.id)?.scriptReservoir) || [],
     savedAngles: (client(isNew ? null : state.editing?.id)?.savedAngles) || [],
     favorites: (client(isNew ? null : state.editing?.id)?.favorites) || { pains: [], desires: [], caseStudies: [], offers: [] }
