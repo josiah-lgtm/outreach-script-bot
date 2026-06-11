@@ -51,6 +51,7 @@ export SUPABASE_ACCESS_TOKEN="$SUPABASE_TOKEN"
 SECRETS=()
 [ -n "$ANTHROPIC_API_KEY" ] && SECRETS+=("ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
 [ -n "$ADMIN_KEY" ]         && SECRETS+=("ADMIN_KEY=$ADMIN_KEY")
+[ -n "$NOTION_API_KEY" ]    && SECRETS+=("NOTION_API_KEY=$NOTION_API_KEY")
 if [ ${#SECRETS[@]} -gt 0 ]; then
   echo "Setting secrets: $(printf '%s ' "${SECRETS[@]%%=*}")"
   $SUPABASE secrets set --project-ref $PROJECT_REF "${SECRETS[@]}"

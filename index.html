@@ -606,6 +606,73 @@
   .foot-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; }
   .foot-row .seg button { padding: 6px 14px; }
   .foot-label { font-size: 11px; color: var(--muted); font-weight: 600; }
+
+  /* ── GROWTH PLAN BUILDER ── */
+  .main.growth-mode { grid-template-columns: 1fr; }
+  .growth-wrap { display: grid; grid-template-columns: minmax(440px, 1fr) 1fr; height: 100%; overflow: hidden; }
+  .growth-form { overflow-y: auto; padding: 18px 22px; border-right: 1px solid var(--border); }
+  .growth-form::-webkit-scrollbar, .growth-preview::-webkit-scrollbar { width: 5px; }
+  .growth-form::-webkit-scrollbar-thumb, .growth-preview::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .growth-preview { overflow-y: auto; background: var(--bg); }
+  @media (max-width: 1080px) { .growth-wrap { grid-template-columns: 1fr; } .growth-preview { display: none; } }
+
+  .mode-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
+  .mode-btn { flex: 1; padding: 13px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg2); cursor: pointer; text-align: left; transition: .12s; }
+  .mode-btn:hover { border-color: var(--accent); }
+  .mode-btn.on { border-color: var(--accent); background: rgba(37,99,235,.1); }
+  .mode-btn .mt-title { font: 700 13px 'Inter', sans-serif; color: var(--text); }
+  .mode-btn .mt-sub { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+
+  .assume-grid { display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; align-items: center; margin: 6px 0 4px; }
+  .assume-grid label { font-size: 11.5px; color: var(--subtle); }
+  .num-input { width: 96px; background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; padding: 5px 8px; text-align: right; outline: none; font-variant-numeric: tabular-nums; }
+  .num-input:focus { border-color: var(--accent); }
+  .num-input.pct::after { content: '%'; }
+
+  .gp-target { border: 1px solid var(--border); border-radius: 9px; background: var(--bg2); padding: 12px 13px; margin-bottom: 9px; }
+  .gp-target.on { border-color: var(--amber); background: rgba(245,158,11,.06); }
+  .gp-target-head { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+  .gp-target-title { font: 700 12px 'Inter', sans-serif; }
+  .gp-target-body { margin-top: 10px; }
+  .gp-sub { font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; margin: 10px 0 5px; }
+  .gp-script-opt { display: flex; gap: 8px; align-items: flex-start; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; margin-bottom: 5px; cursor: pointer; font-size: 11.5px; line-height: 1.4; background: var(--bg); }
+  .gp-script-opt.on { border-color: var(--accent); background: rgba(37,99,235,.08); }
+  .gp-script-opt .s-meta { color: var(--muted); font-size: 10px; }
+
+  .plan-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg2); padding: 9px 12px; margin-bottom: 7px; }
+  .plan-row .pl-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .gp-badge { font-size: 9px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .gp-badge.strategy { background: rgba(245,158,11,.12); color: var(--amber); }
+  .gp-badge.growth { background: rgba(16,185,129,.12); color: var(--green); }
+
+  .gp-toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 11px; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 7px; }
+  .gp-toggle-row .tg-label { font-size: 12px; color: var(--subtle); }
+  .gp-toggle-row .tg-label b { color: var(--text); }
+
+  /* preview document */
+  .doc { padding: 28px 32px 60px; font-family: 'Inter', sans-serif; color: var(--text); max-width: 760px; margin: 0 auto; }
+  .doc h1 { font-size: 21px; margin-bottom: 3px; }
+  .doc .doc-sub { color: var(--muted); font-size: 12px; margin-bottom: 20px; }
+  .doc h2 { font-size: 15px; margin: 24px 0 9px; padding-bottom: 6px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 7px; }
+  .doc h3 { font-size: 13px; margin: 16px 0 6px; color: var(--accent2); }
+  .doc p { font-size: 13px; line-height: 1.6; color: var(--subtle); margin-bottom: 10px; }
+  .doc .callout { background: rgba(37,99,235,.08); border: 1px solid rgba(37,99,235,.25); border-radius: 8px; padding: 12px 14px; font-size: 13px; line-height: 1.6; color: var(--subtle); margin: 12px 0; }
+  .doc .callout.pledge { background: rgba(16,185,129,.08); border-color: rgba(16,185,129,.3); }
+  .doc table { width: 100%; border-collapse: collapse; margin: 10px 0 14px; font-size: 12px; }
+  .doc th, .doc td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+  .doc th { color: var(--muted); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; }
+  .doc td.num, .doc th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .doc td.tot { font-weight: 700; color: var(--text); }
+  .doc .big-stat { font-size: 25px; font-weight: 800; color: var(--green); line-height: 1.1; }
+  .doc .stat-row { display: flex; gap: 22px; margin: 10px 0 14px; flex-wrap: wrap; }
+  .doc .stat-row .s { }
+  .doc .stat-row .s .lab { font-size: 10px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
+  .doc ul { margin: 6px 0 12px 18px; font-size: 13px; color: var(--subtle); line-height: 1.65; }
+  .doc .scriptbox { background: var(--bg2); border: 1px solid var(--border); border-radius: 7px; padding: 11px 13px; font-family: 'Courier Prime', monospace; font-size: 12px; white-space: pre-wrap; line-height: 1.6; margin: 7px 0; color: var(--text); }
+  .doc .opt-card { border: 1px solid var(--border); border-radius: 8px; padding: 11px 13px; margin-bottom: 8px; background: var(--bg2); }
+  .doc .opt-card .oc-title { font-weight: 700; font-size: 12px; margin-bottom: 4px; }
+  .doc-empty { color: var(--muted); text-align: center; padding: 90px 24px; font-size: 13px; line-height: 1.6; }
+  .doc-actions { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; justify-content: flex-end; padding: 11px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); }
 </style>
 </head>
 <body>
@@ -614,6 +681,7 @@
   <div class="header-left">
     <div class="logo">script<span>.</span>bot</div>
     <button class="nav-btn active" id="nav-builder" onclick="showScreen('builder')">Builder</button>
+    <button class="nav-btn" id="nav-growth" onclick="showScreen('growth')">📈 Growth</button>
     <button class="nav-btn" id="nav-admin" onclick="showScreen('admin')">⚙ Admin</button>
   </div>
   <div class="header-right">
@@ -738,10 +806,19 @@
           <button class="tab-btn" id="atab-winning" onclick="switchAdminTab('winning')">🏆 Winning Scripts</button>
           <button class="tab-btn" id="atab-niches" onclick="switchAdminTab('niches')">Niches & Angles</button>
           <button class="tab-btn" id="atab-clients" onclick="switchAdminTab('clients')">Clients</button>
+          <button class="tab-btn" id="atab-tools" onclick="switchAdminTab('tools')">🧰 Tools KB</button>
           <button class="tab-btn" id="atab-settings" onclick="switchAdminTab('settings')">Settings</button>
         </div>
         <div id="adminBody"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- GROWTH PLAN BUILDER (full-width view) -->
+  <div class="panel" id="panelGrowth" style="display:none">
+    <div class="growth-wrap">
+      <div class="growth-form" id="growthForm"></div>
+      <div class="growth-preview" id="growthPreview"></div>
     </div>
   </div>
 
@@ -830,7 +907,14 @@ async function api(body) {
 const DEFAULT_CONFIG = {
   version: 2,
   settings: {
-    globalRules: "No jargon, no dashes mid-sentence, no 'genuinely', no corporate speak. Plain language a 12-year-old gets. Sound like a real person texting, not a marketer writing copy. Every script must be sendable exactly as written. Hooks must be answerable in 2 seconds."
+    globalRules: "No jargon, no dashes mid-sentence, no 'genuinely', no corporate speak. Plain language a 12-year-old gets. Sound like a real person texting, not a marketer writing copy. Every script must be sendable exactly as written. Hooks must be answerable in 2 seconds.",
+    notionParentId: '33a4fd2a4cfe81fdaab6e17031fa93be',
+    // Growth-plan funnel + cost assumptions (editable in Admin → Settings).
+    planDefaults: {
+      email: { leadsPerMonth: 3000, verifyRate: 0.65, sendsPerLead: 3, replyRate: 0.04, positiveRate: 0.30, bookRate: 0.40 },
+      linkedin: { connectsPerDay: 25, daysPerMonth: 22, acceptRate: 0.30, replyRate: 0.25, positiveRate: 0.40, bookRate: 0.40 },
+      personalization: { inputTokensPerLead: 2000, outputTokensPerLead: 200, model: 'Gemini 2.5 Flash' }
+    }
   },
   frameworks: [
     {
@@ -924,6 +1008,7 @@ let state = {
   suggestedAngles: [],         // AI-suggested angles awaiting user tap
   emphTab: 'pains',            // active tab in the Emphasis & proof fold
   selectedIcpId: null,         // saved ICP the scripts are personalized to
+  growth: null,                // working growth-plan object (built in initGrowth)
 };
 let scriptIndex = []; // flat ordered list built during renderOutput; each {framework,angle,label,script,nicheId}
 
@@ -985,11 +1070,27 @@ function migrateConfig(cfg) {
     ['pains', 'desires', 'caseStudies', 'offers'].forEach(k => { if (!Array.isArray(c.favorites[k])) c.favorites[k] = []; });
     c.sources = c.sources || {};   // text → {type:'site'|'transcript'|'research'|'ai'|'competitor', label}
     c.icps = c.icps || [];         // saved ideal customer profiles from the ICP builder
+    c.growthPlans = c.growthPlans || []; // saved growth plans
   });
   (cfg.frameworks || []).forEach(f => { f.nicheIds = f.nicheIds || []; });
   cfg.winningScripts = cfg.winningScripts || [];
+  cfg.settings = cfg.settings || {};
+  cfg.settings.notionParentId = cfg.settings.notionParentId || '33a4fd2a4cfe81fdaab6e17031fa93be';
+  cfg.settings.planDefaults = cfg.settings.planDefaults || structuredClone(DEFAULT_CONFIG.settings.planDefaults);
+  // Tools knowledge base — what we use, why, cost. Seed sensible defaults once.
+  if (!Array.isArray(cfg.toolsKB) || !cfg.toolsKB.length) cfg.toolsKB = structuredClone(DEFAULT_TOOLS_KB);
   return cfg;
 }
+
+// costModel: 'flat' ($/mo) · 'per_1k_leads' · 'per_1k_verified' ($ per 1000) · 'tokens' (uses inPerM/outPerM $ per 1M)
+const DEFAULT_TOOLS_KB = [
+  { id: 'tool-apollo', name: 'Apollo.io', category: 'scraping', channels: ['email', 'linkedin'], link: 'https://apollo.io', costModel: 'flat', cost: 99, why: 'Lead database — find and scrape the ICP\'s job titles at the target company sizes.' },
+  { id: 'tool-mv', name: 'MillionVerifier', category: 'verification', channels: ['email'], link: 'https://millionverifier.com', costModel: 'per_1k_verified', cost: 0.37, why: 'Verify scraped emails before sending — protects domain reputation, keeps bounces under 2%.' },
+  { id: 'tool-smartlead', name: 'Smartlead', category: 'sending', channels: ['email'], link: 'https://smartlead.ai', costModel: 'flat', cost: 94, why: 'Multi-inbox email sequencer with warmup and inbox rotation for deliverability at volume.' },
+  { id: 'tool-heyreach', name: 'HeyReach', category: 'sending', channels: ['linkedin'], link: 'https://heyreach.io', costModel: 'flat', cost: 79, why: 'LinkedIn outreach automation — connection requests and DMs at safe daily volumes.' },
+  { id: 'tool-gemini', name: 'Gemini 2.5 Flash', category: 'personalization', channels: ['email', 'linkedin'], link: 'https://ai.google.dev', costModel: 'tokens', inPerM: 0.30, outPerM: 2.50, cost: 0, why: 'Writes a personalized first line per lead from their scraped data — relevance lifts reply rates.' },
+  { id: 'tool-replyagent', name: 'AI Reply Agent', category: 'reply-agent', channels: ['email', 'linkedin'], link: '', costModel: 'flat', cost: 250, why: 'Answers replies within minutes and books the call. The client signs up for this directly.' },
+];
 
 // Frameworks visible for a niche: global ones (no scope) + ones scoped to it.
 const frameworksForNiche = nicheId =>
@@ -1038,14 +1139,20 @@ function setConfigPill(mode) {
 function showScreen(s) {
   state.screen = s;
   document.getElementById('nav-builder').classList.toggle('active', s === 'builder');
+  document.getElementById('nav-growth').classList.toggle('active', s === 'growth');
   document.getElementById('nav-admin').classList.toggle('active', s === 'admin');
   const adminMode = s === 'admin';
-  document.getElementById('panelClients').style.display = adminMode ? 'none' : 'flex';
-  document.getElementById('panelBuild').style.display   = adminMode ? 'none' : 'flex';
-  document.getElementById('panelOutput').style.display  = adminMode ? 'none' : 'flex';
+  const growthMode = s === 'growth';
+  const builderMode = s === 'builder';
+  document.getElementById('panelClients').style.display = builderMode ? 'flex' : 'none';
+  document.getElementById('panelBuild').style.display   = builderMode ? 'flex' : 'none';
+  document.getElementById('panelOutput').style.display  = builderMode ? 'flex' : 'none';
   document.getElementById('panelAdmin').style.display   = adminMode ? 'flex' : 'none';
+  document.getElementById('panelGrowth').style.display  = growthMode ? 'flex' : 'none';
   document.getElementById('main').classList.toggle('admin-mode', adminMode);
+  document.getElementById('main').classList.toggle('growth-mode', growthMode);
   if (adminMode) renderAdmin();
+  if (growthMode) openGrowth();
 }
 
 function switchTab(tab) {
@@ -1127,6 +1234,7 @@ function renderBuilder() {
       <div class="hero-badges">
         ${(c.nicheIds || []).map(id => `<span class="badge2">${esc(niche(id)?.name || '')}</span>`).join('')}
         ${(c.icps || []).length ? `<span class="badge2" style="color:var(--amber);border-color:rgba(245,158,11,.4)">🎯 ${c.icps.length} ICP${c.icps.length > 1 ? 's' : ''}</span>` : ''}
+        ${(c.growthPlans || []).length ? `<span class="badge2" style="color:var(--green);border-color:rgba(16,185,129,.4)">📈 ${c.growthPlans.length} plan${c.growthPlans.length > 1 ? 's' : ''}</span>` : ''}
         ${(cs.caseStudies || []).length ? `<span class="badge2">📂 ${cs.caseStudies.length} case studies</span>` : ''}
         ${(c.competitorIntel || []).length ? `<span class="badge2">🏁 ${c.competitorIntel.length} rivals</span>` : ''}
         ${(c.guarantees || []).length ? `<span class="badge2" style="color:var(--green);border-color:rgba(16,185,129,.4)">✅ ${c.guarantees.length} guarantee${c.guarantees.length > 1 ? 's' : ''}</span>` : ''}
@@ -1884,7 +1992,7 @@ function adminEdit(type, id) {
 }
 
 function renderAdmin() {
-  ['frameworks', 'winning', 'niches', 'clients', 'settings'].forEach(t =>
+  ['frameworks', 'winning', 'niches', 'clients', 'tools', 'settings'].forEach(t =>
     document.getElementById('atab-' + t).classList.toggle('active', t === state.adminTab));
   const body = document.getElementById('adminBody');
 
@@ -1917,7 +2025,84 @@ function adminTabHtml() {
   if (t === 'winning') return adminWinning();
   if (t === 'niches') return adminNiches();
   if (t === 'clients') return adminClients();
+  if (t === 'tools') return adminToolsKB();
   return adminSettings();
+}
+
+// — Tools knowledge base —
+const TOOL_CATS = ['scraping', 'verification', 'sending', 'personalization', 'reply-agent', 'other'];
+const COST_MODELS = [['flat', '$ / month (flat)'], ['per_1k_leads', '$ per 1,000 leads'], ['per_1k_verified', '$ per 1,000 verified'], ['tokens', 'per-token (Gemini etc.)']];
+
+function adminToolsKB() {
+  let html = `<div class="info-block"><div class="info-title">🧰 Tools knowledge base</div>
+    <div class="hint">What we use, why, and the cost. These feed the Growth Plan Builder's tech-stack and cost breakdown automatically.</div></div>
+    <button class="mini-btn" onclick="adminEditTool('__new__')">+ New tool</button>`;
+  html += (config.toolsKB || []).map(t => `
+    <div class="list-row">
+      <div style="min-width:0"><b>${esc(t.name)}</b> <span class="sub">${esc(t.category)} · ${(t.channels || []).join(', ') || 'any'} · ${esc(gpToolCostLabel(t))}</span>
+        <div class="sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:520px">${esc(t.why || '')}</div></div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="mini-btn" onclick="adminEditTool('${t.id}')">Edit</button>
+        <button class="mini-btn danger" onclick="deleteTool('${t.id}')">Delete</button>
+      </div>
+    </div>`).join('');
+
+  if (state.editing?.type === 'tools') {
+    const isNew = state.editing.id === '__new__';
+    const t = isNew ? { name: '', category: 'other', channels: [], link: '', costModel: 'flat', cost: 0, inPerM: 0, outPerM: 0, why: '' } : (config.toolsKB || []).find(x => x.id === state.editing.id);
+    if (t) html += `
+    <div class="editor">
+      <h3>${isNew ? 'New tool' : 'Edit: ' + esc(t.name)}</h3>
+      <div class="grid2">
+        <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="et-name" value="${esc(t.name)}"></div>
+        <div class="form-group"><label class="form-label">Category</label><select class="form-select" id="et-cat">${TOOL_CATS.map(cat => `<option value="${cat}" ${t.category === cat ? 'selected' : ''}>${cat}</option>`).join('')}</select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Channels</label>
+        <div class="chips" id="et-channels">${['email', 'linkedin'].map(ch => `<div class="chip ${(t.channels || []).includes(ch) ? 'on' : ''}" data-ch="${ch}" onclick="this.classList.toggle('on')">${CH_LABEL[ch]}</div>`).join('')}</div></div>
+      <div class="form-group"><label class="form-label">Link</label><input class="form-input" id="et-link" value="${esc(t.link || '')}" placeholder="https://"></div>
+      <div class="grid2">
+        <div class="form-group"><label class="form-label">Cost model</label><select class="form-select" id="et-model" onchange="document.getElementById('et-token-fields').style.display=this.value==='tokens'?'grid':'none';document.getElementById('et-cost-field').style.display=this.value==='tokens'?'none':'block'">${COST_MODELS.map(([v, l]) => `<option value="${v}" ${t.costModel === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        <div class="form-group" id="et-cost-field" style="${t.costModel === 'tokens' ? 'display:none' : ''}"><label class="form-label">Cost ($)</label><input class="form-input" id="et-cost" type="number" step="0.01" value="${t.cost || 0}"></div>
+      </div>
+      <div class="grid2" id="et-token-fields" style="${t.costModel === 'tokens' ? '' : 'display:none'}">
+        <div class="form-group"><label class="form-label">$ / 1M input tokens</label><input class="form-input" id="et-inperm" type="number" step="0.01" value="${t.inPerM || 0}"></div>
+        <div class="form-group"><label class="form-label">$ / 1M output tokens</label><input class="form-input" id="et-outperm" type="number" step="0.01" value="${t.outPerM || 0}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Why we use it</label><textarea class="form-textarea" id="et-why">${esc(t.why || '')}</textarea></div>
+      <div style="display:flex;gap:8px">
+        <button class="mini-btn" onclick="saveTool(${isNew})">💾 Save tool</button>
+        <button class="mini-btn" onclick="state.editing=null;renderAdmin()">Cancel</button>
+      </div>
+    </div>`;
+  }
+  return html;
+}
+
+function adminEditTool(id) { state.editing = { type: 'tools', id }; renderAdmin(); }
+
+function saveTool(isNew) {
+  const name = document.getElementById('et-name').value.trim();
+  if (!name) return showNotif('Name required', true);
+  const obj = {
+    id: isNew ? uid('tool') : state.editing.id,
+    name, category: document.getElementById('et-cat').value,
+    channels: Array.from(document.querySelectorAll('#et-channels .chip.on')).map(el => el.dataset.ch),
+    link: document.getElementById('et-link').value.trim(),
+    costModel: document.getElementById('et-model').value,
+    cost: +document.getElementById('et-cost').value || 0,
+    inPerM: +document.getElementById('et-inperm').value || 0,
+    outPerM: +document.getElementById('et-outperm').value || 0,
+    why: document.getElementById('et-why').value.trim(),
+  };
+  config.toolsKB = config.toolsKB || [];
+  if (isNew) config.toolsKB.push(obj); else config.toolsKB = config.toolsKB.map(t => t.id === obj.id ? obj : t);
+  state.editing = null; persistConfig(); renderAdmin(); showNotif('Tool saved');
+}
+
+function deleteTool(id) {
+  if (!confirm('Delete this tool?')) return;
+  config.toolsKB = (config.toolsKB || []).filter(t => t.id !== id);
+  state.editing = null; persistConfig(); renderAdmin(); showNotif('Tool deleted');
 }
 
 // Tag editors needing post-render wiring (stored as {containerId: array})
@@ -2838,6 +3023,38 @@ function adminSettings() {
       <div style="margin-top:8px"><button class="mini-btn" onclick="saveSettings()">💾 Save rules</button></div>
     </div>
     <div class="info-block">
+      <div class="info-title">📤 Notion export (Growth Plan Builder)</div>
+      <div class="hint" style="margin-bottom:8px">Growth plans export as a page under this Notion page. Create an internal integration at notion.so/my-integrations, share the destination page with it, then deploy with <b>NOTION_API_KEY</b> set. Paste the destination page ID or URL below.</div>
+      <div style="display:flex;gap:8px">
+        <input class="form-input" id="es-notion" value="${esc(config.settings?.notionParentId || '')}" placeholder="Notion page ID or URL" style="max-width:420px">
+        <button class="mini-btn" onclick="saveNotionParent()">Save</button>
+        <button class="mini-btn" onclick="testNotion()">Test connection</button>
+      </div>
+      <div class="hint" id="es-notion-status"></div>
+    </div>
+    <div class="info-block">
+      <div class="info-title">📊 Growth plan defaults (funnel + personalization)</div>
+      <div class="hint" style="margin-bottom:8px">Starting assumptions for new plans (each plan can override). Rates are decimals (0.04 = 4%).</div>
+      <div class="grid2">
+        <div>
+          <div class="gp-sub" style="color:var(--accent2)">📧 Email</div>
+          ${['leadsPerMonth', 'verifyRate', 'sendsPerLead', 'replyRate', 'positiveRate', 'bookRate'].map(k =>
+            `<div class="assume-grid"><label>${k}</label><input class="num-input" type="number" step="0.01" id="pd-email-${k}" value="${config.settings.planDefaults.email[k]}"></div>`).join('')}
+        </div>
+        <div>
+          <div class="gp-sub" style="color:var(--accent2)">🔗 LinkedIn</div>
+          ${['connectsPerDay', 'daysPerMonth', 'acceptRate', 'replyRate', 'positiveRate', 'bookRate'].map(k =>
+            `<div class="assume-grid"><label>${k}</label><input class="num-input" type="number" step="0.01" id="pd-linkedin-${k}" value="${config.settings.planDefaults.linkedin[k]}"></div>`).join('')}
+        </div>
+      </div>
+      <div class="gp-sub" style="color:var(--accent2)">✨ Personalization (Gemini 2.5)</div>
+      <div class="assume-grid">
+        <label>Input tokens / lead</label><input class="num-input" type="number" id="pd-pers-inputTokensPerLead" value="${config.settings.planDefaults.personalization.inputTokensPerLead}">
+        <label>Output tokens / lead</label><input class="num-input" type="number" id="pd-pers-outputTokensPerLead" value="${config.settings.planDefaults.personalization.outputTokensPerLead}">
+      </div>
+      <div style="margin-top:8px"><button class="mini-btn" onclick="savePlanDefaults()">💾 Save defaults</button></div>
+    </div>
+    <div class="info-block">
       <div class="info-title">Config</div>
       Stored ${configSource === 'server' ? 'on the server (shared across browsers)' : configSource === 'local' ? 'in this browser only' : 'as defaults (nothing saved yet)'}.
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
@@ -2876,6 +3093,37 @@ function saveSettings() {
   persistConfig(); showNotif('Rules saved');
 }
 
+// Accept a Notion page URL or raw ID; store the 32-char id.
+function saveNotionParent() {
+  const raw = document.getElementById('es-notion').value.trim();
+  const m = raw.match(/[0-9a-f]{32}/i) || raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  const id = (m ? m[0] : raw).replace(/-/g, '');
+  config.settings.notionParentId = id;
+  persistConfig(); showNotif('Notion destination saved');
+}
+
+async function testNotion() {
+  const el = document.getElementById('es-notion-status');
+  if (el) el.textContent = 'Testing…';
+  try {
+    const r = await api({ action: 'export_notion', test: true, parentId: config.settings.notionParentId });
+    if (el) el.innerHTML = `✅ Connected — destination: <b>${esc(r.title || 'page found')}</b>`;
+    showNotif('Notion connection OK');
+  } catch (e) {
+    if (el) el.innerHTML = '❌ ' + esc(e.message) + ' — check NOTION_API_KEY is set and the page is shared with the integration.';
+    showNotif('Notion test failed', true);
+  }
+}
+
+function savePlanDefaults() {
+  const pd = config.settings.planDefaults;
+  ['leadsPerMonth', 'verifyRate', 'sendsPerLead', 'replyRate', 'positiveRate', 'bookRate'].forEach(k => { pd.email[k] = +document.getElementById('pd-email-' + k).value || 0; });
+  ['connectsPerDay', 'daysPerMonth', 'acceptRate', 'replyRate', 'positiveRate', 'bookRate'].forEach(k => { pd.linkedin[k] = +document.getElementById('pd-linkedin-' + k).value || 0; });
+  pd.personalization.inputTokensPerLead = +document.getElementById('pd-pers-inputTokensPerLead').value || 0;
+  pd.personalization.outputTokensPerLead = +document.getElementById('pd-pers-outputTokensPerLead').value || 0;
+  persistConfig(); showNotif('Plan defaults saved');
+}
+
 function exportConfig() {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' }));
@@ -2912,6 +3160,616 @@ function deleteItem(type, id) {
     if (state.nicheId === id) { state.nicheId = config.niches[0]?.id ?? null; state.angles = new Set(); }
   }
   state.editing = null; persistConfig(); renderAdmin(); renderClientList(); renderBuilder(); showNotif('Deleted');
+}
+
+// ─── GROWTH PLAN BUILDER ─────────────────────────────────────────────────────
+const gpMoney = n => '$' + Math.round(n || 0).toLocaleString();
+const gpInt = n => Math.round(n || 0).toLocaleString();
+const gpPct = n => { const v = (n || 0) * 100; return (v < 10 && v > 0 ? v.toFixed(1) : Math.round(v)) + '%'; };
+const CH_LABEL = { email: '📧 Email', linkedin: '🔗 LinkedIn' };
+
+function gpClient() { return client(state.growth?.clientId); }
+
+// Angle + script pools (aggregated like the builder uses).
+function clientAnglePool(c) {
+  const fromNiches = (c?.nicheIds || []).flatMap(id => niche(id)?.angles || []);
+  const fromTranscripts = (c?.transcripts || []).flatMap(t => t.angles || []);
+  const custom = (c?.savedAngles || []).map(x => x.text);
+  return dedupeStr([...fromNiches, ...fromTranscripts, ...custom]);
+}
+function clientScriptPool(c) {
+  const res = (c?.scriptReservoir || []).map(s => ({ label: `${s.framework} · ${s.angle}`, text: s.script, status: s.status || 'idea', note: s.note || '' }));
+  const win = (config.winningScripts || [])
+    .filter(w => !w.scope || w.scope === 'global' || (c?.nicheIds || []).includes(w.scope))
+    .map(w => ({ label: w.name || 'Winning script', text: w.script, status: 'winning', note: '' }));
+  return [...res, ...win].filter(s => s.text);
+}
+
+function initGrowth(clientId, mode = 'strategy') {
+  const c = client(clientId) || config.clients[0];
+  const pd = config.settings.planDefaults;
+  state.growth = {
+    clientId: c?.id || null, planId: null, mode,
+    channels: ['email'], targets: [],
+    assumptions: { email: { ...pd.email }, linkedin: { ...pd.linkedin }, personalization: { ...pd.personalization } },
+    toolIds: [],
+    toggles: { replyAgent: false, pledge: false, pledgeText: (c?.guarantees?.[0]?.text) || '' },
+    winningScript: null,
+    observed: { email: { contacted: 0, replies: 0, positive: 0, booked: 0 }, linkedin: { contacted: 0, replies: 0, positive: 0, booked: 0 } },
+    nicheSize: '', targetBookings: 10, narrative: null,
+  };
+  gpResetToolDefaults();
+}
+function gpResetToolDefaults() {
+  const g = state.growth;
+  g.toolIds = (config.toolsKB || [])
+    .filter(t => t.category !== 'reply-agent' && (t.channels || []).some(ch => g.channels.includes(ch)))
+    .map(t => t.id);
+}
+
+function openGrowth() {
+  if (!state.growth || !client(state.growth.clientId)) {
+    initGrowth(state.clientId || config.clients[0]?.id, 'strategy');
+  }
+  renderGrowth();
+}
+
+// ── compute (deterministic — never the model) ──
+function computeChannel(channel, a) {
+  if (channel === 'email') {
+    const leads = Math.max(0, +a.leadsPerMonth || 0);
+    const verified = leads * (+a.verifyRate || 0);
+    const outreaches = verified * (+a.sendsPerLead || 0);
+    const replies = verified * (+a.replyRate || 0);
+    const positive = replies * (+a.positiveRate || 0);
+    const booked = positive * (+a.bookRate || 0);
+    return { leads, verified, outreaches, replies, positive, booked, conversion: leads ? booked / leads : 0 };
+  }
+  const connects = (+a.connectsPerDay || 0) * (+a.daysPerMonth || 0);
+  const accepted = connects * (+a.acceptRate || 0);
+  const replies = accepted * (+a.replyRate || 0);
+  const positive = replies * (+a.positiveRate || 0);
+  const booked = positive * (+a.bookRate || 0);
+  return { leads: connects, connects, accepted, outreaches: connects, replies, positive, booked, conversion: connects ? booked / connects : 0 };
+}
+function gpIncludedTools() {
+  const g = state.growth;
+  const ids = new Set(g.toolIds);
+  if (g.toggles.replyAgent) { const ra = (config.toolsKB || []).find(t => t.category === 'reply-agent'); if (ra) ids.add(ra.id); }
+  return (config.toolsKB || []).filter(t => ids.has(t.id));
+}
+function toolMonthlyCost(tool, agg, pers) {
+  if (!tool) return 0;
+  if (tool.costModel === 'per_1k_leads') return (agg.leads || 0) / 1000 * (+tool.cost || 0);
+  if (tool.costModel === 'per_1k_verified') return (agg.verified || 0) / 1000 * (+tool.cost || 0);
+  if (tool.costModel === 'tokens') return (agg.leads || 0) * ((+pers.inputTokensPerLead || 0) * (+tool.inPerM || 0) + (+pers.outputTokensPerLead || 0) * (+tool.outPerM || 0)) / 1e6;
+  return +tool.cost || 0; // flat
+}
+// Aggregate volumes across the selected channels for cost math.
+function gpAggregate() {
+  const g = state.growth;
+  let leads = 0, verified = 0, booked = 0;
+  const per = {};
+  g.channels.forEach(ch => { const m = computeChannel(ch, g.assumptions[ch]); per[ch] = m; leads += m.leads; verified += (ch === 'email' ? m.verified : 0); booked += m.booked; });
+  return { per, leads, verified, booked };
+}
+function gpCostRows() {
+  const g = state.growth, agg = gpAggregate();
+  return gpIncludedTools().map(t => ({ tool: t, cost: toolMonthlyCost(t, agg, g.assumptions.personalization) }));
+}
+
+// ── render ──
+function renderGrowth() { renderGrowthForm(); renderGrowthPreview(); }
+
+function renderGrowthForm() {
+  const el = document.getElementById('growthForm'); if (!el) return;
+  const g = state.growth, c = gpClient();
+  const clientOpts = config.clients.map(x => `<option value="${x.id}" ${x.id === g.clientId ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
+  const plans = c?.growthPlans || [];
+
+  let html = `
+    <div class="form-group"><label class="form-label">Client</label>
+      <select class="form-select" onchange="gpSetClient(this.value)">${clientOpts}</select></div>
+    <div class="mode-toggle">
+      <div class="mode-btn ${g.mode === 'strategy' ? 'on' : ''}" onclick="gpSetMode('strategy')">
+        <div class="mt-title">🧪 Strategy</div><div class="mt-sub">Proof of concept — new client, find what works</div></div>
+      <div class="mode-btn ${g.mode === 'growth' ? 'on' : ''}" onclick="gpSetMode('growth')">
+        <div class="mt-title">📈 Growth</div><div class="mt-sub">Scaling — proven script, scale to X bookings</div></div>
+    </div>`;
+
+  if (plans.length) {
+    html += `<div class="gp-sub">Saved plans for ${esc(c.name)}</div>` + plans.map(p => `
+      <div class="plan-row">
+        <div style="min-width:0"><b style="font-size:12px">${esc(p.title)}</b> <span class="gp-badge ${p.mode}">${p.mode}</span>
+          <div class="pl-meta">${(p.channels || []).map(ch => CH_LABEL[ch]).join(' · ')} · ${esc(p.createdAt || '')}${p.notionUrl ? ' · <a href="' + esc(p.notionUrl) + '" target="_blank" style="color:var(--accent2)">Notion ↗</a>' : ''}</div></div>
+        <div style="display:flex;gap:5px;flex-shrink:0">
+          <button class="mini-btn" onclick="gpLoadPlan('${p.id}')">Open</button>
+          <button class="mini-btn danger" onclick="gpDeletePlan('${p.id}')">Del</button>
+        </div>
+      </div>`).join('');
+    html += `<div style="height:14px"></div>`;
+  }
+
+  // Step: channel
+  html += `<div class="step"><div class="step-head"><span class="step-title"><span class="step-num">1</span>Channel</span></div>
+    <div class="chips">
+      ${['email', 'linkedin'].map(ch => `<div class="chip ${g.channels.includes(ch) ? 'on' : ''}" onclick="gpToggleChannel('${ch}')">${CH_LABEL[ch]}</div>`).join('')}
+    </div></div>`;
+
+  html += (g.mode === 'strategy') ? gpStrategyForm(c) : gpGrowthForm(c);
+
+  // Assumptions (shared) + tools + cost
+  html += gpAssumptionsForm();
+  html += gpToolsForm();
+
+  // Narrative
+  html += `<div class="step"><div class="step-head"><span class="step-title">✨ Narrative</span></div>
+    <button class="mini-btn" id="gp-narr-btn" onclick="gpComposeNarrative()">✨ Draft the plan narrative with AI</button>
+    <span class="hint" id="gp-narr-status" style="margin-left:8px"></span></div>`;
+
+  // Actions
+  html += `<div style="display:flex;gap:8px;margin:18px 0 40px">
+      <button class="btn btn-primary" style="flex:1" onclick="gpSavePlan()">💾 Save plan</button>
+      <button class="btn btn-primary" style="flex:1;background:#000;border:1px solid var(--border)" onclick="gpExportNotion()">📤 Export to Notion</button>
+    </div>`;
+
+  el.innerHTML = html;
+}
+
+function gpStrategyForm(c) {
+  const g = state.growth;
+  const icps = c?.icps || [];
+  if (!icps.length) {
+    return `<div class="step"><div class="step-head"><span class="step-title"><span class="step-num">2</span>Targets</span></div>
+      <div class="proof-empty">No ICPs saved for ${esc(c?.name || 'this client')} yet. Build them in the client profile (✏️ Edit profile → 🎯 ICP Builder), then come back.</div></div>`;
+  }
+  let html = `<div class="step"><div class="step-head"><span class="step-title"><span class="step-num">2</span>Targets — pick up to 3</span><span class="step-count">${g.targets.length}/3</span></div>`;
+  icps.forEach(icp => {
+    const t = g.targets.find(x => x.icpId === icp.id);
+    const on = !!t;
+    html += `<div class="gp-target ${on ? 'on' : ''}">
+      <div class="gp-target-head" onclick="gpToggleTarget('${icp.id}')">
+        <span class="gp-target-title">${on ? '★ ' : '☆ '}${esc(icp.title)}</span>
+        <span class="icp-score ${(+icp.score >= 8) ? 'hot' : ''}">${icp.score ? 'fit ' + esc(icp.score) + '/10' : 'select'}</span>
+      </div>`;
+    if (on) {
+      const pains = clientPains(c);
+      const angles = clientAnglePool(c);
+      const scripts = clientScriptPool(c);
+      const offers = clientOffers(c);
+      html += `<div class="gp-target-body">
+        <div class="gp-sub">Key pains to push (pick the few that matter)</div>
+        <div class="chips">${pains.map(p => `<div class="fav-chip ${t.pains.includes(p) ? 'on' : ''}" onclick="gpToggleTargetItem('${icp.id}','pains','${b64(p)}')"><span class="fav-star">${t.pains.includes(p) ? '★' : '☆'}</span>${esc(p)}${srcIco(c, 'pains', p)}</div>`).join('') || '<span class="proof-empty">No pains on file.</span>'}</div>
+        <div class="gp-sub">2 angles</div>
+        <div class="chips">${angles.map(a => `<div class="chip ${t.angles.includes(a) ? 'on' : ''}" onclick="gpToggleTargetItem('${icp.id}','angles','${b64(a)}')">${esc(a)}</div>`).join('') || '<span class="proof-empty">No angles on file.</span>'}</div>
+        <div class="gp-sub">2 scripts to test</div>
+        ${scripts.length ? scripts.map((s, i) => `<div class="gp-script-opt ${t.scripts.some(x => x.text === s.text) ? 'on' : ''}" onclick="gpToggleTargetScript('${icp.id}',${i})"><span>${t.scripts.some(x => x.text === s.text) ? '☑' : '☐'}</span><span><b>${esc(s.label)}</b> <span class="s-meta">${esc(s.status)}${s.note ? ' · ' + esc(s.note) : ''}</span><br>${esc(s.text.slice(0, 90))}…</span></div>`).join('') : '<div class="proof-empty">No saved scripts — generate some in the Builder and 💾 them first.</div>'}
+        <div class="gp-sub">Offer</div>
+        <div class="chips">${(offers.length ? offers : ['(no offers on file)']).map(o => `<div class="chip ${t.offer === o ? 'on' : ''}" onclick="gpSetTargetOffer('${icp.id}','${b64(o)}')">${esc(o)}</div>`).join('')}</div>
+      </div>`;
+    }
+    html += `</div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function gpGrowthForm(c) {
+  const g = state.growth;
+  const scripts = clientScriptPool(c).filter(s => s.status === 'winning');
+  const pool = scripts.length ? scripts : clientScriptPool(c);
+  let html = `<div class="step"><div class="step-head"><span class="step-title"><span class="step-num">2</span>The winning script</span></div>`;
+  html += pool.length ? pool.map((s, i) => `<div class="gp-script-opt ${g.winningScript?.text === s.text ? 'on' : ''}" onclick="gpPickWinning(${i})"><span>${g.winningScript?.text === s.text ? '☑' : '☐'}</span><span><b>${esc(s.label)}</b> <span class="s-meta">${esc(s.status)}${s.note ? ' · ' + esc(s.note) : ''}</span><br>${esc(s.text.slice(0, 100))}…</span></div>`).join('')
+    : '<div class="proof-empty">No scripts saved yet — find a winner in the Builder/Reservoir first.</div>';
+  // store the candidate pool for picker
+  g._winPool = pool;
+  html += `</div>`;
+
+  // Observed metrics per channel
+  html += `<div class="step"><div class="step-head"><span class="step-title"><span class="step-num">3</span>Observed campaign metrics</span></div>
+    <div class="hint" style="margin-bottom:8px">Enter what this script actually did — the scale math runs off these real rates, not assumptions.</div>`;
+  g.channels.forEach(ch => {
+    const o = g.observed[ch];
+    html += `<div class="gp-sub">${CH_LABEL[ch]}</div>
+      <div class="assume-grid">
+        <label>${ch === 'email' ? 'Contacted' : 'Connections sent'}</label><input class="num-input" type="number" value="${o.contacted}" onchange="gpObs('${ch}','contacted',this.value)">
+        <label>Replies</label><input class="num-input" type="number" value="${o.replies}" onchange="gpObs('${ch}','replies',this.value)">
+        <label>Positive replies</label><input class="num-input" type="number" value="${o.positive}" onchange="gpObs('${ch}','positive',this.value)">
+        <label>Booked calls</label><input class="num-input" type="number" value="${o.booked}" onchange="gpObs('${ch}','booked',this.value)">
+      </div>`;
+  });
+  html += `</div>`;
+
+  // Niche size + target
+  html += `<div class="step"><div class="step-head"><span class="step-title"><span class="step-num">4</span>Niche size & target</span></div>
+    <div class="form-group"><label class="form-label">How big is the niche (reachable prospects)</label>
+      <input class="form-input" value="${esc(g.nicheSize)}" placeholder="e.g. ~34K — from the ICP builder" onchange="state.growth.nicheSize=this.value;renderGrowthPreview()">
+      ${(c?.icps || []).length ? `<div class="hint">From saved ICPs: ${(c.icps).map((i, idx) => `<a onclick="gpUseIcpSize(${idx})" style="color:var(--accent2);cursor:pointer">${esc(i.marketSize || i.title)}</a>`).join(' · ')}</div>` : ''}</div>
+    <div class="assume-grid"><label>Target bookings / month</label><input class="num-input" type="number" value="${g.targetBookings}" onchange="state.growth.targetBookings=+this.value;renderGrowthPreview()"></div>`;
+  html += `</div>`;
+  return html;
+}
+
+function gpAssumptionsForm() {
+  const g = state.growth;
+  if (g.mode === 'growth') return ''; // growth mode derives rates from observed metrics
+  const num = (ch, key, label, pct) => `<label>${label}</label><input class="num-input" type="number" step="${pct ? '0.01' : '1'}" value="${g.assumptions[ch][key]}" onchange="gpNum('${ch}','${key}',this.value)">`;
+  let html = `<div class="step"><div class="step-head"><span class="step-title"><span class="step-num">3</span>Volumes & assumptions</span></div>`;
+  g.channels.forEach(ch => {
+    html += `<div class="gp-sub">${CH_LABEL[ch]}</div><div class="assume-grid">`;
+    if (ch === 'email') {
+      html += num('email', 'leadsPerMonth', 'Leads scraped / mo') + num('email', 'verifyRate', 'Verify rate', 1) + num('email', 'sendsPerLead', 'Sends / lead') + num('email', 'replyRate', 'Reply rate', 1) + num('email', 'positiveRate', 'Positive / reply', 1) + num('email', 'bookRate', 'Book / positive', 1);
+    } else {
+      html += num('linkedin', 'connectsPerDay', 'Connects / day') + num('linkedin', 'daysPerMonth', 'Sending days / mo') + num('linkedin', 'acceptRate', 'Accept rate', 1) + num('linkedin', 'replyRate', 'Reply / accepted', 1) + num('linkedin', 'positiveRate', 'Positive / reply', 1) + num('linkedin', 'bookRate', 'Book / positive', 1);
+    }
+    html += `</div>`;
+  });
+  html += `<div class="gp-sub">Personalization (${esc(g.assumptions.personalization.model)})</div><div class="assume-grid">
+    <label>Input tokens / lead</label><input class="num-input" type="number" value="${g.assumptions.personalization.inputTokensPerLead}" onchange="gpPers('inputTokensPerLead',this.value)">
+    <label>Output tokens / lead</label><input class="num-input" type="number" value="${g.assumptions.personalization.outputTokensPerLead}" onchange="gpPers('outputTokensPerLead',this.value)">
+  </div>`;
+  html += `</div>`;
+  return html;
+}
+
+function gpToolsForm() {
+  const g = state.growth;
+  const tools = (config.toolsKB || []).filter(t => t.category !== 'reply-agent' && (t.channels || []).some(ch => g.channels.includes(ch)));
+  let html = `<div class="step"><div class="step-head"><span class="step-title">🧰 Tools & costs</span></div>`;
+  html += tools.map(t => `<div class="gp-script-opt ${g.toolIds.includes(t.id) ? 'on' : ''}" onclick="gpToggleTool('${t.id}')">
+    <span>${g.toolIds.includes(t.id) ? '☑' : '☐'}</span>
+    <span><b>${esc(t.name)}</b> <span class="s-meta">${esc(gpToolCostLabel(t))}</span><br><span style="color:var(--muted)">${esc(t.why)}</span></span></div>`).join('');
+  // Toggles
+  html += `<div class="gp-toggle-row" style="margin-top:10px"><span class="tg-label"><b>🤖 AI reply agent</b> — books replies; client signs up</span>
+      <label class="toggle"><input type="checkbox" ${g.toggles.replyAgent ? 'checked' : ''} onchange="state.growth.toggles.replyAgent=this.checked;renderGrowth()"><span class="toggle-slider"></span></label></div>
+    <div class="gp-toggle-row"><span class="tg-label"><b>✅ Performance pledge</b> — off for pure tests</span>
+      <label class="toggle"><input type="checkbox" ${g.toggles.pledge ? 'checked' : ''} onchange="state.growth.toggles.pledge=this.checked;renderGrowth()"><span class="toggle-slider"></span></label></div>
+    ${g.toggles.pledge ? `<textarea class="form-textarea" placeholder="The pledge / guarantee text…" onchange="state.growth.toggles.pledgeText=this.value;renderGrowthPreview()">${esc(g.toggles.pledgeText)}</textarea>` : ''}`;
+  html += `</div>`;
+  return html;
+}
+function gpToolCostLabel(t) {
+  if (t.costModel === 'flat') return gpMoney(t.cost) + '/mo';
+  if (t.costModel === 'per_1k_leads') return gpMoney(t.cost) + ' / 1K leads';
+  if (t.costModel === 'per_1k_verified') return '$' + (t.cost) + ' / 1K verified';
+  if (t.costModel === 'tokens') return `$${t.inPerM}/1M in · $${t.outPerM}/1M out`;
+  return '';
+}
+
+// ── form interaction ──
+function gpSetClient(id) { initGrowth(id, state.growth.mode); renderGrowth(); }
+function gpSetMode(m) { if (state.growth.mode !== m) state.growth.narrative = null; state.growth.mode = m; renderGrowth(); }
+function gpToggleChannel(ch) {
+  const g = state.growth, i = g.channels.indexOf(ch);
+  if (i === -1) g.channels.push(ch); else if (g.channels.length > 1) g.channels.splice(i, 1);
+  gpResetToolDefaults(); renderGrowth();
+}
+function gpNum(ch, key, val) { state.growth.assumptions[ch][key] = +val; renderGrowthPreview(); }
+function gpPers(key, val) { state.growth.assumptions.personalization[key] = +val; renderGrowthPreview(); }
+function gpObs(ch, key, val) { state.growth.observed[ch][key] = +val; renderGrowthPreview(); }
+function gpToggleTool(id) { const a = state.growth.toolIds, i = a.indexOf(id); if (i === -1) a.push(id); else a.splice(i, 1); renderGrowth(); }
+function gpToggleTarget(icpId) {
+  const g = state.growth, c = gpClient();
+  const i = g.targets.findIndex(t => t.icpId === icpId);
+  if (i !== -1) { g.targets.splice(i, 1); renderGrowth(); return; }
+  if (g.targets.length >= 3) return showNotif('Max 3 targets — keep the test focused', true);
+  const icp = (c.icps || []).find(x => x.id === icpId);
+  const pains = (c.favorites?.pains || []).filter(Boolean).slice(0, 4);
+  const realPains = pains.length ? pains : clientPains(c).slice(0, 3);
+  const angles = clientAnglePool(c).slice(0, 2);
+  const offers = clientOffers(c);
+  g.targets.push({ icpId, title: icp.title, niche: icp.niche, marketSize: icp.marketSize || '', pains: realPains, angles, scripts: [], offer: offers[0] || '', why: icp.why || '' });
+  renderGrowth();
+}
+function gpToggleTargetItem(icpId, kind, b) {
+  const text = decodeURIComponent(escape(atob(b)));
+  const t = state.growth.targets.find(x => x.icpId === icpId); if (!t) return;
+  const arr = t[kind], i = arr.indexOf(text);
+  if (i === -1) { if (kind === 'angles' && arr.length >= 2) arr.shift(); arr.push(text); } else arr.splice(i, 1);
+  renderGrowth();
+}
+function gpToggleTargetScript(icpId, idx) {
+  const t = state.growth.targets.find(x => x.icpId === icpId); if (!t) return;
+  const pool = clientScriptPool(gpClient()); const s = pool[idx]; if (!s) return;
+  const i = t.scripts.findIndex(x => x.text === s.text);
+  if (i === -1) { if (t.scripts.length >= 2) t.scripts.shift(); t.scripts.push({ label: s.label, text: s.text }); } else t.scripts.splice(i, 1);
+  renderGrowth();
+}
+function gpSetTargetOffer(icpId, b) { const t = state.growth.targets.find(x => x.icpId === icpId); if (t) { t.offer = decodeURIComponent(escape(atob(b))); renderGrowth(); } }
+function gpPickWinning(idx) { const s = (state.growth._winPool || [])[idx]; if (s) { state.growth.winningScript = { label: s.label, text: s.text, note: s.note }; renderGrowth(); } }
+function gpUseIcpSize(idx) { const c = gpClient(); const i = (c.icps || [])[idx]; if (i) { state.growth.nicheSize = i.marketSize || ''; renderGrowth(); } }
+
+// ── preview document ──
+function funnelTable(channel, m) {
+  const rows = channel === 'email'
+    ? [['Leads scraped', m.leads], ['Verified (sendable)', m.verified], ['Outreaches sent', m.outreaches], ['Replies', m.replies], ['Positive replies', m.positive], ['Booked calls', m.booked]]
+    : [['Connection requests', m.connects], ['Accepted', m.accepted], ['Replies', m.replies], ['Positive replies', m.positive], ['Booked calls', m.booked]];
+  return `<table><thead><tr><th>Expected (monthly)</th><th class="num">Volume</th></tr></thead><tbody>
+    ${rows.map(([k, v]) => `<tr><td>${k}</td><td class="num">${gpInt(v)}</td></tr>`).join('')}
+    <tr><td class="tot">Conversion</td><td class="num tot">${gpPct(m.conversion)}</td></tr></tbody></table>`;
+}
+
+function renderGrowthPreview() {
+  const el = document.getElementById('growthPreview'); if (!el) return;
+  const g = state.growth, c = gpClient();
+  const actions = `<div class="doc-actions">
+      <button class="mini-btn" onclick="gpSavePlan()">💾 Save</button>
+      <button class="mini-btn" onclick="gpExportNotion()">📤 Export to Notion</button></div>`;
+  el.innerHTML = actions + (g.mode === 'strategy' ? gpPreviewStrategy(c) : gpPreviewGrowth(c));
+}
+
+function gpPreviewStrategy(c) {
+  const g = state.growth;
+  const costRows = gpCostRows();
+  const totalCost = costRows.reduce((s, r) => s + r.cost, 0);
+  const totalBooked = g.channels.reduce((s, ch) => s + computeChannel(ch, g.assumptions[ch]).booked, 0);
+  const N = g.narrative;
+  let h = `<div class="doc"><h1>Growth Plan — ${esc(c?.name || '')}</h1>
+    <div class="doc-sub">🧪 Strategy · Proof of Concept · ${g.channels.map(ch => CH_LABEL[ch]).join(' · ')}</div>`;
+  h += `<div class="callout">${N?.execSummary ? esc(N.execSummary) : 'The goal of this phase is to prove the concept — test ' + g.targets.length + ' target' + (g.targets.length !== 1 ? 's' : '') + ' with tight messaging, find the script + audience that books calls, then scale what works. Click “Draft narrative” to write this up.'}</div>`;
+
+  if (!g.targets.length) h += `<p style="color:var(--amber)">⚠ Pick at least one target on the left to build the plan.</p>`;
+
+  g.targets.forEach((t, i) => {
+    const rationale = N?.targetRationales?.find(r => (r.title || '').toLowerCase().includes((t.title || '').toLowerCase().slice(0, 12))) || N?.targetRationales?.[i];
+    h += `<h2>🎯 Target ${i + 1}: ${esc(t.title)}</h2>
+      <p>${rationale?.rationale ? esc(rationale.rationale) : esc(t.why || ('Niche: ' + (t.niche || '')))}</p>
+      ${t.marketSize ? `<p style="color:var(--amber)">📊 ${esc(t.marketSize)}</p>` : ''}
+      <h3>Key pains</h3><ul>${t.pains.map(p => `<li>${esc(p)}</li>`).join('') || '<li>—</li>'}</ul>
+      <h3>Offer</h3><p>${esc(t.offer || '—')}</p>
+      <h3>Angles to test</h3><ul>${t.angles.map(a => `<li>${esc(a)}</li>`).join('') || '<li>—</li>'}</ul>
+      <h3>Scripts</h3>${t.scripts.map(s => `<div class="scriptbox">${esc(s.text)}</div>`).join('') || '<p>—</p>'}`;
+  });
+
+  // Per-channel funnel
+  g.channels.forEach(ch => {
+    h += `<h2>${CH_LABEL[ch]} — projected funnel</h2>${funnelTable(ch, computeChannel(ch, g.assumptions[ch]))}`;
+  });
+
+  // Personalization note
+  const pers = g.assumptions.personalization;
+  h += `<h2>Personalization</h2><p>Every lead gets a custom first line written by <b>${esc(pers.model)}</b> (~${gpInt(pers.inputTokensPerLead)} in / ${gpInt(pers.outputTokensPerLead)} out tokens per lead). Relevance is what lifts reply rates above the floor.</p>`;
+
+  // Tools & cost
+  h += `<h2>🧰 Tech stack & cost breakdown</h2>
+    <table><thead><tr><th>Tool</th><th>Why</th><th class="num">$/mo</th></tr></thead><tbody>
+    ${costRows.map(r => `<tr><td><b>${esc(r.tool.name)}</b></td><td style="color:var(--muted)">${esc(r.tool.why)}</td><td class="num">${gpMoney(r.cost)}</td></tr>`).join('')}
+    <tr><td class="tot">Total tech stack</td><td></td><td class="num tot">${gpMoney(totalCost)}/mo</td></tr></tbody></table>`;
+
+  // Next steps
+  h += `<h2>Next steps</h2><ul>
+    <li>☐ Verbal agreement on the target niche${g.targets.length > 1 ? 's' : ''}</li>
+    <li>☐ Verbal agreement on the scripts to test</li>
+    ${g.toggles.replyAgent ? '<li>☐ Sign up for the AI reply agent</li>' : ''}
+    <li>☐ Kickoff: ${g.channels.includes('email') ? 'domains + inbox warmup' : ''}${g.channels.length > 1 ? ' / ' : ''}${g.channels.includes('linkedin') ? 'LinkedIn seat setup' : ''}</li>
+  </ul>`;
+
+  if (g.toggles.pledge && g.toggles.pledgeText.trim()) h += `<div class="callout pledge"><b>Our pledge:</b> ${esc(g.toggles.pledgeText)}</div>`;
+  if (N?.closing) h += `<p><i>${esc(N.closing)}</i></p>`;
+  h += `</div>`;
+  return h;
+}
+
+function gpPreviewGrowth(c) {
+  const g = state.growth, N = g.narrative;
+  // Derive observed rates per channel, solve for target bookings.
+  let h = `<div class="doc"><h1>Scaling Plan — ${esc(c?.name || '')}</h1>
+    <div class="doc-sub">📈 Growth · ${g.channels.map(ch => CH_LABEL[ch]).join(' · ')}</div>`;
+  h += `<div class="callout">${N?.execSummary ? esc(N.execSummary) : 'We already have a script that books calls. This plan scales it: add the niche pains, bulk-order leads, and run at the volume needed to hit the booking target.'}</div>`;
+
+  if (g.winningScript) h += `<h2>The winning script</h2><div class="scriptbox">${esc(g.winningScript.text)}</div>${g.winningScript.note ? `<p style="color:var(--muted)">${esc(g.winningScript.note)}</p>` : ''}`;
+  if (g.nicheSize) h += `<h2>The niche</h2><p class="big-stat">${esc(g.nicheSize)}</p><p>reachable prospects</p>`;
+
+  // Math per channel from observed rates
+  let totalCostAll = 0, plannedLeadsAll = 0;
+  g.channels.forEach(ch => {
+    const o = g.observed[ch];
+    const bookedPer = o.contacted ? (o.booked || 0) / o.contacted : 0;
+    const needContacted = bookedPer > 0 ? g.targetBookings / bookedPer : 0;
+    const verifyRate = ch === 'email' ? (g.assumptions.email.verifyRate || 0.65) : 1;
+    const leadsNeeded = verifyRate ? needContacted / verifyRate : needContacted;
+    const bulkOrder = Math.ceil(leadsNeeded / 1000) * 1000;
+    plannedLeadsAll += bulkOrder;
+    h += `<h2>${CH_LABEL[ch]} — to hit ${g.targetBookings} bookings/mo</h2>`;
+    if (!o.contacted || !o.booked) { h += `<p style="color:var(--amber)">Enter observed ${CH_LABEL[ch]} metrics on the left to compute this.</p>`; return; }
+    h += `<table><tbody>
+      <tr><td>Observed booking rate</td><td class="num">${gpPct(bookedPer)} of contacts</td></tr>
+      <tr><td>Contacts needed / mo</td><td class="num">${gpInt(needContacted)}</td></tr>
+      <tr><td class="tot">Bulk lead order</td><td class="num tot">${gpInt(bulkOrder)} leads</td></tr>
+    </tbody></table>`;
+  });
+
+  // Cost at planned volume: recompute aggregate using bulk order as leads
+  const aggForCost = { leads: plannedLeadsAll, verified: plannedLeadsAll * (g.assumptions.email.verifyRate || 0.65) };
+  const costRows = gpIncludedTools().map(t => ({ tool: t, cost: toolMonthlyCost(t, aggForCost, g.assumptions.personalization) }));
+  totalCostAll = costRows.reduce((s, r) => s + r.cost, 0);
+  const perBooking = g.targetBookings ? totalCostAll / g.targetBookings : 0;
+
+  h += `<h2>🧰 Cost to scale</h2>
+    <table><thead><tr><th>Tool</th><th class="num">$/mo</th></tr></thead><tbody>
+    ${costRows.map(r => `<tr><td>${esc(r.tool.name)}</td><td class="num">${gpMoney(r.cost)}</td></tr>`).join('')}
+    <tr><td class="tot">Total</td><td class="num tot">${gpMoney(totalCostAll)}/mo</td></tr></tbody></table>
+    <div class="stat-row"><div class="s"><div class="lab">For</div><div class="big-stat">${g.targetBookings}</div><div class="lab">bookings / mo</div></div>
+    <div class="s"><div class="lab">Cost per booking</div><div class="big-stat">${gpMoney(perBooking)}</div></div></div>`;
+
+  // Steps
+  h += `<h2>Next steps</h2><ul>
+    <li>☐ Confirm the niche pains added to the script</li>
+    <li>☐ Bulk order ${gpInt(plannedLeadsAll)} leads</li>
+    <li>☐ Run the script at the volume above</li>
+  </ul>`;
+
+  // Scaling options
+  h += `<h2>Scaling options</h2>`;
+  h += `<div class="opt-card"><div class="oc-title">⏫ Double the volume</div><p>~${gpInt(plannedLeadsAll * 2)} leads/mo → ~${g.targetBookings * 2} bookings at ~${gpMoney(totalCostAll * 2)}/mo.</p></div>`;
+  const otherIcps = (c?.icps || []).filter(i => i.marketSize);
+  if (otherIcps.length) h += `<div class="opt-card"><div class="oc-title">🎯 More niches</div><p>Open a second front: ${otherIcps.slice(0, 3).map(i => esc(i.title) + (i.marketSize ? ' (' + esc(i.marketSize) + ')' : '')).join(', ')}.</p></div>`;
+  const otherCh = ['email', 'linkedin'].find(ch => !g.channels.includes(ch));
+  if (otherCh) h += `<div class="opt-card"><div class="oc-title">➕ Add ${CH_LABEL[otherCh]}</div><p>Layer in ${CH_LABEL[otherCh]} to multiply touchpoints on the same accounts.</p></div>`;
+
+  if (g.toggles.pledge && g.toggles.pledgeText.trim()) h += `<div class="callout pledge"><b>Our pledge:</b> ${esc(g.toggles.pledgeText)}</div>`;
+  if (N?.closing) h += `<p><i>${esc(N.closing)}</i></p>`;
+  h += `</div>`;
+  return h;
+}
+
+// ── narrative / save / export ──
+async function gpComposeNarrative() {
+  if (!adminKey) return showNotif('No admin key', true);
+  const g = state.growth, c = gpClient();
+  const btn = document.getElementById('gp-narr-btn'), st = document.getElementById('gp-narr-status');
+  if (btn) { btn.textContent = '✨ Drafting…'; btn.disabled = true; }
+  if (st) st.textContent = 'Writing…';
+  try {
+    const numbers = g.channels.map(ch => ({ channel: ch, ...computeChannel(ch, g.assumptions[ch]) }));
+    const r = await api({
+      action: 'compose_growth_plan',
+      mode: g.mode,
+      client: { name: c.name, proofLine: c.caseStudy?.proofLine || '', mechanism: c.caseStudy?.mechanism || '' },
+      targets: g.targets.map(t => ({ title: t.title, niche: t.niche, pains: t.pains, angles: t.angles, offer: t.offer })),
+      numbers, channels: g.channels, targetBookings: g.targetBookings, nicheSize: g.nicheSize,
+    });
+    g.narrative = { execSummary: r.execSummary || '', targetRationales: r.targetRationales || [], closing: r.closing || '' };
+    renderGrowthPreview();
+    if (st) st.textContent = '✅ Drafted';
+    showNotif('Narrative drafted');
+  } catch (e) { if (st) st.textContent = '⚠️ ' + e.message; showNotif('Draft failed: ' + e.message, true); }
+  if (btn) { btn.textContent = '✨ Draft the plan narrative with AI'; btn.disabled = false; }
+}
+
+function gpSnapshot() {
+  const g = state.growth;
+  return {
+    id: g.planId || uid('gp'),
+    mode: g.mode,
+    title: `${g.mode === 'strategy' ? 'POC' : 'Scale'} — ${(g.targets[0]?.title) || g.winningScript?.label || (gpClient()?.name) || ''}`.slice(0, 60),
+    channels: [...g.channels],
+    targets: structuredClone(g.targets),
+    assumptions: structuredClone(g.assumptions),
+    toolIds: [...g.toolIds], toggles: structuredClone(g.toggles),
+    winningScript: g.winningScript ? structuredClone(g.winningScript) : null,
+    observed: structuredClone(g.observed), nicheSize: g.nicheSize, targetBookings: g.targetBookings,
+    narrative: g.narrative ? structuredClone(g.narrative) : null,
+    notionUrl: g._notionUrl || '',
+    createdAt: new Date().toISOString().slice(0, 10),
+  };
+}
+
+function gpSavePlan() {
+  const c = gpClient(); if (!c) return;
+  const snap = gpSnapshot();
+  c.growthPlans = c.growthPlans || [];
+  const i = c.growthPlans.findIndex(p => p.id === snap.id);
+  if (i !== -1) c.growthPlans[i] = snap; else c.growthPlans.push(snap);
+  state.growth.planId = snap.id;
+  persistConfig(); renderGrowthForm(); renderClientList();
+  showNotif('Plan saved to client');
+}
+
+function gpLoadPlan(id) {
+  const c = gpClient(); const p = (c.growthPlans || []).find(x => x.id === id); if (!p) return;
+  const pd = config.settings.planDefaults;
+  state.growth = {
+    clientId: c.id, planId: p.id, mode: p.mode, channels: [...p.channels],
+    targets: structuredClone(p.targets || []),
+    assumptions: structuredClone(p.assumptions || { email: { ...pd.email }, linkedin: { ...pd.linkedin }, personalization: { ...pd.personalization } }),
+    toolIds: [...(p.toolIds || [])], toggles: structuredClone(p.toggles || { replyAgent: false, pledge: false, pledgeText: '' }),
+    winningScript: p.winningScript ? structuredClone(p.winningScript) : null,
+    observed: structuredClone(p.observed || { email: {}, linkedin: {} }),
+    nicheSize: p.nicheSize || '', targetBookings: p.targetBookings || 10,
+    narrative: p.narrative ? structuredClone(p.narrative) : null, _notionUrl: p.notionUrl || '',
+  };
+  renderGrowth(); showNotif('Plan loaded');
+}
+
+function gpDeletePlan(id) {
+  const c = gpClient(); if (!c || !confirm('Delete this growth plan?')) return;
+  c.growthPlans = (c.growthPlans || []).filter(p => p.id !== id);
+  if (state.growth.planId === id) state.growth.planId = null;
+  persistConfig(); renderGrowthForm(); renderClientList(); showNotif('Plan deleted');
+}
+
+// Portable block list → Notion (server converts). Built from the same numbers as the preview.
+function gpBuildBlocks() {
+  const g = state.growth, c = gpClient(), N = g.narrative, B = [];
+  const strat = g.mode === 'strategy';
+  B.push({ t: 'h1', text: `Growth Plan — ${c.name}` });
+  B.push({ t: 'p', text: `${strat ? '🧪 Strategy · Proof of Concept' : '📈 Growth · Scaling'} · ${g.channels.map(ch => CH_LABEL[ch]).join(' · ')} · ${new Date().toISOString().slice(0, 10)}` });
+  if (N?.execSummary) B.push({ t: 'callout', text: N.execSummary });
+
+  if (strat) {
+    g.targets.forEach((t, i) => {
+      const r = N?.targetRationales?.[i];
+      B.push({ t: 'h2', text: `🎯 Target ${i + 1}: ${t.title}` });
+      if (r?.rationale || t.why) B.push({ t: 'p', text: r?.rationale || t.why });
+      if (t.marketSize) B.push({ t: 'p', text: `📊 ${t.marketSize}` });
+      if (t.pains.length) { B.push({ t: 'h3', text: 'Key pains' }); t.pains.forEach(p => B.push({ t: 'bullet', text: p })); }
+      B.push({ t: 'h3', text: 'Offer' }); B.push({ t: 'p', text: t.offer || '—' });
+      if (t.angles.length) { B.push({ t: 'h3', text: 'Angles to test' }); t.angles.forEach(a => B.push({ t: 'bullet', text: a })); }
+      B.push({ t: 'h3', text: 'Scripts' }); t.scripts.forEach(s => B.push({ t: 'code', text: s.text }));
+    });
+    g.channels.forEach(ch => {
+      const m = computeChannel(ch, g.assumptions[ch]);
+      B.push({ t: 'h2', text: `${CH_LABEL[ch]} — projected funnel` });
+      const rows = ch === 'email'
+        ? [['Leads scraped', gpInt(m.leads)], ['Verified', gpInt(m.verified)], ['Outreaches', gpInt(m.outreaches)], ['Replies', gpInt(m.replies)], ['Positive replies', gpInt(m.positive)], ['Booked calls', gpInt(m.booked)], ['Conversion', gpPct(m.conversion)]]
+        : [['Connections', gpInt(m.connects)], ['Accepted', gpInt(m.accepted)], ['Replies', gpInt(m.replies)], ['Positive replies', gpInt(m.positive)], ['Booked calls', gpInt(m.booked)], ['Conversion', gpPct(m.conversion)]];
+      B.push({ t: 'table', headers: ['Metric', 'Expected/mo'], rows });
+    });
+    const costRows = gpCostRows();
+    B.push({ t: 'h2', text: '🧰 Tech stack & cost' });
+    B.push({ t: 'table', headers: ['Tool', 'Why', '$/mo'], rows: costRows.map(r => [r.tool.name, r.tool.why, gpMoney(r.cost)]).concat([['Total', '', gpMoney(costRows.reduce((s, r) => s + r.cost, 0)) + '/mo']]) });
+    B.push({ t: 'h2', text: 'Next steps' });
+    B.push({ t: 'todo', text: 'Verbal agreement on the target niche(s)' });
+    B.push({ t: 'todo', text: 'Verbal agreement on the scripts to test' });
+    if (g.toggles.replyAgent) B.push({ t: 'todo', text: 'Sign up for the AI reply agent' });
+    B.push({ t: 'todo', text: 'Kickoff — warmup / seat setup' });
+  } else {
+    if (g.winningScript) { B.push({ t: 'h2', text: 'The winning script' }); B.push({ t: 'code', text: g.winningScript.text }); }
+    if (g.nicheSize) { B.push({ t: 'h2', text: 'The niche' }); B.push({ t: 'p', text: `${g.nicheSize} reachable prospects` }); }
+    let leadsAll = 0;
+    g.channels.forEach(ch => {
+      const o = g.observed[ch]; const bookedPer = o.contacted ? (o.booked || 0) / o.contacted : 0;
+      const need = bookedPer > 0 ? g.targetBookings / bookedPer : 0;
+      const vr = ch === 'email' ? (g.assumptions.email.verifyRate || 0.65) : 1;
+      const bulk = Math.ceil((vr ? need / vr : need) / 1000) * 1000; leadsAll += bulk;
+      B.push({ t: 'h2', text: `${CH_LABEL[ch]} — to hit ${g.targetBookings} bookings/mo` });
+      B.push({ t: 'table', headers: ['Metric', 'Value'], rows: [['Observed booking rate', gpPct(bookedPer) + ' of contacts'], ['Contacts needed/mo', gpInt(need)], ['Bulk lead order', gpInt(bulk) + ' leads']] });
+    });
+    const agg = { leads: leadsAll, verified: leadsAll * (g.assumptions.email.verifyRate || 0.65) };
+    const costRows = gpIncludedTools().map(t => ({ tool: t, cost: toolMonthlyCost(t, agg, g.assumptions.personalization) }));
+    const total = costRows.reduce((s, r) => s + r.cost, 0);
+    B.push({ t: 'h2', text: '🧰 Cost to scale' });
+    B.push({ t: 'table', headers: ['Tool', '$/mo'], rows: costRows.map(r => [r.tool.name, gpMoney(r.cost)]).concat([['Total', gpMoney(total) + '/mo'], ['Cost per booking', gpMoney(g.targetBookings ? total / g.targetBookings : 0)]]) });
+    B.push({ t: 'h2', text: 'Next steps' });
+    B.push({ t: 'todo', text: 'Confirm the niche pains added to the script' });
+    B.push({ t: 'todo', text: `Bulk order ${gpInt(leadsAll)} leads` });
+    B.push({ t: 'todo', text: 'Run the script at the volume above' });
+  }
+  if (g.toggles.pledge && g.toggles.pledgeText.trim()) B.push({ t: 'callout', text: '✅ Our pledge: ' + g.toggles.pledgeText });
+  if (N?.closing) B.push({ t: 'p', text: N.closing });
+  return B;
+}
+
+async function gpExportNotion() {
+  if (!adminKey) return showNotif('No admin key', true);
+  const c = gpClient(); if (!c) return;
+  gpSavePlan();
+  showNotif('Exporting to Notion…');
+  try {
+    const r = await api({
+      action: 'export_notion',
+      parentId: config.settings.notionParentId,
+      title: `Growth Plan — ${c.name} — ${state.growth.mode === 'strategy' ? 'Strategy' : 'Scaling'} — ${new Date().toISOString().slice(0, 10)}`,
+      blocks: gpBuildBlocks(),
+    });
+    state.growth._notionUrl = r.url || '';
+    const c2 = gpClient(); const p = (c2.growthPlans || []).find(x => x.id === state.growth.planId);
+    if (p) { p.notionUrl = r.url || ''; persistConfig(); }
+    renderGrowthForm();
+    showNotif('✅ Exported to Notion');
+    if (r.url) window.open(r.url, '_blank');
+  } catch (e) { showNotif('Notion export failed: ' + e.message, true); }
 }
 
 // ─── MISC ──────────────────────────────────────────────────────────────────────

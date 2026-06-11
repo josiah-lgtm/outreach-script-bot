@@ -187,6 +187,24 @@ async function handle(req: Request): Promise<Response> {
         insights: "(mock) Start with ICP 1 — proof transfers cleanly and the ~34K market is the outbound sweet spot. ICP 2 is the high-ACV expansion play.",
       }, cors);
     }
+    if (body.action === "compose_growth_plan") {
+      await new Promise((r) => setTimeout(r, 900));
+      const targets = Array.isArray(body.targets) ? body.targets : [];
+      return json({
+        ok: true,
+        execSummary: `(mock) This ${body.mode === "growth" ? "scaling" : "proof-of-concept"} plan focuses outbound on ${targets.length || "the chosen"} target(s) across ${(body.channels || []).join(" + ")}, testing tight messaging to find the audience-script pair that books calls before scaling spend.`,
+        targetRationales: targets.map((t: { title: string; niche: string }) => ({
+          title: t.title,
+          rationale: `(mock) ${t.title} is a strong fit — their pains map directly to the client's mechanism and the proof transfers cleanly to ${t.niche}.`,
+        })),
+        closing: "(mock) Success = a repeatable script booking calls at a predictable cost, ready to scale.",
+      }, cors);
+    }
+    if (body.action === "export_notion") {
+      await new Promise((r) => setTimeout(r, 700));
+      if (body.test) return json({ ok: true, title: "Outreach Tracker (mock)" }, cors);
+      return json({ ok: true, url: "https://notion.so/mock-growth-plan-" + Math.random().toString(36).slice(2, 8) }, cors);
+    }
     if (body.action === "suggest_offers") {
       await new Promise((r) => setTimeout(r, 800));
       return json({

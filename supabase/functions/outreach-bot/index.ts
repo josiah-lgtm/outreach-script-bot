@@ -49,6 +49,38 @@ function parseJson<T>(raw: string, fallback: T): T {
   }
 }
 
+// ─── Notion export helpers ──────────────────────────────────────────────────
+// Notion rich_text content caps at 2000 chars; keep a safe margin.
+function nRich(content: string) {
+  return [{ type: "text", text: { content: String(content ?? "").slice(0, 1900) } }];
+}
+// Convert the app's portable block list into Notion API block objects.
+function toNotionBlock(b: { t: string; text?: string; headers?: string[]; rows?: string[][] }) {
+  switch (b.t) {
+    case "h1": return { object: "block", type: "heading_1", heading_1: { rich_text: nRich(b.text ?? "") } };
+    case "h2": return { object: "block", type: "heading_2", heading_2: { rich_text: nRich(b.text ?? "") } };
+    case "h3": return { object: "block", type: "heading_3", heading_3: { rich_text: nRich(b.text ?? "") } };
+    case "callout": return { object: "block", type: "callout", callout: { rich_text: nRich(b.text ?? ""), icon: { emoji: "📌" } } };
+    case "bullet": return { object: "block", type: "bulleted_list_item", bulleted_list_item: { rich_text: nRich(b.text ?? "") } };
+    case "todo": return { object: "block", type: "to_do", to_do: { rich_text: nRich(b.text ?? ""), checked: false } };
+    case "code": return { object: "block", type: "code", code: { rich_text: nRich(b.text ?? ""), language: "plain text" } };
+    case "table": {
+      const headers = b.headers ?? [];
+      const rows = b.rows ?? [];
+      const width = headers.length || (rows[0]?.length ?? 1);
+      const tableRows: unknown[] = [];
+      if (headers.length) tableRows.push({ type: "table_row", table_row: { cells: headers.map((h) => nRich(h)) } });
+      rows.forEach((r) => tableRows.push({ type: "table_row", table_row: { cells: (r || []).map((c) => nRich(c)) } }));
+      return { object: "block", type: "table", table: { table_width: width, has_column_header: headers.length > 0, has_row_header: false, children: tableRows } };
+    }
+    default: return { object: "block", type: "paragraph", paragraph: { rich_text: nRich(b.text ?? "") } };
+  }
+}
+function dashifyId(raw: string): string {
+  const id = String(raw).replace(/-/g, "");
+  return id.length === 32 ? `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}` : raw;
+}
+
 // ─── Config storage (Supabase Storage, service-role only) ─────────────────────
 const BUCKET = "outreach-bot";
 const OBJECT = "config.json";
@@ -616,6 +648,70 @@ Deno.serve(async (req) => {
         const parsed = parseJson(textOf(res.content), null as Record<string, unknown> | null);
         if (!parsed) return json({ ok: false, error: "could not parse ICP output — try again" }, 422);
         return json({ ok: true, ...parsed });
+      }
+
+      case "compose_growth_plan": {
+        const mode = String(body.mode ?? "strategy");
+        const ctx = JSON.stringify({
+          client: body.client, targets: body.targets, numbers: body.numbers,
+          channels: body.channels, targetBookings: body.targetBookings, nicheSize: body.nicheSize,
+        }).slice(0, 12_000);
+        const res = await claudeMessages({
+          model: CLAUDE_MODEL,
+          max_tokens: 1600,
+          system:
+            `You are a senior outbound strategist writing a client-facing growth plan. Write crisp, confident, plain-English prose — no fluff, no hype. ` +
+            `The numbers are already computed and given to you; never invent or change them, reference them naturally.\n` +
+            `Return valid JSON only, no markdown fences:\n` +
+            `{"execSummary":"2-3 sentences framing the plan and the goal",` +
+            (mode === "strategy"
+              ? `"targetRationales":[{"title":"the exact target title","rationale":"2-3 sentences: why this audience + these pains + this offer will work for THIS client, referencing their proof"}],`
+              : `"targetRationales":[],`) +
+            `"closing":"1 sentence on what success looks like / the next move"}`,
+          messages: [{ role: "user", content: `MODE: ${mode}\n${ctx}` }],
+        });
+        const parsed = parseJson(textOf(res.content), null as Record<string, unknown> | null);
+        if (!parsed) return json({ ok: false, error: "could not parse narrative — try again" }, 422);
+        return json({ ok: true, ...parsed });
+      }
+
+      case "export_notion": {
+        const key = Deno.env.get("NOTION_API_KEY");
+        if (!key) return json({ ok: false, error: "NOTION_API_KEY not set on the server — add it as a Supabase secret and redeploy" }, 400);
+        const parentId = dashifyId(String(body.parentId ?? "").trim());
+        if (!parentId) return json({ ok: false, error: "parentId (Notion page) required" }, 400);
+        const headers = { "Authorization": `Bearer ${key}`, "Notion-Version": "2022-06-28", "Content-Type": "application/json" };
+
+        // Test mode: just confirm we can read the destination page.
+        if (body.test) {
+          const res = await fetch(`https://api.notion.com/v1/pages/${parentId}`, { headers });
+          if (!res.ok) return json({ ok: false, error: `Notion ${res.status}: ${(await res.text()).slice(0, 200)}` }, 422);
+          const data = await res.json();
+          const titleProp = data?.properties ? Object.values(data.properties).find((p: unknown) => (p as { type?: string }).type === "title") : null;
+          const title = (titleProp as { title?: Array<{ plain_text?: string }> })?.title?.[0]?.plain_text;
+          return json({ ok: true, title: title || "(page found)" });
+        }
+
+        const blocks = Array.isArray(body.blocks) ? (body.blocks as Array<{ t: string }>).map(toNotionBlock) : [];
+        const createRes = await fetch("https://api.notion.com/v1/pages", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            parent: { page_id: parentId },
+            properties: { title: { title: nRich(String(body.title ?? "Growth Plan")) } },
+            children: blocks.slice(0, 100),
+          }),
+        });
+        if (!createRes.ok) return json({ ok: false, error: `Notion ${createRes.status}: ${(await createRes.text()).slice(0, 300)}` }, 422);
+        const page = await createRes.json();
+        let rest = blocks.slice(100);
+        while (rest.length) {
+          const chunk = rest.slice(0, 100);
+          rest = rest.slice(100);
+          const ap = await fetch(`https://api.notion.com/v1/blocks/${page.id}/children`, { method: "PATCH", headers, body: JSON.stringify({ children: chunk }) });
+          if (!ap.ok) break;
+        }
+        return json({ ok: true, url: page.url });
       }
 
       case "suggest_offers": {
