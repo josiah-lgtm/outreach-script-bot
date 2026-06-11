@@ -434,6 +434,12 @@
   .guar-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
   .guar-none { font-size: 11px; color: var(--muted); padding: 5px 0; }
   .chip.guar-chip.on { background: rgba(16,185,129,.18); border-color: var(--green); color: var(--green); }
+  .chip.icp-chip.on { background: rgba(245,158,11,.16); border-color: var(--amber); color: var(--amber); }
+  .icp-active-note {
+    font-size: 11px; color: var(--amber); background: rgba(245,158,11,.07);
+    border: 1px solid rgba(245,158,11,.25); border-radius: 7px;
+    padding: 6px 10px; margin-top: 7px; line-height: 1.5;
+  }
 
   /* ── AI SUGGEST ANGLES ── */
   .suggest-bar { display: flex; gap: 6px; margin-top: 10px; align-items: center; }
@@ -632,8 +638,9 @@
         <div id="clientHero"></div>
 
         <div class="step">
-          <div class="step-head"><span class="step-title"><span class="step-num">1</span>Niche</span></div>
+          <div class="step-head"><span class="step-title"><span class="step-num">1</span>Niche &amp; target ICP</span></div>
           <select class="form-select" id="nicheSelect" onchange="onNicheChange()"></select>
+          <div id="icpSelect"></div>
         </div>
 
         <div class="step">
@@ -916,6 +923,7 @@ let state = {
   selectedGuarantee: null,     // string | null — guarantee chip selected in builder
   suggestedAngles: [],         // AI-suggested angles awaiting user tap
   emphTab: 'pains',            // active tab in the Emphasis & proof fold
+  selectedIcpId: null,         // saved ICP the scripts are personalized to
 };
 let scriptIndex = []; // flat ordered list built during renderOutput; each {framework,angle,label,script,nicheId}
 
@@ -1077,6 +1085,9 @@ function selectClient(id) {
   if (state.selectedGuarantee && !(c.guarantees || []).some(g => g.text === state.selectedGuarantee)) {
     state.selectedGuarantee = null;
   }
+  if (state.selectedIcpId && !(c.icps || []).some(i => i.id === state.selectedIcpId)) {
+    state.selectedIcpId = null;
+  }
   if (!c.nicheIds.includes(state.nicheId)) {
     state.nicheId = primaryNicheId(c) || state.nicheId || config.niches[0]?.id || null;
     const n = niche(state.nicheId);
@@ -1137,6 +1148,19 @@ function renderBuilder() {
   sel.innerHTML =
     (mine.length ? `<optgroup label="${esc(c.name)}'s niches">${mine.map(opt).join('')}</optgroup>` : '') +
     (others.length ? `<optgroup label="${mine.length ? 'Other niches' : 'All niches'}">${others.map(opt).join('')}</optgroup>` : '');
+
+  // Saved ICPs from the ICP builder — pick one to personalize every script to
+  // that persona (titles, company size, seniority).
+  const icpEl = document.getElementById('icpSelect');
+  const icps = c?.icps || [];
+  if (state.selectedIcpId && !icps.some(i => i.id === state.selectedIcpId)) state.selectedIcpId = null;
+  const activeIcp = icps.find(i => i.id === state.selectedIcpId);
+  icpEl.innerHTML = icps.length ? `
+    <div class="section-label" style="margin-top:10px">🎯 Target ICP <span style="text-transform:none;font-weight:400;color:var(--muted)">— optional, personalizes every script to this persona</span></div>
+    <div class="chips">${icps.map(i =>
+      `<div class="chip icp-chip ${state.selectedIcpId === i.id ? 'on' : ''}" onclick="toggleIcp('${i.id}')" title="${esc((i.jobTitles || []).join(', '))} · ${esc(i.employeeSize || '')} · ${esc((i.locations || []).join(', '))}">${esc(i.title)}${i.score ? `<span class="cat">fit ${esc(i.score)}/10</span>` : ''}</div>`).join('')}</div>
+    ${activeIcp ? `<div class="icp-active-note">✍️ Writing to: <b>${esc((activeIcp.jobTitles || []).slice(0, 3).join(', ') || activeIcp.title)}</b> at ${esc(activeIcp.employeeSize || '?')} ${esc(activeIcp.niche || '')} companies${(activeIcp.locations || []).length ? ' · ' + esc(activeIcp.locations.join(', ')) : ''}</div>` : ''}
+  ` : '';
 
   // Angle section — ONE cloud of hooks; the little icon on each chip says
   // where it came from (🎯 niche · 📞 transcript · ✨ AI · ✍️ manual).
@@ -1305,6 +1329,10 @@ async function generate() {
       variantsPerAngle: variantsPer,
       globalRules: config.settings?.globalRules || '',
       guarantee: state.selectedGuarantee || '',
+      icp: (() => {
+        const i = (c.icps || []).find(x => x.id === state.selectedIcpId);
+        return i ? { title: i.title, niche: i.niche, jobTitles: i.jobTitles || [], locations: i.locations || [], employeeSize: i.employeeSize || '', revenue: i.revenue || '', outboundNotes: i.outboundNotes || '' } : undefined;
+      })(),
       research: state.research?.ok ? state.research : undefined
     });
 
@@ -1468,6 +1496,27 @@ function exportCsv() {
 function toggleGuarantee(el) {
   const g = el.dataset.g;
   state.selectedGuarantee = state.selectedGuarantee === g ? null : g;
+  renderBuilder();
+}
+
+function toggleIcp(id) {
+  const c = client(state.clientId);
+  if (state.selectedIcpId === id) { state.selectedIcpId = null; renderBuilder(); return; }
+  state.selectedIcpId = id;
+  // If a niche matching this ICP exists (e.g. created via "Research as
+  // niche"), switch to it so the angles line up with the persona.
+  const icp = (c?.icps || []).find(i => i.id === id);
+  if (icp?.niche) {
+    const want = icp.niche.trim().toLowerCase();
+    const match = config.niches.find(n => {
+      const have = n.name.trim().toLowerCase();
+      return have === want || have.startsWith(want) || want.startsWith(have);
+    });
+    if (match && match.id !== state.nicheId && (c?.nicheIds || []).includes(match.id)) {
+      state.nicheId = match.id;
+      state.angles = new Set((match.angles || []).slice(0, 3));
+    }
+  }
   renderBuilder();
 }
 

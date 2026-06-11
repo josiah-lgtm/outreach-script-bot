@@ -269,6 +269,7 @@ interface GenerateBody {
   variantsPerAngle: number;
   globalRules?: string;
   guarantee?: string;
+  icp?: { title?: string; niche?: string; jobTitles?: string[]; locations?: string[]; employeeSize?: string; revenue?: string; outboundNotes?: string };
   research?: { summary?: string; pains?: string[]; hooks?: string[] };
 }
 
@@ -299,6 +300,16 @@ function buildSystemPrompt(body: GenerateBody, fw: Framework): string {
     ? `\nGUARANTEE / RISK REVERSAL (incorporate naturally where it fits — don't force into every variant):\n${body.guarantee.trim()}\n`
     : "";
 
+  const icp = body.icp;
+  const icpBlock = icp?.title
+    ? `\nTARGET ICP — every script is written TO this exact persona. Match their seniority, vocabulary and pain framing; a CFO reads differently than a founder:\n` +
+      `ICP: ${icp.title}${icp.niche ? ` (${icp.niche})` : ""}\n` +
+      `Recipient job titles: ${(icp.jobTitles ?? []).join(", ") || "unknown"}\n` +
+      `Company size: ${icp.employeeSize || "unknown"}${icp.revenue ? ` · ${icp.revenue}` : ""}\n` +
+      `Locations: ${(icp.locations ?? []).join(", ") || "unknown"}\n` +
+      (icp.outboundNotes ? `Outbound notes (lead with this): ${icp.outboundNotes}\n` : "")
+    : "";
+
   const em = body.client.emphasis ?? {};
   const emList = (arr?: string[]) => (arr ?? []).filter((x) => String(x).trim()).map((x) => `- ${x}`).join("\n");
   const emphasisParts: string[] = [];
@@ -327,7 +338,7 @@ ${csLines}
 
 NICHE: ${body.niche.name}
 NICHE TRIGGER WORDS (work 1-3 in naturally where they genuinely fit; never force them): ${tw || "(none)"}
-${researchBlock}${overrideBlock}${competitorBlock}${avoidBlock}${guaranteeBlock}${emphasisBlock}
+${icpBlock}${researchBlock}${overrideBlock}${competitorBlock}${avoidBlock}${guaranteeBlock}${emphasisBlock}
 OUTPUT FORMAT — return valid JSON only, no markdown, no preamble:
 {
   "framework_fill": { "<variable_name>": "<value used in the first script>", ... },
