@@ -976,7 +976,7 @@ const DEFAULT_CONFIG = {
   version: 2,
   settings: {
     globalRules: "No jargon, no dashes mid-sentence, no 'genuinely', no corporate speak. Plain language a 12-year-old gets. Sound like a real person texting, not a marketer writing copy. Every script must be sendable exactly as written. Hooks must be answerable in 2 seconds.",
-    notionParentId: '33a4fd2a4cfe81fdaab6e17031fa93be',
+    notionParentId: '3744fd2a4cfe8015830fc724e06dcdb3', // "CSM" page (CEO Station)
     // Growth-plan funnel + cost assumptions (editable in Admin → Settings).
     planDefaults: {
       email: { leadsPerMonth: 3000, verifyRate: 0.65, sendsPerLead: 3, replyRate: 0.04, positiveRate: 0.30, bookRate: 0.40 },
@@ -1145,7 +1145,11 @@ function migrateConfig(cfg) {
   (cfg.frameworks || []).forEach(f => { f.nicheIds = f.nicheIds || []; });
   cfg.winningScripts = cfg.winningScripts || [];
   cfg.settings = cfg.settings || {};
-  cfg.settings.notionParentId = cfg.settings.notionParentId || '33a4fd2a4cfe81fdaab6e17031fa93be';
+  // Default export destination = the "CSM" page; also migrate configs still on
+  // the old code default (Outreach Tracker), which was never user-chosen.
+  if (!cfg.settings.notionParentId || cfg.settings.notionParentId === '33a4fd2a4cfe81fdaab6e17031fa93be') {
+    cfg.settings.notionParentId = '3744fd2a4cfe8015830fc724e06dcdb3';
+  }
   cfg.settings.growthRules = cfg.settings.growthRules || '';
   cfg.settings.planDefaults = cfg.settings.planDefaults || structuredClone(DEFAULT_CONFIG.settings.planDefaults);
   // Tools knowledge base — what we use, why, cost. Seed sensible defaults once.
