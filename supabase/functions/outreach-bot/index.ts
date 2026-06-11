@@ -128,6 +128,37 @@ async function configSave(config: unknown): Promise<void> {
   if (!res.ok) throw new Error(`config save failed: ${res.status} ${await res.text()}`);
 }
 
+// ─── Team logins (email + password → the shared admin key) ───────────────────
+// Users live in the same private bucket; passwords stored as PBKDF2 hashes.
+interface TeamUser { email: string; name: string; salt: string; hash: string; createdAt: string }
+
+async function usersLoad(): Promise<TeamUser[]> {
+  const { url, headers } = storageEnv();
+  const res = await fetch(`${url}/storage/v1/object/${BUCKET}/users.json`, { headers });
+  if (!res.ok) return [];
+  const data = await res.json().catch(() => null);
+  return Array.isArray(data?.users) ? data.users : [];
+}
+
+async function usersSave(users: TeamUser[]): Promise<void> {
+  const { url, headers } = storageEnv();
+  const res = await fetch(`${url}/storage/v1/object/${BUCKET}/users.json`, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json", "x-upsert": "true" },
+    body: JSON.stringify({ users }),
+  });
+  if (!res.ok) throw new Error(`users save failed: ${res.status}`);
+}
+
+const hexBytes = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+async function hashPassword(password: string, saltHex: string): Promise<string> {
+  const salt = new Uint8Array((saltHex.match(/.{2}/g) ?? []).map((h) => parseInt(h, 16)));
+  const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: 100_000, hash: "SHA-256" }, keyMaterial, 256);
+  return hexBytes(bits);
+}
+
 // ─── Site fetching ─────────────────────────────────────────────────────────────
 async function fetchSiteText(rawUrl: string): Promise<{ ok: true; target: string; text: string } | { ok: false; error: string }> {
   let target = rawUrl.trim();
@@ -465,16 +496,34 @@ Deno.serve(async (req) => {
 
   if (req.method !== "POST") return json({ ok: false, error: "method not allowed" }, 405);
 
-  const adminKey = Deno.env.get("ADMIN_KEY");
-  if (!adminKey || req.headers.get("x-admin-key") !== adminKey) {
-    return json({ ok: false, error: "unauthorized — missing or wrong x-admin-key" }, 401);
-  }
-
   let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
     return json({ ok: false, error: "invalid JSON body" }, 400);
+  }
+
+  const adminKey = Deno.env.get("ADMIN_KEY");
+
+  // Login is the only unauthenticated action: it exchanges valid team
+  // credentials for the shared admin key (which guards everything else).
+  if (body.action === "login") {
+    const email = String(body.email ?? "").trim().toLowerCase();
+    const password = String(body.password ?? "");
+    if (!email || !password) return json({ ok: false, error: "email and password required" }, 400);
+    const users = await usersLoad();
+    const u = users.find((x) => x.email.toLowerCase() === email);
+    const okPw = u ? (await hashPassword(password, u.salt)) === u.hash : false;
+    if (!u || !okPw) {
+      await new Promise((r) => setTimeout(r, 900)); // slow brute force
+      return json({ ok: false, error: "wrong email or password" }, 401);
+    }
+    if (!adminKey) return json({ ok: false, error: "server has no ADMIN_KEY set" }, 500);
+    return json({ ok: true, adminKey, name: u.name, email: u.email });
+  }
+
+  if (!adminKey || req.headers.get("x-admin-key") !== adminKey) {
+    return json({ ok: false, error: "unauthorized — missing or wrong x-admin-key" }, 401);
   }
 
   try {
@@ -711,6 +760,85 @@ Deno.serve(async (req) => {
           }],
         });
         return json({ ok: true, html: textOf(res.content).trim() });
+      }
+
+      case "users_list": {
+        const users = await usersLoad();
+        return json({ ok: true, users: users.map((u) => ({ email: u.email, name: u.name, createdAt: u.createdAt })) });
+      }
+
+      case "users_add": {
+        const email = String(body.email ?? "").trim().toLowerCase();
+        const name = String(body.name ?? "").trim();
+        const password = String(body.password ?? "");
+        if (!email || !email.includes("@")) return json({ ok: false, error: "valid email required" }, 400);
+        if (password.length < 8) return json({ ok: false, error: "password must be at least 8 characters" }, 400);
+        const users = await usersLoad();
+        const salt = hexBytes(crypto.getRandomValues(new Uint8Array(16)).buffer);
+        const hash = await hashPassword(password, salt);
+        const entry: TeamUser = { email, name: name || email.split("@")[0], salt, hash, createdAt: new Date().toISOString().slice(0, 10) };
+        const i = users.findIndex((u) => u.email.toLowerCase() === email);
+        if (i !== -1) users[i] = entry; else users.push(entry);
+        await usersSave(users);
+        return json({ ok: true, updated: i !== -1 });
+      }
+
+      case "users_remove": {
+        const email = String(body.email ?? "").trim().toLowerCase();
+        const users = await usersLoad();
+        const next = users.filter((u) => u.email.toLowerCase() !== email);
+        if (next.length === users.length) return json({ ok: false, error: "no such user" }, 404);
+        await usersSave(next);
+        return json({ ok: true });
+      }
+
+      case "compose_client_brief": {
+        const ctx = String(body.context ?? "").slice(0, 10_000);
+        if (!ctx.trim()) return json({ ok: false, error: "client context required" }, 400);
+        const rules = String(body.rules ?? "").trim();
+        const res = await claudeMessages({
+          model: CLAUDE_MODEL,
+          max_tokens: 1400,
+          system:
+            `You turn a lead gen agency's internal client notes into a clean client facing brief that opens a growth plan. ` +
+            `The client reading it should feel "they did their research on us".\n` +
+            `STYLE RULES (strict): simple, concise, clear. Plain English a busy founder skims in seconds. ` +
+            `NEVER use dashes or hyphens of any kind in the text, not even in compound words you can rephrase. Use commas or the word "to" instead. ` +
+            `No jargon, no fluff, no exaggeration. Only use facts present in the notes, never invent numbers or names.\n` +
+            (rules ? `HOUSE LANGUAGE RULES (also obey):\n${rules}\n` : "") +
+            `Return valid JSON only, no fences:\n` +
+            `{"services":["3 to 5 short lines, what the client offers, each under 12 words"],` +
+            `"positioning":"2 to 3 sentences: who they serve, how they get results, why them",` +
+            `"caseStudies":["each proven result as one clean line with its real numbers"],` +
+            `"competitors":["each competitor as one line: Name, what they pitch, how our client differs"]}`,
+          messages: [{ role: "user", content: `CLIENT NOTES:\n${ctx}` }],
+        });
+        const parsed = parseJson(textOf(res.content), null as Record<string, unknown> | null);
+        if (!parsed) return json({ ok: false, error: "could not parse brief — try again" }, 422);
+        return json({ ok: true, ...parsed });
+      }
+
+      case "find_icp_example": {
+        const icp = body.icp as { title?: string; niche?: string; jobTitles?: string[]; employeeSize?: string; locations?: string[] } | undefined;
+        if (!icp?.title) return json({ ok: false, error: "icp required" }, 400);
+        const res = await claudeMessages({
+          model: CLAUDE_MODEL,
+          max_tokens: 800,
+          system:
+            `You find ONE real company that is a textbook example of an ideal customer profile, using web search (up to 3 searches). ` +
+            `It must be a real, currently operating company with a working website that matches the ICP's niche, size and location. ` +
+            `Never invent a company. If genuinely nothing fits, return an empty company string.\n` +
+            `Style: no dashes or hyphens in the text, plain clear English.\n` +
+            `Return valid JSON only, no fences: {"company":"name","website":"domain.com","why":"one sentence: why this company is a perfect example of the ICP"}`,
+          messages: [{
+            role: "user",
+            content: `ICP: ${icp.title}\nNiche: ${icp.niche ?? ""}\nBuyer titles: ${(icp.jobTitles ?? []).join(", ")}\nCompany size: ${icp.employeeSize ?? ""}\nLocations: ${(icp.locations ?? []).join(", ")}`,
+          }],
+          tools: [webSearchTool(3)],
+        });
+        const parsed = parseJson(textOf(res.content), null as { company?: string; website?: string; why?: string } | null);
+        if (!parsed) return json({ ok: false, error: "could not parse example — try again" }, 422);
+        return json({ ok: true, ...parsed });
       }
 
       case "generate_followups": {

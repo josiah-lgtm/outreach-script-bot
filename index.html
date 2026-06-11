@@ -878,6 +878,28 @@
 
 <div class="notif" id="notif"></div>
 
+<!-- TEAM LOGIN (email + password → admin key behind the scenes) -->
+<div class="modal-overlay" id="loginModal">
+  <div class="modal" style="width:min(400px,94vw);height:auto">
+    <div style="padding:26px 26px 22px">
+      <div class="logo" style="font-size:22px;margin-bottom:4px">script<span>.</span>bot</div>
+      <div class="hint" style="margin-bottom:18px">Sign in with your team login.</div>
+      <div class="form-group"><label class="form-label">Email</label>
+        <input class="form-input" id="loginEmail" type="email" autocomplete="username" placeholder="you@agency.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div class="form-group"><label class="form-label">Password</label>
+        <input class="form-input" id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <button class="btn btn-primary" id="loginBtn" onclick="doLogin()">Sign in</button>
+      <div class="hint" id="loginStatus" style="margin-top:8px;min-height:16px"></div>
+      <details style="margin-top:10px"><summary class="hint" style="cursor:pointer">Have an admin key instead?</summary>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <input class="form-input" id="loginKey" placeholder="admin key">
+          <button class="mini-btn" onclick="loginWithKey()">Use key</button>
+        </div>
+      </details>
+    </div>
+  </div>
+</div>
+
 <!-- Floating format + AI bar for the editable growth-plan doc -->
 <div class="fmt-bar" id="fmtBar">
   <button onmousedown="event.preventDefault()" onclick="fmtCmd('bold')"><b>B</b></button>
@@ -1162,6 +1184,7 @@ function migrateConfig(cfg) {
     c.icps = c.icps || [];         // saved ideal customer profiles from the ICP builder
     c.growthPlans = c.growthPlans || []; // saved growth plans
     c.followups = c.followups || []; // saved outbound follow-up sequences
+    c.brief = c.brief || null; // client-facing brief (services/positioning/case studies/competitors)
   });
   if (!Array.isArray(cfg.followupFrameworks) || !cfg.followupFrameworks.length) cfg.followupFrameworks = structuredClone(DEFAULT_FOLLOWUP_FRAMEWORKS);
   (cfg.frameworks || []).forEach(f => { f.nicheIds = f.nicheIds || []; });
@@ -2343,6 +2366,7 @@ function renderAdmin() {
   }
   body.innerHTML = keyBlock + adminTabHtml();
   wireAdminTags();
+  if (state.adminTab === 'settings') loadTeamUsers();
 }
 
 function setAdminKey() {
@@ -3389,7 +3413,20 @@ function saveClient(isNew) {
 
 // — Settings tab —
 function adminSettings() {
+  const me = (() => { try { return JSON.parse(safeStorageGet('outreach_user') || 'null'); } catch { return null; } })();
   return `
+    <div class="info-block">
+      <div class="info-title">👥 Team logins</div>
+      <div class="hint" style="margin-bottom:8px">Everyone signs in with their email and password — the admin key is applied automatically behind the scenes, so it never needs sharing. ${me ? `Signed in as <b>${esc(me.name || me.email)}</b>.` : ''} <a onclick="signOut()" style="color:var(--accent2);cursor:pointer">Sign out</a></div>
+      <div id="es-users"><div class="hint">Loading…</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1.2fr 1fr auto;gap:8px;margin-top:10px">
+        <input class="form-input" id="tu-name" placeholder="Name">
+        <input class="form-input" id="tu-email" type="email" placeholder="email@agency.com">
+        <input class="form-input" id="tu-password" type="password" placeholder="password (8+ chars)">
+        <button class="mini-btn" onclick="addTeamUser()" style="white-space:nowrap">+ Add login</button>
+      </div>
+      <div class="hint">Adding an email that already exists resets that person's password.</div>
+    </div>
     <div class="info-block">
       <div class="info-title">Admin key</div>
       ${adminKey ? `Current key in this browser: <b>${esc(adminKey.slice(0, 4))}…${esc(adminKey.slice(-4))}</b> (${adminKey.length} chars)` : 'No key saved in this browser yet.'}
@@ -3805,6 +3842,20 @@ function renderGrowthForm() {
     html += `<div style="height:14px"></div>`;
   }
 
+  // Client brief — the client's own research opens every plan
+  const briefIcps = gpBriefTargetIcps();
+  const missingEx = briefIcps.filter(i => !i.example).length;
+  html += `<div class="info-block" style="border-color:rgba(245,158,11,.35)">
+    <div class="info-title">🧾 Client brief — opens the plan with their research</div>
+    <div class="hint" style="margin-bottom:8px">${c?.brief
+      ? `✓ Built ${esc(c.brief.builtAt || '')} — services, positioning, ${(c.brief.caseStudies || []).length} case studies, ${(c.brief.competitors || []).length} competitors${briefIcps.length ? ` · example clients: ${briefIcps.filter(i => i.example).length}/${briefIcps.length} ICPs` : ''}. Rebuild after profile changes${missingEx ? ' or to find the missing example clients' : ''}.`
+      : `Turns the profile into simple, clear, client facing copy (services, positioning, case studies, competitors) and finds one real example company per chosen ICP via web search.`}</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="mini-btn" id="gp-brief-btn" onclick="gpBuildClientBrief()">${c?.brief ? '🧾 Rebuild client brief' : '🧾 Build client brief'}</button>
+      <span class="hint" id="gp-brief-status"></span>
+    </div>
+  </div>`;
+
   // Step: channel
   html += `<div class="step"><div class="step-head"><span class="step-title"><span class="step-num">1</span>Channel</span></div>
     <div class="chips">
@@ -4180,6 +4231,87 @@ function gpFollowupsDocHtml() {
       <div style="padding:0 0 12px">${s.items.map(it => `<h3>Day +${it.day} · ${esc(it.framework || '')}</h3><div class="scriptbox">${esc(it.text)}</div>`).join('')}</div>
     </details>`).join('');
 }
+// ── Client brief: the client's own research, leading every plan ──
+// Built once from the profile (AI cleans it into simple, no dashes copy),
+// cached on the client; each chosen ICP gets one real example company found
+// via web search, cached on the ICP.
+function gpBriefTargetIcps() {
+  const c = gpClient(), g = state.growth;
+  if (g.mode === 'strategy') return g.targets.map(t => (c.icps || []).find(i => i.id === t.icpId)).filter(Boolean);
+  return [];
+}
+
+async function gpBuildClientBrief() {
+  if (!adminKey) return showNotif('No admin key', true);
+  const c = gpClient(); if (!c) return;
+  const btn = document.getElementById('gp-brief-btn');
+  const st = document.getElementById('gp-brief-status');
+  if (btn) { btn.disabled = true; btn.textContent = '🧾 Building…'; }
+  try {
+    const lines = [];
+    lines.push(`Client: ${c.name} (${c.meta || ''})`);
+    if (c.caseStudy?.mechanism) lines.push(`How they get results: ${c.caseStudy.mechanism}`);
+    if (c.caseStudy?.proofLine) lines.push(`Proof line: ${c.caseStudy.proofLine}`);
+    const offers = clientOffers(c); if (offers.length) lines.push(`Services / offers:\n${offers.join('\n')}`);
+    const cs = clientCaseStudies(c); if (cs.length) lines.push(`Case studies:\n${cs.join('\n')}`);
+    if ((c.competitorIntel || []).length) lines.push(`Competitors:\n${c.competitorIntel.map(x => `${x.name}: offer=${x.offer || '?'}; mechanism=${x.mechanism || '?'}${x.guarantee ? '; guarantee=' + x.guarantee : ''}`).join('\n')}`);
+    if (st) st.textContent = 'Writing the brief…';
+    const r = await api({ action: 'compose_client_brief', context: lines.join('\n\n'), rules: config.settings?.growthRules || '' });
+    c.brief = {
+      services: r.services || [], positioning: r.positioning || '',
+      caseStudies: r.caseStudies || [], competitors: r.competitors || [],
+      builtAt: new Date().toISOString().slice(0, 10)
+    };
+    persistConfig();
+    // One real example company per chosen ICP (cached on the ICP)
+    const icps = gpBriefTargetIcps().filter(i => !i.example);
+    for (let k = 0; k < icps.length; k++) {
+      if (st) st.textContent = `Finding an example client for "${icps[k].title}"… (${k + 1}/${icps.length})`;
+      try {
+        const ex = await api({ action: 'find_icp_example', icp: { title: icps[k].title, niche: icps[k].niche, jobTitles: icps[k].jobTitles, employeeSize: icps[k].employeeSize, locations: icps[k].locations } });
+        if (ex.company) { icps[k].example = { company: ex.company, website: ex.website || '', why: ex.why || '' }; persistConfig(); }
+      } catch {}
+    }
+    renderGrowth();
+    if (st) st.textContent = '';
+    showNotif('🧾 Client brief ready — it now opens the plan');
+  } catch (e) { if (st) st.textContent = '⚠️ ' + e.message; showNotif('Brief failed: ' + e.message, true); }
+  if (btn) { btn.disabled = false; btn.textContent = '🧾 Rebuild client brief'; }
+}
+
+// Preview HTML — rendered FIRST in the doc, before everything else.
+function gpBriefHtml(c) {
+  const b = c?.brief;
+  if (!b) return `<p style="color:var(--muted);font-size:12px">🧾 Build the client brief (left panel) to open the plan with ${esc(c?.name || 'the client')}'s services, positioning, case studies and competitors.</p>`;
+  const icps = gpBriefTargetIcps().filter(i => i.example);
+  let h = `<h2>About ${esc(c.name)}</h2>`;
+  if (b.positioning) h += `<p>${esc(b.positioning)}</p>`;
+  if (b.services?.length) h += `<h3>Services</h3><ul>${b.services.map(s => `<li>${esc(s)}</li>`).join('')}</ul>`;
+  if (b.caseStudies?.length) h += `<h3>Case studies</h3><ul>${b.caseStudies.map(s => `<li>${esc(s)}</li>`).join('')}</ul>`;
+  if (b.competitors?.length) h += `<h3>Competitors</h3><ul>${b.competitors.map(s => `<li>${esc(s)}</li>`).join('')}</ul>`;
+  if (icps.length) {
+    h += `<h3>Who we will target, with a real example</h3>`;
+    icps.forEach(i => { h += `<p><b>${esc(i.title)}</b> → ${esc(i.example.company)}${i.example.website ? ` (${esc(i.example.website)})` : ''}. ${esc(i.example.why)}</p>`; });
+  }
+  return h;
+}
+
+// Export blocks — same content for Notion.
+function gpBriefBlocks(c) {
+  const b = c?.brief; if (!b) return [];
+  const B = [{ t: 'h2', text: `About ${c.name}` }];
+  if (b.positioning) B.push({ t: 'p', text: b.positioning });
+  if (b.services?.length) { B.push({ t: 'h3', text: 'Services' }); b.services.forEach(s => B.push({ t: 'bullet', text: s })); }
+  if (b.caseStudies?.length) { B.push({ t: 'h3', text: 'Case studies' }); b.caseStudies.forEach(s => B.push({ t: 'bullet', text: s })); }
+  if (b.competitors?.length) { B.push({ t: 'h3', text: 'Competitors' }); b.competitors.forEach(s => B.push({ t: 'bullet', text: s })); }
+  const icps = gpBriefTargetIcps().filter(i => i.example);
+  if (icps.length) {
+    B.push({ t: 'h3', text: 'Who we will target, with a real example' });
+    icps.forEach(i => B.push({ t: 'p', text: `${i.title} → ${i.example.company}${i.example.website ? ` (${i.example.website})` : ''}. ${i.example.why}` }));
+  }
+  return B;
+}
+
 // Export: each sequence as a Notion toggle (dropdown) with the follow-ups inside.
 function gpFollowupsBlocks() {
   const seqs = gpActiveFollowups();
@@ -4416,6 +4548,7 @@ function gpPreviewStrategy(c) {
   const N = g.narrative;
   let h = `<div class="doc"><h1>Growth Plan — ${esc(c?.name || '')}</h1>
     <div class="doc-sub">🧪 Strategy · Proof of Concept · ${g.channels.map(ch => CH_LABEL[ch]).join(' · ')}</div>`;
+  h += gpBriefHtml(c);
   h += `<div class="callout">${N?.execSummary ? esc(N.execSummary) : 'The goal of this phase is to prove the concept — test ' + g.targets.length + ' target' + (g.targets.length !== 1 ? 's' : '') + ' with tight messaging, find the script + audience that books calls, then scale what works. Click “Draft narrative” to write this up.'}</div>`;
 
   if (!g.targets.length) h += `<p style="color:var(--amber)">⚠ Pick at least one target on the left to build the plan.</p>`;
@@ -4475,6 +4608,7 @@ function gpPreviewGrowth(c) {
   // Derive observed rates per channel, solve for target bookings.
   let h = `<div class="doc"><h1>Scaling Plan — ${esc(c?.name || '')}</h1>
     <div class="doc-sub">📈 Growth · ${g.channels.map(ch => CH_LABEL[ch]).join(' · ')}</div>`;
+  h += gpBriefHtml(c);
   h += `<div class="callout">${N?.execSummary ? esc(N.execSummary) : 'We already have a script that books calls. This plan scales it: add the niche pains, bulk-order leads, and run at the volume needed to hit the booking target.'}</div>`;
 
   if (g.winningScript) h += `<h2>The winning script</h2><div class="scriptbox">${esc(g.winningScript.text)}</div>${g.winningScript.note ? `<p style="color:var(--muted)">${esc(g.winningScript.note)}</p>` : ''}`;
@@ -4689,6 +4823,7 @@ function gpBuildBlocks() {
   const strat = g.mode === 'strategy';
   B.push({ t: 'h1', text: `Growth Plan — ${c.name}` });
   B.push({ t: 'p', text: `${strat ? '🧪 Strategy · Proof of Concept' : '📈 Growth · Scaling'} · ${g.channels.map(ch => CH_LABEL[ch]).join(' · ')} · ${new Date().toISOString().slice(0, 10)}` });
+  gpBriefBlocks(c).forEach(b => B.push(b));   // the client's own research always opens the plan
   if (N?.execSummary) B.push({ t: 'callout', text: N.execSummary });
 
   if (strat) {
@@ -4917,6 +5052,82 @@ function fuSave() {
   if (state.screen === 'growth') renderGrowth();
 }
 
+// ─── TEAM LOGIN ───────────────────────────────────────────────────────────────
+// Email + password exchanges for the shared admin key server-side; nobody on
+// the team ever sees or pastes the key itself.
+function showLogin() {
+  bringToTop(document.getElementById('loginModal'));
+  document.getElementById('loginModal').classList.add('show');
+  setTimeout(() => document.getElementById('loginEmail')?.focus(), 60);
+}
+function hideLogin() { document.getElementById('loginModal').classList.remove('show'); }
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const st = document.getElementById('loginStatus'), btn = document.getElementById('loginBtn');
+  if (!email || !password) { st.textContent = 'Enter your email and password.'; return; }
+  btn.disabled = true; btn.textContent = 'Signing in…'; st.textContent = '';
+  try {
+    const r = await api({ action: 'login', email, password });
+    adminKey = cleanKey(r.adminKey);
+    safeStorageSet('offer_admin_key', adminKey);
+    safeStorageSet('outreach_user', JSON.stringify({ email: r.email, name: r.name }));
+    hideLogin();
+    showNotif('👋 Welcome, ' + (r.name || email));
+    loadConfigAndRender();
+  } catch (e) { st.textContent = '❌ ' + e.message; }
+  btn.disabled = false; btn.textContent = 'Sign in';
+}
+
+function loginWithKey() {
+  const v = cleanKey(document.getElementById('loginKey').value);
+  if (!v) return showNotif('Paste the key first', true);
+  adminKey = v; safeStorageSet('offer_admin_key', v);
+  hideLogin(); loadConfigAndRender();
+}
+
+function signOut() {
+  adminKey = '';
+  safeStorageSet('offer_admin_key', '');
+  safeStorageSet('outreach_user', '');
+  showNotif('Signed out');
+  showLogin();
+}
+
+// — Team management (Settings) —
+async function loadTeamUsers() {
+  const el = document.getElementById('es-users'); if (!el) return;
+  if (!adminKey) { el.innerHTML = '<div class="hint">Sign in first.</div>'; return; }
+  try {
+    const r = await api({ action: 'users_list' });
+    el.innerHTML = (r.users || []).length ? r.users.map(u => `
+      <div class="list-row" style="margin-bottom:5px"><div><b>${esc(u.name)}</b> <span class="sub">${esc(u.email)} · added ${esc(u.createdAt || '')}</span></div>
+        <button class="mini-btn danger" onclick="removeTeamUser('${esc(u.email)}')">Remove</button></div>`).join('')
+      : '<div class="hint">No logins yet — add yourself below. Until then, sign in with the admin key.</div>';
+  } catch (e) { el.innerHTML = '<div class="hint">⚠️ ' + esc(e.message) + '</div>'; }
+}
+
+async function addTeamUser() {
+  const name = document.getElementById('tu-name').value.trim();
+  const email = document.getElementById('tu-email').value.trim();
+  const password = document.getElementById('tu-password').value;
+  if (!email || !password) return showNotif('Email and password required', true);
+  if (password.length < 8) return showNotif('Password must be at least 8 characters', true);
+  try {
+    const r = await api({ action: 'users_add', name, email, password });
+    showNotif(r.updated ? 'Login updated' : 'Login created');
+    document.getElementById('tu-password').value = '';
+    loadTeamUsers();
+  } catch (e) { showNotif('Failed: ' + e.message, true); }
+}
+
+async function removeTeamUser(email) {
+  if (!confirm('Remove the login for ' + email + '?')) return;
+  try { await api({ action: 'users_remove', email }); showNotif('Login removed'); loadTeamUsers(); }
+  catch (e) { showNotif('Failed: ' + e.message, true); }
+}
+
 // ─── MISC ──────────────────────────────────────────────────────────────────────
 function showNotif(msg, err = false) {
   const n = document.getElementById('notif');
@@ -4945,6 +5156,7 @@ async function loadConfigAndRender() {
   setConfigPill(configSource === 'server' ? 'server' : 'local');
   initSelections();
   renderEverything();
+  if (!adminKey) showLogin();
   if (keyFromLink) {
     keyFromLink = false;
     try {

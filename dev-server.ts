@@ -16,6 +16,7 @@ const HTML_PATH = new URL("./index.html", import.meta.url).pathname;
 
 // In-memory config store standing in for Supabase Storage.
 let savedConfig: unknown = null;
+let mockUsers: Array<{ email: string; name: string; createdAt: string }> = [{ email: "owner@local", name: "Owner", createdAt: "2026-06-11" }];
 
 function mockScript(fw: string, angle: string, v: number): string {
   return `Hey {{first_name}}, quick one — is {{company}} feeling "${angle}" yet?\n\n` +
@@ -200,6 +201,41 @@ async function handle(req: Request): Promise<Response> {
         ok: true,
         html: `<p>📌 [mock ${instruction}] ${text.split(" ").slice(0, 6).join(" ")}…</p><ul><li>✅ point one</li><li style="color:red" onclick="alert(1)">point two (attrs must be stripped)</li></ul><script>bad()</script>`,
       }, cors);
+    }
+    if (body.action === "login") {
+      await new Promise((r) => setTimeout(r, 300));
+      if (String(body.password) === "wrong") return json({ ok: false, error: "wrong email or password" }, cors, 401);
+      return json({ ok: true, adminKey: "devkey", name: "Dev User", email: String(body.email || "dev@local") }, cors);
+    }
+    if (body.action === "users_list") {
+      return json({ ok: true, users: mockUsers.map((u) => ({ email: u.email, name: u.name, createdAt: u.createdAt })) }, cors);
+    }
+    if (body.action === "users_add") {
+      const email = String(body.email || "").toLowerCase();
+      const i = mockUsers.findIndex((u) => u.email === email);
+      const entry = { email, name: String(body.name || email.split("@")[0]), createdAt: "2026-06-11" };
+      if (i !== -1) mockUsers[i] = entry; else mockUsers.push(entry);
+      return json({ ok: true, updated: i !== -1 }, cors);
+    }
+    if (body.action === "users_remove") {
+      const email = String(body.email || "").toLowerCase();
+      const n = mockUsers.length;
+      mockUsers = mockUsers.filter((u) => u.email !== email);
+      return json(n === mockUsers.length ? { ok: false, error: "no such user" } : { ok: true }, cors, n === mockUsers.length ? 404 : 200);
+    }
+    if (body.action === "compose_client_brief") {
+      await new Promise((r) => setTimeout(r, 900));
+      return json({
+        ok: true,
+        services: ["Done for you cold email campaigns", "Lead list building and verification", "Reply handling that books the calls"],
+        positioning: "(mock) They help B2B SaaS companies unlock revenue hiding in their existing customer base. Proven pricing work with companies from Series B to $500M in revenue.",
+        caseStudies: ["$500M eHealth platform: 20% ARR uplift identified", "$70M Series B insurer: 17% ARR uplift"],
+        competitors: ["LeadFlow Co, pitches volume retainers, our client sells outcomes instead", "PipelinePros, pay per show model, our client offers deeper strategy"],
+      }, cors);
+    }
+    if (body.action === "find_icp_example") {
+      await new Promise((r) => setTimeout(r, 900));
+      return json({ ok: true, company: "Acme Health Tech (mock)", website: "acmehealth.example", why: "A Series B digital health SaaS at 120 people, exactly the size and niche this ICP describes." }, cors);
     }
     if (body.action === "generate_followups") {
       await new Promise((r) => setTimeout(r, 1000));
