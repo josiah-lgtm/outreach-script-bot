@@ -452,6 +452,102 @@
   }
   .transcript-title { font: 600 12px 'Inter', sans-serif; margin-bottom: 4px; }
   .transcript-meta { font: 500 10px 'Inter', sans-serif; color: var(--muted); }
+
+  /* ── PROOF & EMPHASIS (builder step) — favoritable chips/rows ── */
+  .proof-sub {
+    font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: .6px;
+    text-transform: uppercase; margin: 13px 0 7px; display: flex; align-items: center; gap: 7px;
+  }
+  .proof-sub:first-child { margin-top: 0; }
+  .proof-sub .cnt { color: var(--amber); font-weight: 700; }
+  .proof-empty { font-size: 11px; color: var(--muted); padding: 2px 0 4px; }
+  .fav-chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px;
+    border-radius: 16px; border: 1px solid var(--border); background: var(--bg2);
+    color: var(--subtle); font-size: 12px; cursor: pointer; transition: .12s; user-select: none;
+  }
+  .fav-chip:hover { border-color: var(--accent); }
+  .fav-chip.on { background: rgba(245,158,11,.13); border-color: var(--amber); color: var(--text); }
+  .fav-star { font-size: 11px; color: var(--muted); transition: .12s; }
+  .fav-chip.on .fav-star { color: var(--amber); }
+  .cs-row {
+    display: flex; gap: 9px; align-items: flex-start; padding: 8px 11px;
+    border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px;
+    cursor: pointer; background: var(--bg2); transition: .12s; font-size: 12px; line-height: 1.45;
+  }
+  .cs-row:hover { border-color: var(--accent); }
+  .cs-row.on { border-color: var(--amber); background: rgba(245,158,11,.08); }
+  .cs-row .fav-star { font-size: 13px; margin-top: 1px; flex-shrink: 0; }
+  .cs-row.on .fav-star { color: var(--amber); }
+  .offer-chip.on { background: rgba(37,99,235,.16); border-color: var(--accent); color: var(--text); }
+  .offer-chip.on .fav-star { color: var(--accent2); }
+
+  /* ── EDIT MODAL with version rail + AI composer ── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(5,5,10,.74); backdrop-filter: blur(3px);
+    display: none; align-items: center; justify-content: center; z-index: 1000;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    width: min(960px, 95vw); height: min(680px, 92vh); background: var(--bg2);
+    border: 1px solid var(--border); border-radius: 14px; display: flex; flex-direction: column;
+    overflow: hidden; box-shadow: 0 24px 90px rgba(0,0,0,.65);
+  }
+  .modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .modal-title { font: 700 15px 'Inter', sans-serif; }
+  .modal-sub { font: 500 11px 'Inter', sans-serif; color: var(--muted); margin-left: 10px; }
+  .modal-close {
+    background: transparent; border: none; color: var(--muted); font-size: 18px;
+    cursor: pointer; padding: 2px 9px; border-radius: 6px; line-height: 1;
+  }
+  .modal-close:hover { color: var(--text); background: var(--bg3); }
+  .modal-body { flex: 1; display: flex; overflow: hidden; }
+  .version-rail { width: 232px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--bg); flex-shrink: 0; }
+  .version-rail-title {
+    font: 600 10px 'Inter', sans-serif; letter-spacing: .8px; text-transform: uppercase;
+    color: var(--muted); padding: 13px 14px 8px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .version-list { flex: 1; overflow-y: auto; padding: 0 10px 10px; }
+  .version-list::-webkit-scrollbar { width: 4px; }
+  .version-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .version-item {
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 7px;
+    cursor: pointer; transition: .12s; background: var(--bg2);
+  }
+  .version-item:hover { border-color: var(--accent); }
+  .version-item.active { border-color: var(--accent); background: rgba(37,99,235,.12); }
+  .version-item-label { font: 600 11px 'Inter', sans-serif; color: var(--text); display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .version-item-tag { font-size: 9px; padding: 1px 6px; border-radius: 8px; background: var(--bg3); color: var(--accent2); white-space: nowrap; }
+  .version-item-tag.ai { background: rgba(37,99,235,.16); }
+  .version-item-tag.orig { color: var(--muted); }
+  .version-item-preview {
+    font: 400 10px 'Courier Prime', monospace; color: var(--muted); margin-top: 5px;
+    line-height: 1.4; max-height: 27px; overflow: hidden;
+  }
+  .editor-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .modal-textarea {
+    flex: 1; resize: none; border: none; outline: none; background: var(--bg2); color: var(--text);
+    font-family: 'Courier Prime', monospace; font-size: 14px; line-height: 1.7; padding: 18px 20px;
+  }
+  .ai-composer { display: flex; gap: 9px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg); flex-shrink: 0; }
+  .ai-composer-icon { font-size: 16px; flex-shrink: 0; }
+  .ai-composer-wrap {
+    flex: 1; display: flex; align-items: center; gap: 8px; background: var(--bg2);
+    border: 1px solid var(--border); border-radius: 11px; padding: 5px 5px 5px 14px; transition: border-color .15s;
+  }
+  .ai-composer-wrap:focus-within { border-color: var(--accent); }
+  .ai-composer-wrap input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font: 400 13px 'Inter', sans-serif; }
+  .ai-send {
+    background: var(--accent); border: none; color: #fff; width: 32px; height: 32px; border-radius: 8px;
+    cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center;
+    transition: .15s; flex-shrink: 0;
+  }
+  .ai-send:hover { background: var(--accent2); }
+  .ai-send:disabled { opacity: .5; cursor: default; }
+  .modal-foot { display: flex; gap: 8px; align-items: center; padding: 12px 18px; border-top: 1px solid var(--border); flex-shrink: 0; }
 </style>
 </head>
 <body>
@@ -494,12 +590,17 @@
         </div>
 
         <div class="step">
-          <div class="step-head"><span class="step-title"><span class="step-num">3</span>Frameworks</span><span class="step-count" id="fwCount"></span></div>
+          <div class="step-head"><span class="step-title"><span class="step-num">3</span>Proof &amp; emphasis</span><span class="step-count" id="proofCount"></span></div>
+          <div id="proofSection"></div>
+        </div>
+
+        <div class="step">
+          <div class="step-head"><span class="step-title"><span class="step-num">4</span>Frameworks</span><span class="step-count" id="fwCount"></span></div>
           <div class="chips" id="fwChips"></div>
         </div>
 
         <div class="step">
-          <div class="step-head"><span class="step-title"><span class="step-num">4</span>Variants per combo</span></div>
+          <div class="step-head"><span class="step-title"><span class="step-num">5</span>Variants per combo</span></div>
           <div class="seg" id="variantSeg">
             <button class="on" onclick="setVariants(1, this)">1</button>
             <button onclick="setVariants(2, this)">2</button>
@@ -587,6 +688,38 @@
 </div>
 
 <div class="notif" id="notif"></div>
+
+<!-- SCRIPT EDIT MODAL — version rail + clean AI composer -->
+<div class="modal-overlay" id="editModal" onclick="if(event.target===this)closeEditModal()">
+  <div class="modal">
+    <div class="modal-head">
+      <div><span class="modal-title" id="editModalTitle">Edit script</span><span class="modal-sub" id="editModalSub"></span></div>
+      <button class="modal-close" onclick="closeEditModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="version-rail">
+        <div class="version-rail-title"><span>Versions</span><span class="version-item-tag" id="versionCount">1</span></div>
+        <div class="version-list" id="versionList"></div>
+      </div>
+      <div class="editor-pane">
+        <textarea class="modal-textarea" id="modalScript" spellcheck="true"></textarea>
+        <div class="ai-composer">
+          <span class="ai-composer-icon">✨</span>
+          <div class="ai-composer-wrap">
+            <input id="modalAiInput" placeholder="Ask AI to rewrite — “make it shorter”, “add a stat”, “warmer tone”…" onkeydown="if(event.key==='Enter'){event.preventDefault();modalAiRefine()}">
+            <button class="ai-send" id="modalAiBtn" onclick="modalAiRefine()" title="Rewrite with AI">↑</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="mini-btn" onclick="modalSnapshot()">📌 Save as version</button>
+      <div style="flex:1"></div>
+      <button class="mini-btn" onclick="modalSaveReservoir()">💾 To Reservoir</button>
+      <button class="btn btn-primary" style="width:auto;padding:8px 18px" onclick="modalApply()">Apply to script</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ─── SERVER CONFIG ─────────────────────────────────────────────────────────────
@@ -735,6 +868,14 @@ const client = id => config.clients.find(c => c.id === id);
 const framework = id => config.frameworks.find(f => f.id === id);
 const fwVars = t => Array.from(new Set(Array.from(String(t).matchAll(/\{\{(\w+)\}\}/g), m => m[1])));
 const primaryNicheId = c => (c?.nicheIds || [])[0] || null;
+const dedupeStr = arr => Array.from(new Set((arr || []).map(s => String(s).trim()).filter(Boolean)));
+
+// Everything a client knows, aggregated from its case study AND all call
+// transcripts — so transcript-derived material always shows up in the builder.
+function clientPains(c)       { return dedupeStr([...(c?.caseStudy?.pains || []),   ...(c?.transcripts || []).flatMap(t => t.pains || [])]); }
+function clientDesires(c)     { return dedupeStr([...(c?.caseStudy?.desires || []), ...(c?.transcripts || []).flatMap(t => t.desires || [])]); }
+function clientOffers(c)      { return dedupeStr([...(c?.caseStudy?.offers || []),  ...(c?.transcripts || []).flatMap(t => t.offers || [])]); }
+function clientCaseStudies(c) { return dedupeStr(c?.caseStudy?.caseStudies || []); }
 
 // Migrate older configs: clients used a single nicheId; v3 clients target many.
 function migrateConfig(cfg) {
@@ -750,6 +891,8 @@ function migrateConfig(cfg) {
     c.savedAngles = c.savedAngles || [];
     c.scriptReservoir = c.scriptReservoir || [];
     c.transcripts = c.transcripts || [];
+    c.favorites = c.favorites || { pains: [], desires: [], caseStudies: [], offers: [] };
+    ['pains', 'desires', 'caseStudies', 'offers'].forEach(k => { if (!Array.isArray(c.favorites[k])) c.favorites[k] = []; });
   });
   (cfg.frameworks || []).forEach(f => { f.nicheIds = f.nicheIds || []; });
   cfg.winningScripts = cfg.winningScripts || [];
@@ -910,30 +1053,23 @@ function renderBuilder() {
     (mine.length ? `<optgroup label="${esc(c.name)}'s niches">${mine.map(opt).join('')}</optgroup>` : '') +
     (others.length ? `<optgroup label="${mine.length ? 'Other niches' : 'All niches'}">${others.map(opt).join('')}</optgroup>` : '');
 
-  // Angle section — grouped: niche + client pains/desires + custom saved
+  // Angle section — the email hooks: niche angles, transcript-derived, custom, AI
   const as = document.getElementById('angleSection');
-  const cs2 = c?.caseStudy || {};
 
   const chipHtml = (a, extra = '') =>
     `<div class="chip ${state.angles.has(a) ? 'on' : ''} ${extra}" onclick="toggleAngle(this)" data-a="${esc(a)}">${esc(a)}</div>`;
 
   const nicheChips = (n?.angles || []).map(a => chipHtml(a)).join('');
 
-  // Pains + desires from client profile as extra angle sources
-  const painChips = (cs2.pains || []).map(a =>
-    `<div class="chip ${state.angles.has(a) ? 'on' : ''}" style="border-color:rgba(239,68,68,.3)" onclick="toggleAngle(this)" data-a="${esc(a)}">${esc(a)}</div>`).join('');
-  const desireChips = (cs2.desires || []).map(a =>
-    `<div class="chip ${state.angles.has(a) ? 'on' : ''}" style="border-color:rgba(16,185,129,.25)" onclick="toggleAngle(this)" data-a="${esc(a)}">${esc(a)}</div>`).join('');
+  // Angles surfaced from this client's call transcripts (tappable as angles)
+  const transcriptAngles = dedupeStr((c?.transcripts || []).flatMap(t => t.angles || []));
+  const transcriptChips = transcriptAngles.map(a =>
+    `<div class="chip ${state.angles.has(a) ? 'on' : ''}" style="border-color:rgba(245,158,11,.3)" onclick="toggleAngle(this)" data-a="${esc(a)}">${esc(a)}</div>`).join('');
 
   // Saved custom angles for this niche
   const customAngles = (c?.savedAngles || []).filter(x => !x.nicheId || x.nicheId === state.nicheId);
   const customChips = customAngles.map(x =>
     `<div class="chip ${state.angles.has(x.text) ? 'on' : ''}" style="border-style:dashed" onclick="toggleAngle(this)" data-a="${esc(x.text)}">${esc(x.text)}</div>`).join('');
-
-  // Guarantee chips from client profile
-  const guarantees = c?.guarantees || [];
-  const guarChips = guarantees.map(g =>
-    `<div class="chip guar-chip ${state.selectedGuarantee === g.text ? 'on' : ''}" onclick="toggleGuarantee(this)" data-g="${esc(g.text)}">${esc(g.text)}</div>`).join('');
 
   // AI suggested angles (pending taps)
   const suggestPills = state.suggestedAngles.map(a =>
@@ -941,8 +1077,7 @@ function renderBuilder() {
 
   as.innerHTML = `
     ${nicheChips ? `<div class="section-label" style="margin-top:0">Niche angles</div><div class="chips">${nicheChips}</div>` : '<div class="hint">No niche angles — add in Admin → Niches.</div>'}
-    ${painChips ? `<div class="section-label" style="margin-top:10px">Client pains <span style="font-size:10px;color:var(--muted);font-weight:400">(tap to use as angle)</span></div><div class="chips">${painChips}</div>` : ''}
-    ${desireChips ? `<div class="section-label" style="margin-top:10px">Client desires</div><div class="chips">${desireChips}</div>` : ''}
+    ${transcriptChips ? `<div class="section-label" style="margin-top:10px">📞 From call transcripts</div><div class="chips">${transcriptChips}</div>` : ''}
     ${customChips ? `<div class="section-label" style="margin-top:10px">Saved custom angles <span style="font-size:10px;color:var(--muted)">─ dashed</span></div><div class="chips">${customChips}</div>` : ''}
     <div class="suggest-bar">
       <input class="form-input" id="suggestInput" placeholder="✨ AI: suggest angles focused on…" />
@@ -950,12 +1085,9 @@ function renderBuilder() {
       <button class="mini-btn" onclick="saveCurrentAngles()" title="Save current selection as custom angles for this client">💾 Save</button>
     </div>
     ${suggestPills ? `<div class="suggest-pills" id="suggestPills">${suggestPills}</div>` : ''}
-    ${guarantees.length ? `
-    <div class="guar-section">
-      <div class="section-label" style="margin-top:0">Guarantee / Risk Reversal <span style="text-transform:none;font-weight:400;color:var(--muted)">(optional — weaves into scripts)</span></div>
-      <div class="chips">${guarChips}</div>
-    </div>` : ''}
   `;
+
+  renderProofSection(c);
 
   // Framework chips — global frameworks + ones scoped to this niche
   const visible = frameworksForNiche(state.nicheId);
@@ -1053,12 +1185,29 @@ async function generate() {
     }
     setStep(2);
 
+    // Aggregate case study, then apply the user's starred selections.
+    const fav = c.favorites || { pains: [], desires: [], caseStudies: [], offers: [] };
+    const caseStudyOut = { ...(c.caseStudy || {}) };
+    caseStudyOut.pains = clientPains(c);
+    caseStudyOut.desires = clientDesires(c);
+    caseStudyOut.offers = clientOffers(c);
+    caseStudyOut.caseStudies = clientCaseStudies(c);
+    // Starred case studies/offers narrow the proof pool to exactly those picked.
+    if (fav.caseStudies.length) caseStudyOut.caseStudies = fav.caseStudies;
+    if (fav.offers.length) caseStudyOut.offers = fav.offers;
+
     const data = await api({
       action: 'generate',
       prospect: { fname, company, url, classification, customPain },
       client: {
         name: c.name,
-        caseStudy: c.caseStudy || {},
+        caseStudy: caseStudyOut,
+        emphasis: {
+          pains: fav.pains,
+          desires: fav.desires,
+          caseStudies: fav.caseStudies,
+          offers: fav.offers
+        },
         frameworkOverride: (c.frameworkOverrides || {})[state.nicheId] || '',
         avoid: c.avoid || [],
         competitorIntel: (c.competitorIntel || []).map(x =>
@@ -1175,30 +1324,13 @@ function renderOutput() {
     const isOpen = state.openAngles.has(angle);
     const cards = scripts.map(({ fw, cat, idx }) => {
       const s = scriptIndex[idx];
-      const isEditing = state.editingScriptIdx === idx;
-      if (isEditing) {
-        return `<div class="script-card" id="sc-${idx}">
-          <div class="script-card-head">
-            <span><span class="script-card-fw">${esc(fw)}</span><span class="script-card-cat">${esc(cat)}</span></span>
-            <span class="script-card-actions">
-              <button class="copy-btn" onclick="applyEdit(${idx})">✓ Apply</button>
-              <button class="copy-btn" onclick="cancelEdit(${idx})">Cancel</button>
-            </span>
-          </div>
-          <textarea class="script-edit-area" id="sea-${idx}">${esc(s.script)}</textarea>
-          <div class="refine-bar">
-            <input class="form-input" id="refine-${idx}" placeholder="Refine with AI: make it shorter, add urgency…">
-            <button class="mini-btn" onclick="refineScriptAI(${idx}, this)">✨ AI Refine</button>
-            <button class="mini-btn" onclick="saveToReservoir(${idx}, 'idea')">💾 Save to Reservoir</button>
-          </div>
-        </div>`;
-      }
+      const vcount = (s.vref?._versions || []).length;
       return `<div class="script-card" id="sc-${idx}">
         <div class="script-card-head">
-          <span><span class="script-card-fw">${esc(fw)}</span><span class="script-card-cat">${esc(cat)}</span></span>
+          <span><span class="script-card-fw">${esc(fw)}</span><span class="script-card-cat">${esc(cat)}</span>${vcount > 1 ? `<span class="script-card-cat" style="color:var(--accent2)"> · v${vcount}</span>` : ''}</span>
           <span class="script-card-actions">
             <button class="copy-btn" onclick="copyScript(this, ${idx})">Copy</button>
-            <button class="copy-btn" onclick="editScriptInline(${idx})">Edit</button>
+            <button class="copy-btn" onclick="openEditModal(${idx})">✏️ Edit</button>
             <button class="copy-btn" onclick="saveToReservoir(${idx}, 'idea')">💾</button>
           </span>
         </div>
@@ -1254,6 +1386,68 @@ function toggleGuarantee(el) {
   renderBuilder();
 }
 
+// ── Proof & emphasis: case studies, pains, desires, offers, guarantee ──
+// Starred (favorited) items persist on the client and are pushed to generation.
+const favOn = (c, kind, text) => (c?.favorites?.[kind] || []).includes(text);
+
+function toggleFav(kind, b64) {
+  const c = client(state.clientId); if (!c) return;
+  const text = decodeURIComponent(escape(atob(b64)));
+  c.favorites = c.favorites || { pains: [], desires: [], caseStudies: [], offers: [] };
+  const arr = c.favorites[kind] || (c.favorites[kind] = []);
+  const i = arr.indexOf(text);
+  if (i === -1) arr.push(text); else arr.splice(i, 1);
+  persistConfig();
+  renderProofSection(c);
+}
+// base64 so arbitrary text (quotes, emoji) survives the inline handler attribute
+const b64 = s => btoa(unescape(encodeURIComponent(String(s))));
+
+function renderProofSection(c) {
+  const el = document.getElementById('proofSection'); if (!el) return;
+  if (!c) { el.innerHTML = '<div class="proof-empty">Select a client.</div>'; return; }
+  const cs = c.caseStudy || {};
+  const fav = c.favorites || { pains: [], desires: [], caseStudies: [], offers: [] };
+
+  const caseStudies = clientCaseStudies(c);
+  const pains = clientPains(c);
+  const desires = clientDesires(c);
+  const offers = clientOffers(c);
+  const guarantees = c.guarantees || [];
+
+  const favChip = (kind, text, cls = 'fav-chip') =>
+    `<div class="${cls} ${favOn(c, kind, text) ? 'on' : ''}" onclick="toggleFav('${kind}','${b64(text)}')"><span class="fav-star">${favOn(c, kind, text) ? '★' : '☆'}</span>${esc(text)}</div>`;
+
+  const csRow = (text) =>
+    `<div class="cs-row ${favOn(c, 'caseStudies', text) ? 'on' : ''}" onclick="toggleFav('caseStudies','${b64(text)}')"><span class="fav-star">${favOn(c, 'caseStudies', text) ? '★' : '☆'}</span><span>${esc(text)}</span></div>`;
+
+  const guarChips = guarantees.map(g =>
+    `<div class="chip guar-chip ${state.selectedGuarantee === g.text ? 'on' : ''}" onclick="toggleGuarantee(this)" data-g="${esc(g.text)}">${esc(g.text)}</div>`).join('');
+
+  const counted = (label, n) => `${label}${n ? ` <span class="cnt">★ ${n}</span>` : ''}`;
+
+  el.innerHTML = `
+    <div class="proof-sub">${counted('📂 Case studies — star which to use as proof', fav.caseStudies.length)}</div>
+    ${caseStudies.length ? caseStudies.map(csRow).join('') : '<div class="proof-empty">No case studies yet — add them in the client profile or extract from a transcript.</div>'}
+
+    <div class="proof-sub">${counted('🔴 Pains to emphasize', fav.pains.length)}</div>
+    ${pains.length ? `<div class="chips">${pains.map(p => favChip('pains', p)).join('')}</div>` : '<div class="proof-empty">No pains on file.</div>'}
+
+    <div class="proof-sub">${counted('🟢 Desires to emphasize', fav.desires.length)}</div>
+    ${desires.length ? `<div class="chips">${desires.map(d => favChip('desires', d)).join('')}</div>` : '<div class="proof-empty">No desires on file.</div>'}
+
+    <div class="proof-sub">${counted('💡 Offers — star which to pitch', fav.offers.length)}</div>
+    ${offers.length ? `<div class="chips">${offers.map(o => favChip('offers', o, 'fav-chip offer-chip')).join('')}</div>` : '<div class="proof-empty">No offers on file.</div>'}
+
+    <div class="proof-sub">✅ Guarantee / risk reversal <span style="text-transform:none;font-weight:400;color:var(--muted)">— pick one to weave in</span></div>
+    ${guarantees.length ? `<div class="chips">${guarChips}</div>` : '<div class="proof-empty">No guarantees on file — add them in the client profile.</div>'}
+  `;
+
+  const total = fav.caseStudies.length + fav.pains.length + fav.desires.length + fav.offers.length + (state.selectedGuarantee ? 1 : 0);
+  const pc = document.getElementById('proofCount');
+  if (pc) pc.textContent = total ? `(${total} starred)` : '';
+}
+
 async function suggestAnglesAI() {
   const input = document.getElementById('suggestInput');
   const prompt = input?.value.trim() || '';
@@ -1307,55 +1501,123 @@ function toggleAngleGroup(el, angle) {
   else state.openAngles.add(angle);
 }
 
-function editScriptInline(idx) {
-  state.editingScriptIdx = idx;
-  renderOutput();
-  setTimeout(() => {
-    const ta = document.getElementById('sea-' + idx);
-    if (ta) { ta.focus(); ta.selectionStart = ta.selectionEnd = ta.value.length; }
-  }, 50);
-}
+// ── Script edit MODAL with version history + clean AI composer ──
+// Versions live on the variant object (vref) so they survive output re-renders
+// within a generation. Each AI rewrite or manual snapshot is a version you can
+// click back to.
+let modalIdx = -1;
 
-function applyEdit(idx) {
-  const ta = document.getElementById('sea-' + idx);
-  if (ta && scriptIndex[idx]) {
-    scriptIndex[idx].script = ta.value;
-    // Write back into state.results so Copy All / Export CSV pick up the edit
-    if (scriptIndex[idx].vref) scriptIndex[idx].vref.script = ta.value;
-    state.editingScriptIdx = -1;
-    renderOutput();
+function ensureVersions(s) {
+  const v = s.vref;
+  if (!v) return [{ id: uid('v'), label: 'Original', tag: 'orig', text: s.script }];
+  if (!v._versions || !v._versions.length) {
+    v._versions = [{ id: uid('v'), label: 'Original', tag: 'orig', text: s.script }];
+    v._activeVersion = 0;
   }
+  return v._versions;
 }
 
-function cancelEdit(idx) {
-  state.editingScriptIdx = -1;
-  renderOutput();
+function openEditModal(idx) {
+  const s = scriptIndex[idx]; if (!s) return;
+  modalIdx = idx;
+  ensureVersions(s);
+  document.getElementById('editModalTitle').textContent = s.framework || 'Edit script';
+  document.getElementById('editModalSub').textContent = s.angle || '';
+  document.getElementById('modalAiInput').value = '';
+  const active = s.vref?._activeVersion ?? 0;
+  document.getElementById('modalScript').value = (s.vref?._versions?.[active]?.text) ?? s.script;
+  renderVersionList();
+  document.getElementById('editModal').classList.add('show');
+  setTimeout(() => document.getElementById('modalScript').focus(), 60);
 }
 
-async function refineScriptAI(idx, btn) {
-  const ta = document.getElementById('sea-' + idx);
-  const input = document.getElementById('refine-' + idx);
-  const prompt = input?.value.trim();
-  if (!prompt) return showNotif('Type a refinement instruction first', true);
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('show');
+  modalIdx = -1;
+}
+
+function renderVersionList() {
+  const s = scriptIndex[modalIdx]; if (!s) return;
+  const versions = s.vref?._versions || [];
+  const active = s.vref?._activeVersion ?? 0;
+  const list = document.getElementById('versionList');
+  document.getElementById('versionCount').textContent = versions.length;
+  list.innerHTML = versions.map((v, i) => `
+    <div class="version-item ${i === active ? 'active' : ''}" onclick="loadVersion(${i})">
+      <div class="version-item-label">${esc(v.label)}<span class="version-item-tag ${v.tag || ''}">${v.tag === 'ai' ? 'AI' : v.tag === 'orig' ? 'original' : 'edit'}</span></div>
+      <div class="version-item-preview">${esc(String(v.text).replace(/\n+/g, ' ').slice(0, 90))}</div>
+    </div>`).join('');
+}
+
+function loadVersion(i) {
+  const s = scriptIndex[modalIdx]; if (!s?.vref?._versions?.[i]) return;
+  // Preserve any unsaved working edits as a snapshot before switching away
+  s.vref._activeVersion = i;
+  document.getElementById('modalScript').value = s.vref._versions[i].text;
+  renderVersionList();
+}
+
+function pushVersion(label, tag, text) {
+  const s = scriptIndex[modalIdx]; if (!s?.vref) return;
+  s.vref._versions.push({ id: uid('v'), label, tag, text });
+  s.vref._activeVersion = s.vref._versions.length - 1;
+  renderVersionList();
+}
+
+function modalSnapshot() {
+  const s = scriptIndex[modalIdx]; if (!s) return;
+  const text = document.getElementById('modalScript').value;
+  const n = (s.vref?._versions || []).filter(v => v.tag === 'edit').length + 1;
+  pushVersion('Manual edit ' + n, 'edit', text);
+  showNotif('Version saved');
+}
+
+async function modalAiRefine() {
+  const s = scriptIndex[modalIdx]; if (!s) return;
+  const input = document.getElementById('modalAiInput');
+  const prompt = input.value.trim();
+  if (!prompt) return showNotif('Tell the AI what to change', true);
   if (!adminKey) return showNotif('No admin key', true);
-  const script = ta ? ta.value : scriptIndex[idx]?.script || '';
-  if (btn) { btn.textContent = '✨ Refining…'; btn.disabled = true; }
+  const script = document.getElementById('modalScript').value;
+  const btn = document.getElementById('modalAiBtn');
+  btn.textContent = '…'; btn.disabled = true;
   try {
     const r = await api({ action: 'refine_script', script, prompt });
-    if (ta) ta.value = r.script;
-    if (input) input.value = '';
-    showNotif('Script refined');
+    pushVersion(prompt, 'ai', r.script);
+    document.getElementById('modalScript').value = r.script;
+    input.value = '';
   } catch (e) { showNotif('Refine failed: ' + e.message, true); }
-  if (btn) { btn.textContent = '✨ AI Refine'; btn.disabled = false; }
+  btn.textContent = '↑'; btn.disabled = false;
+}
+
+function modalApply() {
+  const s = scriptIndex[modalIdx]; if (!s) return;
+  const text = document.getElementById('modalScript').value;
+  s.script = text;
+  if (s.vref) {
+    s.vref.script = text;
+    // Make sure the applied text is captured as the active version
+    const active = s.vref._activeVersion ?? 0;
+    if (s.vref._versions?.[active]?.text !== text) pushVersion('Manual edit', 'edit', text);
+  }
+  closeEditModal();
+  renderOutput();
+  showNotif('Applied to script');
+}
+
+function modalSaveReservoir() {
+  const s = scriptIndex[modalIdx]; if (!s) return;
+  const text = document.getElementById('modalScript').value;
+  s.script = text;
+  if (s.vref) s.vref.script = text;
+  saveToReservoir(modalIdx, 'idea');
 }
 
 function saveToReservoir(idx, status) {
   const c = client(state.clientId);
   if (!c) return showNotif('Select a client first', true);
-  // Capture latest text (may have been edited in textarea)
-  const ta = document.getElementById('sea-' + idx);
-  const script = ta ? ta.value : scriptIndex[idx]?.script || '';
   const s = scriptIndex[idx];
+  const script = s?.script || '';
   if (!script || !s) return;
   c.scriptReservoir.push({
     id: uid('sr'),
@@ -1366,12 +1628,11 @@ function saveToReservoir(idx, status) {
     nicheId: s.nicheId || state.nicheId,
     status,
     note: '',
+    versions: (s.vref?._versions || []).map(v => ({ label: v.label, tag: v.tag, text: v.text })),
     savedAt: new Date().toISOString().slice(0, 10)
   });
   persistConfig();
   showNotif('Saved to Reservoir');
-  // Exit edit mode if we were in it
-  if (state.editingScriptIdx === idx) { state.editingScriptIdx = -1; renderOutput(); }
 }
 
 function renderReservoir(body) {
@@ -2184,8 +2445,17 @@ function saveClient(isNew) {
     guarantees: (document.getElementById('ec-guarantees').__arr || []).map(t => ({ id: uid('g'), text: String(t).trim() })).filter(g => g.text),
     transcripts: editClient.transcripts,
     scriptReservoir: (client(isNew ? null : state.editing?.id)?.scriptReservoir) || [],
-    savedAngles: (client(isNew ? null : state.editing?.id)?.savedAngles) || []
+    savedAngles: (client(isNew ? null : state.editing?.id)?.savedAngles) || [],
+    favorites: (client(isNew ? null : state.editing?.id)?.favorites) || { pains: [], desires: [], caseStudies: [], offers: [] }
   };
+  // Prune favorites that no longer exist after the edit so stale picks don't linger.
+  const present = {
+    pains: new Set(clientPains(obj)), desires: new Set(clientDesires(obj)),
+    caseStudies: new Set(clientCaseStudies(obj)), offers: new Set(clientOffers(obj))
+  };
+  ['pains', 'desires', 'caseStudies', 'offers'].forEach(k => {
+    obj.favorites[k] = (obj.favorites[k] || []).filter(t => present[k].has(t));
+  });
   if (isNew) { config.clients.push(obj); state.clientId = obj.id; }
   else config.clients = config.clients.map(c => c.id === obj.id ? obj : c);
   if (!obj.nicheIds.includes(state.nicheId) && obj.nicheIds.length) {

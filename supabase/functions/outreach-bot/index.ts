@@ -258,6 +258,7 @@ interface GenerateBody {
   client: {
     name: string;
     caseStudy: Record<string, unknown>;
+    emphasis?: { pains?: string[]; desires?: string[]; caseStudies?: string[]; offers?: string[] };
     frameworkOverride?: string;
     competitorIntel?: string;
     avoid?: string[];
@@ -298,6 +299,17 @@ function buildSystemPrompt(body: GenerateBody, fw: Framework): string {
     ? `\nGUARANTEE / RISK REVERSAL (incorporate naturally where it fits — don't force into every variant):\n${body.guarantee.trim()}\n`
     : "";
 
+  const em = body.client.emphasis ?? {};
+  const emList = (arr?: string[]) => (arr ?? []).filter((x) => String(x).trim()).map((x) => `- ${x}`).join("\n");
+  const emphasisParts: string[] = [];
+  if (em.pains?.length) emphasisParts.push(`Pains to lead with (these matter most to this client — prioritize them):\n${emList(em.pains)}`);
+  if (em.desires?.length) emphasisParts.push(`Desired outcomes to point at:\n${emList(em.desires)}`);
+  if (em.caseStudies?.length) emphasisParts.push(`Use ONLY these case studies as proof (don't invent others):\n${emList(em.caseStudies)}`);
+  if (em.offers?.length) emphasisParts.push(`Offers to pitch:\n${emList(em.offers)}`);
+  const emphasisBlock = emphasisParts.length
+    ? `\nEMPHASIS — the user hand-picked these as the focus. Build the scripts around them:\n${emphasisParts.join("\n")}\n`
+    : "";
+
   return `You are a world-class cold email copywriter. You write short, punchy, conversational scripts that get replies, never marketing copy.
 
 FRAMEWORK: ${fw.name} (category: ${fw.category})
@@ -315,7 +327,7 @@ ${csLines}
 
 NICHE: ${body.niche.name}
 NICHE TRIGGER WORDS (work 1-3 in naturally where they genuinely fit; never force them): ${tw || "(none)"}
-${researchBlock}${overrideBlock}${competitorBlock}${avoidBlock}${guaranteeBlock}
+${researchBlock}${overrideBlock}${competitorBlock}${avoidBlock}${guaranteeBlock}${emphasisBlock}
 OUTPUT FORMAT — return valid JSON only, no markdown, no preamble:
 {
   "framework_fill": { "<variable_name>": "<value used in the first script>", ... },
