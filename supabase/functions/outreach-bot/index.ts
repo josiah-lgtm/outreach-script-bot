@@ -267,6 +267,7 @@ interface GenerateBody {
   angles: string[];
   variantsPerAngle: number;
   globalRules?: string;
+  guarantee?: string;
   research?: { summary?: string; pains?: string[]; hooks?: string[] };
 }
 
@@ -293,6 +294,10 @@ function buildSystemPrompt(body: GenerateBody, fw: Framework): string {
       (body.client.avoid ?? []).filter((a) => String(a).trim()).map((a) => `- ${a}`).join("\n") + "\n"
     : "";
 
+  const guaranteeBlock = body.guarantee?.trim()
+    ? `\nGUARANTEE / RISK REVERSAL (incorporate naturally where it fits — don't force into every variant):\n${body.guarantee.trim()}\n`
+    : "";
+
   return `You are a world-class cold email copywriter. You write short, punchy, conversational scripts that get replies, never marketing copy.
 
 FRAMEWORK: ${fw.name} (category: ${fw.category})
@@ -310,7 +315,7 @@ ${csLines}
 
 NICHE: ${body.niche.name}
 NICHE TRIGGER WORDS (work 1-3 in naturally where they genuinely fit; never force them): ${tw || "(none)"}
-${researchBlock}${overrideBlock}${competitorBlock}${avoidBlock}
+${researchBlock}${overrideBlock}${competitorBlock}${avoidBlock}${guaranteeBlock}
 OUTPUT FORMAT — return valid JSON only, no markdown, no preamble:
 {
   "framework_fill": { "<variable_name>": "<value used in the first script>", ... },
@@ -471,12 +476,81 @@ Deno.serve(async (req) => {
         return json({ ok: true, ...parsed });
       }
 
+      case "refine_script": {
+        const script = String(body.script ?? "").trim();
+        const prompt = String(body.prompt ?? "").trim();
+        if (!script || !prompt) return json({ ok: false, error: "script and prompt required" }, 400);
+        const res = await claudeMessages({
+          model: CLAUDE_HAIKU,
+          max_tokens: 600,
+          system: `You are a cold email editor. The user gives you a script and a revision instruction. Make ONLY the requested changes — preserve what works. Return ONLY the revised script text, no commentary, no quotes, no markdown.`,
+          messages: [{ role: "user", content: `SCRIPT:\n${script}\n\nINSTRUCTION: ${prompt}` }],
+        });
+        return json({ ok: true, script: textOf(res.content).trim() });
+      }
+
+      case "extract_transcript": {
+        const text = String(body.text ?? "").slice(0, 30_000);
+        if (!text.trim()) return json({ ok: false, error: "transcript text required" }, 400);
+        const res = await claudeMessages({
+          model: CLAUDE_MODEL,
+          max_tokens: 2000,
+          system:
+            `You extract cold outreach intelligence from sales call transcripts. Read the transcript and identify actionable material.\n` +
+            `Return valid JSON only, no markdown fences:\n` +
+            `{"pains":["6-8 specific pain points, phrased in the prospect's exact words where possible"],` +
+            `"desires":["4-6 outcomes they explicitly or implicitly want"],` +
+            `"angles":["5-8 testable cold email angles derived from what you heard — use their exact language"],` +
+            `"offers":["3-5 potential offer structures that would resonate based on what was said"],` +
+            `"insights":"2-3 sentences on what this call reveals about the niche and what messaging will land"}`,
+          messages: [{ role: "user", content: `Call transcript:\n${text}` }],
+        });
+        const parsed = parseJson(textOf(res.content), null as Record<string, unknown> | null);
+        if (!parsed) return json({ ok: false, error: "could not parse transcript — try again" }, 422);
+        return json({ ok: true, ...parsed });
+      }
+
+      case "suggest_angles": {
+        const nicheName = String(body.niche ?? "").trim();
+        const clientContext = String(body.clientContext ?? "").trim();
+        const userPrompt = String(body.prompt ?? "").trim();
+        if (!nicheName) return json({ ok: false, error: "niche required" }, 400);
+        const res = await claudeMessages({
+          model: CLAUDE_HAIKU,
+          max_tokens: 600,
+          system:
+            `You generate testable cold email angle hooks for a specific niche. Each angle is a 5-14 word specific hook — a problem, trigger event, or curiosity gap. Make them distinct, concrete, and sendable as email openers.\n` +
+            `Return valid JSON only, no markdown: {"angles":["6 angles"]}`,
+          messages: [{
+            role: "user",
+            content: `Niche: ${nicheName}\n${clientContext ? `Client context: ${clientContext}` : ""}${userPrompt ? `\nDirection / focus: ${userPrompt}` : ""}`,
+          }],
+        });
+        const parsed = parseJson(textOf(res.content), { angles: [] as string[] });
+        return json({ ok: true, angles: parsed.angles ?? [] });
+      }
+
       case "research_competitors": {
         const name = String(body.clientName ?? "").trim();
         const url = String(body.clientUrl ?? "").trim();
         if (!name && !url) return json({ ok: false, error: "clientName or clientUrl required" }, 400);
         const result = await researchCompetitors(name, url, String(body.niche ?? ""));
         return json(result, result.ok ? 200 : 422);
+      }
+
+      case "suggest_offers": {
+        const context = String(body.context ?? "").slice(0, 6_000);
+        if (!context.trim()) return json({ ok: false, error: "context required" }, 400);
+        const res = await claudeMessages({
+          model: CLAUDE_HAIKU,
+          max_tokens: 800,
+          system:
+            `You are a cold outreach strategist. Given a client's case study data, suggest 4-6 distinct offer packages they could sell — each with a name and one-line description. Make them concrete, risk-reversed, and outcome-focused.\n` +
+            `Return valid JSON only, no markdown: {"offers":[{"name":"short offer name","description":"one-line description of what's included and the outcome"}]}`,
+          messages: [{ role: "user", content: `Client data:\n${context}` }],
+        });
+        const parsed = parseJson(textOf(res.content), { offers: [] as { name: string; description: string }[] });
+        return json({ ok: true, offers: parsed.offers ?? [] });
       }
 
       case "generate": {

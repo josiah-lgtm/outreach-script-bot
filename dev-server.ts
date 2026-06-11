@@ -102,6 +102,53 @@ async function handle(req: Request): Promise<Response> {
         analysis: "(mock) This wins because it asks permission before pitching, which flips the dynamic — the prospect opts in rather than being sold to.",
       }, cors);
     }
+    if (body.action === "refine_script") {
+      await new Promise((r) => setTimeout(r, 700));
+      const script = String(body.script || "");
+      const prompt = String(body.prompt || "").toLowerCase();
+      let refined = script;
+      if (prompt.includes("short")) refined = script.split("\n").filter((l: string) => l.trim()).slice(0, 3).join("\n");
+      else if (prompt.includes("question")) refined = script.replace(/\.\s*$/, "?");
+      else refined = script + "\n\n(mock refinement applied)";
+      return json({ ok: true, script: refined }, cors);
+    }
+    if (body.action === "extract_transcript") {
+      await new Promise((r) => setTimeout(r, 1400));
+      return json({
+        ok: true,
+        pains: ["CAC doubled since last year", "our old agency ghosted us after month 1", "leads go cold before we follow up", "team is too busy to do outreach manually"],
+        desires: ["predictable 10-15 booked calls per month", "someone else to run the whole process", "leads that actually show up"],
+        angles: ["Agency-burned twice, skeptical of promises", "CAC doubled, pipeline hasn't", "Leads going cold in under 48h", "Team too stretched to do outbound"],
+        offers: ["DFY cold outreach — $2.5K/mo retainer", "Pay-per-show model — $200/booked call", "90-day pilot with performance guarantee"],
+        insights: "(mock) This niche is frustrated with agencies that over-promise and under-deliver. They want a low-risk entry point and proof before committing.",
+      }, cors);
+    }
+    if (body.action === "suggest_angles") {
+      await new Promise((r) => setTimeout(r, 700));
+      return json({
+        ok: true,
+        angles: [
+          "Outbound volume is high but reply rates under 2%",
+          "Cold email works but follow-up is falling through cracks",
+          "Sales team spending 60% of time on prospecting",
+          "Every competitor offering the same angle — standing out is hard",
+          "Q3 pipeline target missed for third quarter running",
+          "New market entry with no existing network",
+        ],
+      }, cors);
+    }
+    if (body.action === "suggest_offers") {
+      await new Promise((r) => setTimeout(r, 800));
+      return json({
+        ok: true,
+        offers: [
+          { name: "DFY Outreach Sprint", description: "90 days fully managed cold outreach — targeting one niche, one offer, daily sends" },
+          { name: "Pay-Per-Show", description: "Only pay $200–300 per booked, confirmed call — zero retainer risk" },
+          { name: "Rapid Audit", description: "One-week audit of current outreach: sequences, targeting, messaging — $997 flat" },
+          { name: "Done-With-You", description: "We build the infrastructure, train your team, run the first month alongside you" },
+        ],
+      }, cors);
+    }
     if (body.action === "research") {
       await new Promise((r) => setTimeout(r, 1000));
       return json({

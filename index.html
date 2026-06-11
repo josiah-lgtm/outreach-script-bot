@@ -357,6 +357,101 @@
     transform: translateY(8px); transition: .25s; pointer-events: none; z-index: 999;
   }
   .notif.show { opacity: 1; transform: translateY(0); }
+
+  /* ── ANGLE ACCORDION (output panel) ── */
+  .angle-acc { margin-bottom: 12px; }
+  .angle-acc-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 13px; background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 8px; cursor: pointer; transition: border-color .15s; user-select: none;
+  }
+  .angle-acc-head:hover { border-color: var(--accent); }
+  .angle-acc-head.open { border-radius: 8px 8px 0 0; border-color: var(--accent); background: rgba(37,99,235,.07); }
+  .angle-acc-title { font: 600 13px 'Inter', sans-serif; color: var(--text); }
+  .angle-acc-meta { font: 500 11px 'Inter', sans-serif; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+  .angle-acc-arrow { color: var(--muted); font-size: 11px; transition: transform .18s; }
+  .angle-acc-head.open .angle-acc-arrow { transform: rotate(180deg); }
+  .angle-acc-body { border: 1px solid var(--accent); border-top: none; border-radius: 0 0 8px 8px; display: none; }
+  .angle-acc-head.open + .angle-acc-body { display: block; }
+
+  .script-card { border-bottom: 1px solid var(--border); }
+  .script-card:last-child { border-bottom: none; }
+  .script-card-head {
+    padding: 6px 12px; background: var(--bg2); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .script-card-fw { font: 600 11px 'Inter', sans-serif; color: var(--accent2); }
+  .script-card-cat { font: 500 10px 'Inter', sans-serif; color: var(--muted); margin-left: 4px; }
+  .script-card-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .script-body { padding: 12px 14px; white-space: pre-wrap; }
+
+  /* ── INLINE SCRIPT EDITING ── */
+  .script-edit-area {
+    display: block; width: 100%; min-height: 110px; resize: vertical;
+    background: rgba(37,99,235,.04); border: none; border-bottom: 1px solid var(--accent);
+    color: var(--text); font-family: 'Courier Prime', monospace; font-size: 13.5px;
+    line-height: 1.75; padding: 12px 14px; outline: none;
+  }
+  .refine-bar {
+    display: flex; gap: 6px; padding: 8px 12px; flex-wrap: wrap; align-items: center;
+    background: rgba(37,99,235,.04); border-bottom: 1px solid var(--border);
+  }
+  .refine-bar .form-input { flex: 1; min-width: 140px; font-size: 12px; padding: 6px 10px; }
+
+  /* ── RESERVOIR / KANBAN ── */
+  .res-filter { display: flex; gap: 4px; padding: 10px 14px 0; flex-shrink: 0; }
+  .res-card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+    margin-bottom: 8px; overflow: hidden;
+  }
+  .res-card-head {
+    padding: 7px 11px; display: flex; align-items: center; gap: 8px; justify-content: space-between;
+    border-bottom: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .res-card-labels { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .status-badge {
+    font-size: 10px; font-weight: 600; padding: 2px 9px; border-radius: 10px;
+    cursor: pointer; border: 1px solid transparent; transition: .12s;
+  }
+  .status-idea { background: rgba(107,114,128,.15); color: var(--muted); border-color: var(--border); }
+  .status-testing { background: rgba(245,158,11,.12); color: var(--amber); border-color: rgba(245,158,11,.35); }
+  .status-winning { background: rgba(16,185,129,.12); color: var(--green); border-color: rgba(16,185,129,.35); }
+  .res-card-body {
+    padding: 10px 12px; white-space: pre-wrap; font-family: 'Courier Prime', monospace;
+    font-size: 12.5px; line-height: 1.65; max-height: 120px; overflow: hidden;
+    cursor: pointer; transition: max-height .2s;
+  }
+  .res-card-body.expanded { max-height: 600px; }
+  .res-card-note { padding: 0 12px 9px; }
+  .res-card-note-input {
+    width: 100%; background: transparent; border: none; border-bottom: 1px dashed var(--border);
+    color: var(--muted); font-size: 11px; padding: 4px 0; outline: none;
+    font-family: 'Inter', sans-serif;
+  }
+  .res-card-note-input:focus { border-bottom-color: var(--accent); color: var(--text); }
+
+  /* ── GUARANTEE CHIPS ── */
+  .guar-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .guar-none { font-size: 11px; color: var(--muted); padding: 5px 0; }
+  .chip.guar-chip.on { background: rgba(16,185,129,.18); border-color: var(--green); color: var(--green); }
+
+  /* ── AI SUGGEST ANGLES ── */
+  .suggest-bar { display: flex; gap: 6px; margin-top: 10px; align-items: center; }
+  .suggest-bar .form-input { flex: 1; font-size: 12px; padding: 7px 10px; }
+  .suggest-pills { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+  .suggest-pill {
+    padding: 4px 10px; border-radius: 12px; border: 1px dashed var(--accent);
+    color: var(--accent2); font-size: 11px; cursor: pointer; background: transparent; transition: .12s;
+  }
+  .suggest-pill:hover { background: rgba(37,99,235,.12); }
+
+  /* ── TRANSCRIPT SECTION ── */
+  .transcript-card {
+    border: 1px solid var(--border); border-radius: 7px; background: var(--bg2);
+    padding: 10px 12px; margin-bottom: 7px;
+  }
+  .transcript-title { font: 600 12px 'Inter', sans-serif; margin-bottom: 4px; }
+  .transcript-meta { font: 500 10px 'Inter', sans-serif; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -395,7 +490,7 @@
 
         <div class="step">
           <div class="step-head"><span class="step-title"><span class="step-num">2</span>Angles</span><span class="step-count" id="angleCount"></span></div>
-          <div class="chips" id="angleChips"></div>
+          <div id="angleSection"></div>
         </div>
 
         <div class="step">
@@ -463,6 +558,7 @@
         <button class="tab-btn active" id="tab-scripts" onclick="switchTab('scripts')">Scripts</button>
         <button class="tab-btn" id="tab-frameworks" onclick="switchTab('frameworks')">Framework Fill</button>
         <button class="tab-btn" id="tab-research" onclick="switchTab('research')">Research</button>
+        <button class="tab-btn" id="tab-reservoir" onclick="switchTab('reservoir')">💾 Reservoir</button>
       </div>
       <div class="output-actions">
         <button class="mini-btn" onclick="copyAll()">Copy All</button>
@@ -621,10 +717,16 @@ let state = {
   variantsPer: 1,
   tab: 'scripts',
   adminTab: 'frameworks',
-  editing: null,        // {type, id} | {type, id:'__new__'}
+  editing: null,
   research: null,
   results: null,
+  openAngles: new Set(),      // which angle accordions are expanded in output
+  editingScriptIdx: -1,        // index into scriptIndex[] currently in edit mode
+  reservoirFilter: 'all',      // 'all'|'idea'|'testing'|'winning'
+  selectedGuarantee: null,     // string | null — guarantee chip selected in builder
+  suggestedAngles: [],         // AI-suggested angles awaiting user tap
 };
+let scriptIndex = []; // flat ordered list built during renderOutput; each {framework,angle,label,script,nicheId}
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid = p => p + '-' + Math.random().toString(36).slice(2, 8);
@@ -644,6 +746,10 @@ function migrateConfig(cfg) {
     c.frameworkOverrides = c.frameworkOverrides || {};
     c.caseStudy = c.caseStudy || {};
     c.avoid = c.avoid || [];
+    c.guarantees = c.guarantees || [];
+    c.savedAngles = c.savedAngles || [];
+    c.scriptReservoir = c.scriptReservoir || [];
+    c.transcripts = c.transcripts || [];
   });
   (cfg.frameworks || []).forEach(f => { f.nicheIds = f.nicheIds || []; });
   cfg.winningScripts = cfg.winningScripts || [];
@@ -709,7 +815,7 @@ function showScreen(s) {
 
 function switchTab(tab) {
   state.tab = tab;
-  ['scripts', 'frameworks', 'research'].forEach(t =>
+  ['scripts', 'frameworks', 'research', 'reservoir'].forEach(t =>
     document.getElementById('tab-' + t).classList.toggle('active', t === tab));
   renderOutput();
 }
@@ -740,6 +846,10 @@ function renderClientList() {
 function selectClient(id) {
   const c = client(id); if (!c) return;
   state.clientId = id;
+  state.suggestedAngles = [];
+  if (state.selectedGuarantee && !(c.guarantees || []).some(g => g.text === state.selectedGuarantee)) {
+    state.selectedGuarantee = null;
+  }
   if (!c.nicheIds.includes(state.nicheId)) {
     state.nicheId = primaryNicheId(c) || state.nicheId || config.niches[0]?.id || null;
     const n = niche(state.nicheId);
@@ -779,7 +889,10 @@ function renderBuilder() {
       <div class="hero-badges">
         ${(c.nicheIds || []).map(id => `<span class="badge2">${esc(niche(id)?.name || '')}</span>`).join('')}
         ${(cs.caseStudies || []).length ? `<span class="badge2">📂 ${cs.caseStudies.length} case studies</span>` : ''}
-        ${(c.competitorIntel || []).length ? `<span class="badge2">🏁 ${c.competitorIntel.length} rivals tracked</span>` : ''}
+        ${(c.competitorIntel || []).length ? `<span class="badge2">🏁 ${c.competitorIntel.length} rivals</span>` : ''}
+        ${(c.guarantees || []).length ? `<span class="badge2" style="color:var(--green);border-color:rgba(16,185,129,.4)">✅ ${c.guarantees.length} guarantee${c.guarantees.length > 1 ? 's' : ''}</span>` : ''}
+        ${(c.transcripts || []).length ? `<span class="badge2">📞 ${c.transcripts.length} transcript${c.transcripts.length > 1 ? 's' : ''}</span>` : ''}
+        ${(c.scriptReservoir || []).length ? `<span class="badge2">💾 ${c.scriptReservoir.length} saved</span>` : ''}
         ${(c.avoid || []).length ? `<span class="badge2 danger">🚫 ${c.avoid.length} exclusions</span>` : ''}
         ${override ? `<span class="badge2 warn">⚡ framework override</span>` : ''}
       </div>
@@ -797,11 +910,52 @@ function renderBuilder() {
     (mine.length ? `<optgroup label="${esc(c.name)}'s niches">${mine.map(opt).join('')}</optgroup>` : '') +
     (others.length ? `<optgroup label="${mine.length ? 'Other niches' : 'All niches'}">${others.map(opt).join('')}</optgroup>` : '');
 
-  // Angle chips
-  const ac = document.getElementById('angleChips');
-  ac.innerHTML = (n?.angles || []).map(a =>
-    `<div class="chip ${state.angles.has(a) ? 'on' : ''}" onclick="toggleAngle(this)" data-a="${esc(a)}">${esc(a)}</div>`).join('')
-    || '<div class="hint">This niche has no angles yet — add them in Admin → Niches.</div>';
+  // Angle section — grouped: niche + client pains/desires + custom saved
+  const as = document.getElementById('angleSection');
+  const cs2 = c?.caseStudy || {};
+
+  const chipHtml = (a, extra = '') =>
+    `<div class="chip ${state.angles.has(a) ? 'on' : ''} ${extra}" onclick="toggleAngle(this)" data-a="${esc(a)}">${esc(a)}</div>`;
+
+  const nicheChips = (n?.angles || []).map(a => chipHtml(a)).join('');
+
+  // Pains + desires from client profile as extra angle sources
+  const painChips = (cs2.pains || []).map(a =>
+    `<div class="chip ${state.angles.has(a) ? 'on' : ''}" style="border-color:rgba(239,68,68,.3)" onclick="toggleAngle(this)" data-a="${esc(a)}">${esc(a)}</div>`).join('');
+  const desireChips = (cs2.desires || []).map(a =>
+    `<div class="chip ${state.angles.has(a) ? 'on' : ''}" style="border-color:rgba(16,185,129,.25)" onclick="toggleAngle(this)" data-a="${esc(a)}">${esc(a)}</div>`).join('');
+
+  // Saved custom angles for this niche
+  const customAngles = (c?.savedAngles || []).filter(x => !x.nicheId || x.nicheId === state.nicheId);
+  const customChips = customAngles.map(x =>
+    `<div class="chip ${state.angles.has(x.text) ? 'on' : ''}" style="border-style:dashed" onclick="toggleAngle(this)" data-a="${esc(x.text)}">${esc(x.text)}</div>`).join('');
+
+  // Guarantee chips from client profile
+  const guarantees = c?.guarantees || [];
+  const guarChips = guarantees.map(g =>
+    `<div class="chip guar-chip ${state.selectedGuarantee === g.text ? 'on' : ''}" onclick="toggleGuarantee(this)" data-g="${esc(g.text)}">${esc(g.text)}</div>`).join('');
+
+  // AI suggested angles (pending taps)
+  const suggestPills = state.suggestedAngles.map(a =>
+    `<span class="suggest-pill" onclick="addSuggestedAngle(this)" data-a="${esc(a)}">${esc(a)} +</span>`).join('');
+
+  as.innerHTML = `
+    ${nicheChips ? `<div class="section-label" style="margin-top:0">Niche angles</div><div class="chips">${nicheChips}</div>` : '<div class="hint">No niche angles — add in Admin → Niches.</div>'}
+    ${painChips ? `<div class="section-label" style="margin-top:10px">Client pains <span style="font-size:10px;color:var(--muted);font-weight:400">(tap to use as angle)</span></div><div class="chips">${painChips}</div>` : ''}
+    ${desireChips ? `<div class="section-label" style="margin-top:10px">Client desires</div><div class="chips">${desireChips}</div>` : ''}
+    ${customChips ? `<div class="section-label" style="margin-top:10px">Saved custom angles <span style="font-size:10px;color:var(--muted)">─ dashed</span></div><div class="chips">${customChips}</div>` : ''}
+    <div class="suggest-bar">
+      <input class="form-input" id="suggestInput" placeholder="✨ AI: suggest angles focused on…" />
+      <button class="mini-btn" onclick="suggestAnglesAI()">→</button>
+      <button class="mini-btn" onclick="saveCurrentAngles()" title="Save current selection as custom angles for this client">💾 Save</button>
+    </div>
+    ${suggestPills ? `<div class="suggest-pills" id="suggestPills">${suggestPills}</div>` : ''}
+    ${guarantees.length ? `
+    <div class="guar-section">
+      <div class="section-label" style="margin-top:0">Guarantee / Risk Reversal <span style="text-transform:none;font-weight:400;color:var(--muted)">(optional — weaves into scripts)</span></div>
+      <div class="chips">${guarChips}</div>
+    </div>` : ''}
+  `;
 
   // Framework chips — global frameworks + ones scoped to this niche
   const visible = frameworksForNiche(state.nicheId);
@@ -916,11 +1070,14 @@ async function generate() {
       angles,
       variantsPerAngle: variantsPer,
       globalRules: config.settings?.globalRules || '',
+      guarantee: state.selectedGuarantee || '',
       research: state.research?.ok ? state.research : undefined
     });
 
     setStep(3);
     state.results = data.results;
+    state.openAngles = new Set();
+    state.editingScriptIdx = -1;
     switchTab('scripts');
     const scriptCount = data.results.reduce((s, r) => s + (r.variants?.length || 0), 0);
     showNotif(`${scriptCount} scripts generated`);
@@ -985,34 +1142,87 @@ function renderOutput() {
     return;
   }
 
+  // reservoir tab
+  if (state.tab === 'reservoir') { renderReservoir(body); return; }
+
   // scripts tab
   if (!state.results) {
     body.innerHTML = `<div class="placeholder-state"><div class="placeholder-icon">✍️</div><div class="placeholder-text">Pick a client, choose angles × frameworks, hit Generate. Every script comes labeled for A/B testing.</div></div>`;
     return;
   }
-  let idx = 0;
-  body.innerHTML = state.results.map(r => {
-    if (r.error) return `<div class="info-block"><div class="info-title">${esc(r.framework)}</div>⚠️ ${esc(r.error)}</div>`;
-    return `<div class="fw-group">
-      <div class="fw-group-header"><span>${esc(r.framework)}</span><span class="cat">${esc(r.category)} · ${(r.variants || []).length} scripts</span></div>
-      ${(r.variants || []).map(v => {
-        const i = idx++;
-        return `<div class="variant-block">
-          <div class="variant-header">
-            <span class="variant-label">${esc(v.angle || '')}${v.label ? ' · ' + esc(v.label) : ''}</span>
-            <button class="copy-btn" onclick="copyScript(this, ${i})">Copy</button>
+
+  // Build flat scriptIndex + group by angle
+  scriptIndex = [];
+  const angleMap = new Map();
+  const errors = [];
+  state.results.forEach(r => {
+    if (r.error) { errors.push(r); return; }
+    (r.variants || []).forEach(v => {
+      const angle = v.angle || 'General';
+      const idx = scriptIndex.length;
+      scriptIndex.push({ framework: r.framework, category: r.category, fwId: r.frameworkId, angle, label: v.label || '', script: substitute(v.script || ''), nicheId: state.nicheId, vref: v });
+      if (!angleMap.has(angle)) angleMap.set(angle, []);
+      angleMap.get(angle).push({ fw: r.framework, cat: r.category, idx });
+    });
+  });
+
+  // Open first angle by default if nothing is open yet
+  if (!state.openAngles.size && angleMap.size) state.openAngles.add([...angleMap.keys()][0]);
+
+  const errHtml = errors.map(r => `<div class="info-block"><div class="info-title">${esc(r.framework)}</div>⚠️ ${esc(r.error)}</div>`).join('');
+
+  const angleHtml = [...angleMap.entries()].map(([angle, scripts]) => {
+    const isOpen = state.openAngles.has(angle);
+    const cards = scripts.map(({ fw, cat, idx }) => {
+      const s = scriptIndex[idx];
+      const isEditing = state.editingScriptIdx === idx;
+      if (isEditing) {
+        return `<div class="script-card" id="sc-${idx}">
+          <div class="script-card-head">
+            <span><span class="script-card-fw">${esc(fw)}</span><span class="script-card-cat">${esc(cat)}</span></span>
+            <span class="script-card-actions">
+              <button class="copy-btn" onclick="applyEdit(${idx})">✓ Apply</button>
+              <button class="copy-btn" onclick="cancelEdit(${idx})">Cancel</button>
+            </span>
           </div>
-          <div class="variant-body" data-script="${i}">${esc(substitute(v.script || ''))}</div>
+          <textarea class="script-edit-area" id="sea-${idx}">${esc(s.script)}</textarea>
+          <div class="refine-bar">
+            <input class="form-input" id="refine-${idx}" placeholder="Refine with AI: make it shorter, add urgency…">
+            <button class="mini-btn" onclick="refineScriptAI(${idx}, this)">✨ AI Refine</button>
+            <button class="mini-btn" onclick="saveToReservoir(${idx}, 'idea')">💾 Save to Reservoir</button>
+          </div>
         </div>`;
-      }).join('')}
+      }
+      return `<div class="script-card" id="sc-${idx}">
+        <div class="script-card-head">
+          <span><span class="script-card-fw">${esc(fw)}</span><span class="script-card-cat">${esc(cat)}</span></span>
+          <span class="script-card-actions">
+            <button class="copy-btn" onclick="copyScript(this, ${idx})">Copy</button>
+            <button class="copy-btn" onclick="editScriptInline(${idx})">Edit</button>
+            <button class="copy-btn" onclick="saveToReservoir(${idx}, 'idea')">💾</button>
+          </span>
+        </div>
+        <div class="script-body" data-script-idx="${idx}">${esc(s.script)}</div>
+      </div>`;
+    }).join('');
+
+    return `<div class="angle-acc">
+      <div class="angle-acc-head ${isOpen ? 'open' : ''}" data-angle="${esc(angle)}" onclick="toggleAngleGroup(this, this.dataset.angle)">
+        <span class="angle-acc-title">${esc(angle)}</span>
+        <span class="angle-acc-meta">${scripts.length} variant${scripts.length !== 1 ? 's' : ''} <span class="angle-acc-arrow">▾</span></span>
+      </div>
+      <div class="angle-acc-body">${cards}</div>
     </div>`;
   }).join('');
+
+  body.innerHTML = errHtml + angleHtml;
 }
 
 function copyScript(btn, i) {
-  const el = document.querySelector(`[data-script="${i}"]`);
-  if (!el) return;
-  navigator.clipboard.writeText(el.innerText);
+  const el = document.querySelector(`[data-script-idx="${i}"]`);
+  const text = el ? el.innerText : (scriptIndex[i]?.script || '');
+  if (!text) return;
+  navigator.clipboard.writeText(text);
   btn.textContent = 'Copied!'; btn.classList.add('copied');
   setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
 }
@@ -1035,6 +1245,197 @@ function exportCsv() {
   a.download = 'outreach-scripts.csv';
   a.click(); URL.revokeObjectURL(a.href);
   showNotif(`${all.length} scripts exported`);
+}
+
+// ─── ANGLE / GUARANTEE / SUGGEST ─────────────────────────────────────────────
+function toggleGuarantee(el) {
+  const g = el.dataset.g;
+  state.selectedGuarantee = state.selectedGuarantee === g ? null : g;
+  renderBuilder();
+}
+
+async function suggestAnglesAI() {
+  const input = document.getElementById('suggestInput');
+  const prompt = input?.value.trim() || '';
+  if (!adminKey) return showNotif('No admin key', true);
+  const n = niche(state.nicheId);
+  if (!n) return showNotif('Select a niche first', true);
+  const c = client(state.clientId);
+  const ctx = [c?.name, c?.caseStudy?.mechanism, c?.caseStudy?.result].filter(Boolean).join(' — ');
+  const btn = document.querySelector('.suggest-bar .mini-btn');
+  if (btn) { btn.textContent = '…'; btn.disabled = true; }
+  try {
+    const r = await api({ action: 'suggest_angles', niche: n.name, clientContext: ctx, prompt });
+    state.suggestedAngles = r.angles || [];
+    renderBuilder();
+    if (input) input.value = '';
+  } catch (e) { showNotif('Suggest failed: ' + e.message, true); }
+  if (btn) { btn.textContent = '→'; btn.disabled = false; }
+}
+
+function addSuggestedAngle(el) {
+  const a = el.dataset.a;
+  state.angles.add(a);
+  state.suggestedAngles = state.suggestedAngles.filter(x => x !== a);
+  // Save it as a custom angle for this client/niche
+  const c = client(state.clientId);
+  if (c && !c.savedAngles.some(x => x.text === a)) {
+    c.savedAngles.push({ id: uid('ang'), text: a, nicheId: state.nicheId });
+    persistConfig();
+  }
+  renderBuilder(); updateMatrix();
+}
+
+function saveCurrentAngles() {
+  const c = client(state.clientId);
+  if (!c) return showNotif('Select a client first', true);
+  let added = 0;
+  state.angles.forEach(a => {
+    if (!c.savedAngles.some(x => x.text === a)) {
+      c.savedAngles.push({ id: uid('ang'), text: a, nicheId: state.nicheId });
+      added++;
+    }
+  });
+  if (added) { persistConfig(); renderBuilder(); showNotif(`${added} angle${added > 1 ? 's' : ''} saved to client`); }
+  else showNotif('All selected angles already saved');
+}
+
+// ─── OUTPUT: ACCORDION + INLINE EDIT + RESERVOIR ─────────────────────────────
+function toggleAngleGroup(el, angle) {
+  el.classList.toggle('open');
+  if (state.openAngles.has(angle)) state.openAngles.delete(angle);
+  else state.openAngles.add(angle);
+}
+
+function editScriptInline(idx) {
+  state.editingScriptIdx = idx;
+  renderOutput();
+  setTimeout(() => {
+    const ta = document.getElementById('sea-' + idx);
+    if (ta) { ta.focus(); ta.selectionStart = ta.selectionEnd = ta.value.length; }
+  }, 50);
+}
+
+function applyEdit(idx) {
+  const ta = document.getElementById('sea-' + idx);
+  if (ta && scriptIndex[idx]) {
+    scriptIndex[idx].script = ta.value;
+    // Write back into state.results so Copy All / Export CSV pick up the edit
+    if (scriptIndex[idx].vref) scriptIndex[idx].vref.script = ta.value;
+    state.editingScriptIdx = -1;
+    renderOutput();
+  }
+}
+
+function cancelEdit(idx) {
+  state.editingScriptIdx = -1;
+  renderOutput();
+}
+
+async function refineScriptAI(idx, btn) {
+  const ta = document.getElementById('sea-' + idx);
+  const input = document.getElementById('refine-' + idx);
+  const prompt = input?.value.trim();
+  if (!prompt) return showNotif('Type a refinement instruction first', true);
+  if (!adminKey) return showNotif('No admin key', true);
+  const script = ta ? ta.value : scriptIndex[idx]?.script || '';
+  if (btn) { btn.textContent = '✨ Refining…'; btn.disabled = true; }
+  try {
+    const r = await api({ action: 'refine_script', script, prompt });
+    if (ta) ta.value = r.script;
+    if (input) input.value = '';
+    showNotif('Script refined');
+  } catch (e) { showNotif('Refine failed: ' + e.message, true); }
+  if (btn) { btn.textContent = '✨ AI Refine'; btn.disabled = false; }
+}
+
+function saveToReservoir(idx, status) {
+  const c = client(state.clientId);
+  if (!c) return showNotif('Select a client first', true);
+  // Capture latest text (may have been edited in textarea)
+  const ta = document.getElementById('sea-' + idx);
+  const script = ta ? ta.value : scriptIndex[idx]?.script || '';
+  const s = scriptIndex[idx];
+  if (!script || !s) return;
+  c.scriptReservoir.push({
+    id: uid('sr'),
+    script,
+    label: `${s.framework} · ${s.angle}`,
+    framework: s.framework,
+    angle: s.angle,
+    nicheId: s.nicheId || state.nicheId,
+    status,
+    note: '',
+    savedAt: new Date().toISOString().slice(0, 10)
+  });
+  persistConfig();
+  showNotif('Saved to Reservoir');
+  // Exit edit mode if we were in it
+  if (state.editingScriptIdx === idx) { state.editingScriptIdx = -1; renderOutput(); }
+}
+
+function renderReservoir(body) {
+  const c = client(state.clientId);
+  if (!c) { body.innerHTML = '<div class="placeholder-state"><div class="placeholder-text">Select a client to see their script reservoir.</div></div>'; return; }
+  const all = c.scriptReservoir || [];
+  const filter = state.reservoirFilter;
+  const shown = filter === 'all' ? all : all.filter(s => s.status === filter);
+
+  const counts = { all: all.length, idea: all.filter(x=>x.status==='idea').length, testing: all.filter(x=>x.status==='testing').length, winning: all.filter(x=>x.status==='winning').length };
+  const filterBtn = (f, label) => `<button class="tab-btn ${filter===f?'active':''}" onclick="state.reservoirFilter='${f}';renderOutput()">${label} <span style="opacity:.6">${counts[f]}</span></button>`;
+
+  if (!shown.length) {
+    body.innerHTML = `<div class="res-filter">${filterBtn('all','All')}${filterBtn('idea','Ideas')}${filterBtn('testing','Testing')}${filterBtn('winning','Winning')}</div>
+      <div class="placeholder-state" style="margin-top:32px"><div class="placeholder-icon">💾</div><div class="placeholder-text">${filter==='all'?'No scripts saved yet — generate scripts and hit 💾 to save.':'No scripts with this status.'}</div></div>`;
+    return;
+  }
+
+  const cards = shown.map(s => {
+    const statusCycle = { idea: 'testing', testing: 'winning', winning: 'idea' };
+    const nextLabel = { idea: '→ Testing', testing: '→ Winning', winning: '→ Idea' };
+    return `<div class="res-card">
+      <div class="res-card-head">
+        <div class="res-card-labels">
+          <span class="status-badge status-${s.status}" onclick="cycleReservoirStatus('${c.id}','${s.id}',this)" title="Click to advance status">${nextLabel[s.status]||s.status}</span>
+          <span style="font-size:11px;font-weight:600;color:var(--text)">${esc(s.framework||'')}</span>
+          ${s.angle ? `<span style="font-size:10px;color:var(--muted)">${esc(s.angle)}</span>` : ''}
+          <span style="font-size:10px;color:var(--border)">${esc(s.savedAt||'')}</span>
+        </div>
+        <div style="display:flex;gap:4px">
+          <button class="copy-btn" onclick="navigator.clipboard.writeText(this.closest('.res-card').querySelector('.res-card-body').innerText);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1800)">Copy</button>
+          <button class="copy-btn danger" onclick="deleteReservoirScript('${c.id}','${s.id}')" style="color:var(--red);border-color:rgba(239,68,68,.35)">Del</button>
+        </div>
+      </div>
+      <div class="res-card-body" onclick="this.classList.toggle('expanded')">${esc(s.script)}</div>
+      <div class="res-card-note"><input class="res-card-note-input" placeholder="Note: reply rate, test result…" value="${esc(s.note||'')}" onchange="updateReservoirNote('${c.id}','${s.id}',this.value)"></div>
+    </div>`;
+  }).join('');
+
+  body.innerHTML = `<div class="res-filter" style="padding-bottom:10px">${filterBtn('all','All')}${filterBtn('idea','Ideas')}${filterBtn('testing','Testing')}${filterBtn('winning','Winning')}</div>
+    <div style="padding:0 14px 14px">${cards}</div>`;
+}
+
+function cycleReservoirStatus(clientId, scriptId, btn) {
+  const c = client(clientId); if (!c) return;
+  const s = c.scriptReservoir.find(x => x.id === scriptId); if (!s) return;
+  const next = { idea: 'testing', testing: 'winning', winning: 'idea' };
+  const label = { idea: '→ Testing', testing: '→ Winning', winning: '→ Idea' };
+  s.status = next[s.status] || 'idea';
+  btn.className = `status-badge status-${s.status}`;
+  btn.textContent = label[s.status];
+  persistConfig();
+}
+
+function deleteReservoirScript(clientId, scriptId) {
+  const c = client(clientId); if (!c) return;
+  c.scriptReservoir = c.scriptReservoir.filter(x => x.id !== scriptId);
+  persistConfig(); renderOutput();
+}
+
+function updateReservoirNote(clientId, scriptId, note) {
+  const c = client(clientId); if (!c) return;
+  const s = c.scriptReservoir.find(x => x.id === scriptId); if (!s) return;
+  s.note = note; persistConfig();
 }
 
 // ─── ADMIN ─────────────────────────────────────────────────────────────────────
@@ -1375,12 +1776,15 @@ function adminClients() {
         nicheIds: structuredClone(c.nicheIds || []),
         overrides: structuredClone(c.frameworkOverrides || {}),
         competitorIntel: structuredClone(c.competitorIntel || []),
-        candidates: []
+        candidates: [],
+        transcripts: structuredClone(c.transcripts || []),
+        suggestedOffers: []
       };
       pendingTags['ec-pains'] = { arr: structuredClone(cs.pains || []), placeholder: 'add pain + Enter' };
       pendingTags['ec-objections'] = { arr: structuredClone(cs.objections || []), placeholder: 'add objection + Enter' };
       pendingTags['ec-desires'] = { arr: structuredClone(cs.desires || []), placeholder: 'add desire + Enter' };
       pendingTags['ec-avoid'] = { arr: structuredClone(c.avoid || []), placeholder: 'add exclusion + Enter' };
+      pendingTags['ec-guarantees'] = { arr: structuredClone((c.guarantees || []).map(g => g.text || g)), placeholder: 'add guarantee / risk reversal + Enter' };
       html += `
       <div class="editor">
         <h3>${isNew ? 'New client' : 'Edit: ' + esc(c.name)}</h3>
@@ -1419,18 +1823,51 @@ function adminClients() {
         <div class="form-group"><label class="form-label">Mechanism (how they get results)</label><input class="form-input" id="ec-mechanism" value="${esc(cs.mechanism || '')}"></div>
         <div class="form-group"><label class="form-label">Proof line (1 sendable sentence)</label>
           <textarea class="form-textarea" id="ec-proofline">${esc(cs.proofLine || '')}</textarea></div>
-        <div class="grid2">
-          <div class="form-group"><label class="form-label">Offers (one per line)</label>
-            <textarea class="form-textarea" id="ec-offers">${esc((cs.offers || []).join('\n'))}</textarea></div>
-          <div class="form-group"><label class="form-label">Case studies (one per line)</label>
-            <textarea class="form-textarea" id="ec-casestudies">${esc((cs.caseStudies || []).join('\n'))}</textarea></div>
-        </div>
         <div class="form-group"><label class="form-label">Niche pains</label><div class="tags" id="ec-pains"></div></div>
         <div class="form-group"><label class="form-label">Common objections</label><div class="tags" id="ec-objections"></div></div>
         <div class="form-group"><label class="form-label">Prospect desires</label><div class="tags" id="ec-desires"></div></div>
         <div class="form-group"><label class="form-label" style="color:var(--red)">🚫 Do NOT mention — things this client never wants in scripts</label>
           <div class="tags" id="ec-avoid"></div>
           <div class="hint">e.g. a past client's name, pricing, a guarantee they dropped, competitor names, words they hate. Scripts are hard-blocked from using these.</div></div>
+
+        <div class="form-group">
+          <label class="form-label" style="color:var(--green)">✅ Guarantees / Risk Reversals — weave into scripts when selected</label>
+          <div class="tags" id="ec-guarantees"></div>
+          <div class="hint">e.g. "10 booked calls in 30 days or you don't pay", "risk-free pilot — only pay for results". These appear as selectable chips in the builder.</div>
+        </div>
+
+        <div class="info-block" style="border-color:rgba(37,99,235,.3)">
+          <div class="info-title">💡 Offers — current offers &amp; AI suggestions</div>
+          <div class="grid2">
+            <div class="form-group"><label class="form-label">Offers (one per line)</label>
+              <textarea class="form-textarea" id="ec-offers">${esc((cs.offers || []).join('\n'))}</textarea></div>
+            <div class="form-group"><label class="form-label">Case studies (one per line)</label>
+              <textarea class="form-textarea" id="ec-casestudies">${esc((cs.caseStudies || []).join('\n'))}</textarea></div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="mini-btn" id="btn-suggest-offers" onclick="suggestClientOffers()">💡 AI Suggest Offer Packages</button>
+            <span class="hint" id="ec-offer-status"></span>
+          </div>
+          <div id="ec-suggested-offers"></div>
+        </div>
+
+        <div class="info-block">
+          <div class="info-title">📞 Call Transcripts — paste recordings to extract angles &amp; pains</div>
+          <div class="hint" style="margin-bottom:10px">Paste a sales call transcript (even 1-hour recordings). AI extracts pain points, desires, angles, and offer ideas directly into this client profile.</div>
+          <div class="grid2">
+            <div class="form-group"><label class="form-label">Transcript title</label>
+              <input class="form-input" id="ec-tr-title" placeholder="e.g. Discovery call — MedSpa owner June 2026"></div>
+            <div style="display:flex;align-items:flex-end;gap:6px;padding-bottom:12px">
+              <button class="mini-btn" onclick="addTranscript()" style="white-space:nowrap">💾 Save transcript</button>
+              <button class="mini-btn" id="btn-extract" onclick="extractTranscript()" style="white-space:nowrap">🤖 Save &amp; Extract</button>
+            </div>
+          </div>
+          <div class="form-group"><label class="form-label">Transcript text (paste full transcript)</label>
+            <textarea class="form-textarea" id="ec-tr-text" style="min-height:90px;font-size:11px" placeholder="Paste the full call transcript here…"></textarea></div>
+          <div class="hint" id="ec-tr-status"></div>
+          <div id="ec-transcripts"></div>
+        </div>
+
         <div class="form-group"><label class="form-label">Framework overrides — this client's own framework/notes per targeted niche</label>
           <div id="ec-overrides"></div></div>
         <div style="display:flex;gap:8px">
@@ -1438,7 +1875,7 @@ function adminClients() {
           <button class="mini-btn" onclick="state.editing=null;editClient=null;renderAdmin()">Cancel</button>
         </div>
       </div>`;
-      setTimeout(() => { renderEditNiches(); renderOverrideBoxes(); renderCompetitors(); }, 0);
+      setTimeout(() => { renderEditNiches(); renderOverrideBoxes(); renderCompetitors(); renderTranscripts(); }, 0);
     }
   }
   return html;
@@ -1607,6 +2044,118 @@ async function findCompetitors() {
   aiBusy = false;
 }
 
+function renderTranscripts() {
+  const el = document.getElementById('ec-transcripts'); if (!el || !editClient) return;
+  const list = editClient.transcripts;
+  if (!list.length) { el.innerHTML = '<div class="hint" style="margin-top:6px">No transcripts saved yet.</div>'; return; }
+  el.innerHTML = list.map((t, i) => `
+    <div class="transcript-card">
+      <div style="display:flex;justify-content:space-between;align-items:start">
+        <div>
+          <div class="transcript-title">${esc(t.title || 'Untitled transcript')}</div>
+          <div class="transcript-meta">${t.extractedAt ? '🤖 Extracted ' + esc(t.extractedAt) : 'Not extracted yet'} · ${Math.round((t.text||'').length/4)} words</div>
+          ${t.angles?.length ? `<div class="transcript-meta" style="margin-top:3px">${t.angles.length} angles · ${(t.pains||[]).length} pains · ${(t.offers||[]).length} offers</div>` : ''}
+        </div>
+        <button class="mini-btn danger" onclick="deleteTranscript(${i})">Delete</button>
+      </div>
+    </div>`).join('');
+}
+
+function addTranscript() {
+  const title = document.getElementById('ec-tr-title')?.value.trim();
+  const text = document.getElementById('ec-tr-text')?.value.trim();
+  if (!text) return showNotif('Paste the transcript text first', true);
+  editClient.transcripts.push({ id: uid('tr'), title: title || 'Untitled', text, extractedAt: '', pains: [], desires: [], angles: [], offers: [] });
+  document.getElementById('ec-tr-title').value = '';
+  document.getElementById('ec-tr-text').value = '';
+  renderTranscripts();
+  showNotif('Transcript saved');
+}
+
+function deleteTranscript(i) {
+  editClient.transcripts.splice(i, 1);
+  renderTranscripts();
+}
+
+async function extractTranscript() {
+  const title = document.getElementById('ec-tr-title')?.value.trim();
+  const text = document.getElementById('ec-tr-text')?.value.trim();
+  if (!text) return showNotif('Paste transcript text first', true);
+  if (!adminKey) return showNotif('No admin key', true);
+  const btn = document.getElementById('btn-extract');
+  const status = document.getElementById('ec-tr-status');
+  if (btn) { btn.textContent = '🤖 Extracting…'; btn.disabled = true; }
+  if (status) status.textContent = '🔍 AI reading transcript (~20s)…';
+  try {
+    const r = await api({ action: 'extract_transcript', text });
+    // Add transcript to list with extracted data
+    const tr = { id: uid('tr'), title: title || 'Untitled', text, extractedAt: new Date().toISOString().slice(0,10), pains: r.pains||[], desires: r.desires||[], angles: r.angles||[], offers: r.offers||[] };
+    editClient.transcripts.push(tr);
+    // Merge into tag editors
+    mergeTags('ec-pains', r.pains);
+    mergeTags('ec-desires', r.desires);
+    mergeTags('ec-objections', []);  // keep existing
+    // Append offers into textarea
+    appendLines('ec-offers', r.offers);
+    document.getElementById('ec-tr-title').value = '';
+    document.getElementById('ec-tr-text').value = '';
+    if (status) status.innerHTML = `✅ Extracted: ${(r.pains||[]).length} pains, ${(r.desires||[]).length} desires, ${(r.angles||[]).length} angles, ${(r.offers||[]).length} offers. All merged into profile.<br>${r.insights ? '<i>' + esc(r.insights) + '</i>' : ''}`;
+    renderTranscripts();
+    showNotif('Transcript extracted and merged');
+  } catch (e) {
+    if (status) status.textContent = '⚠️ ' + e.message;
+    showNotif('Extract failed: ' + e.message, true);
+  }
+  if (btn) { btn.textContent = '🤖 Save & Extract'; btn.disabled = false; }
+}
+
+async function suggestClientOffers() {
+  if (!adminKey) return showNotif('No admin key', true);
+  const name = document.getElementById('ec-name')?.value.trim();
+  const mechanism = document.getElementById('ec-mechanism')?.value.trim();
+  const result = document.getElementById('ec-result')?.value.trim();
+  const proofLine = document.getElementById('ec-proofline')?.value.trim();
+  const offers = document.getElementById('ec-offers')?.value.trim();
+  const cs = document.getElementById('ec-casestudies')?.value.trim();
+  if (!mechanism && !result) return showNotif('Add mechanism and result first', true);
+  const btn = document.getElementById('btn-suggest-offers');
+  const status = document.getElementById('ec-offer-status');
+  if (btn) { btn.textContent = '💡 Generating…'; btn.disabled = true; }
+  if (status) status.textContent = 'Asking AI…';
+  try {
+    const context = [name, mechanism, result, proofLine, offers, cs].filter(Boolean).join('\n');
+    const r = await api({ action: 'suggest_offers', context });
+    editClient.suggestedOffers = r.offers || [];
+    renderSuggestedOffers();
+    if (status) status.textContent = '';
+    showNotif('Offer suggestions ready');
+  } catch (e) {
+    if (status) status.textContent = '⚠️ ' + e.message;
+  }
+  if (btn) { btn.textContent = '💡 AI Suggest Offer Packages'; btn.disabled = false; }
+}
+
+function renderSuggestedOffers() {
+  const el = document.getElementById('ec-suggested-offers'); if (!el || !editClient) return;
+  const offers = editClient.suggestedOffers || [];
+  if (!offers.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="info-title" style="margin-top:10px">AI-suggested offer packages — click to add</div>` +
+    offers.map((o, i) => `
+      <div class="list-row" style="margin-bottom:5px">
+        <div style="font-size:12px">${esc(o.name ? '<b>'+o.name+'</b> — '+o.description : o)}</div>
+        <button class="mini-btn" onclick="addSuggestedOffer(${i})">+ Add</button>
+      </div>`).join('');
+}
+
+function addSuggestedOffer(i) {
+  const offer = editClient.suggestedOffers?.[i];
+  if (!offer) return;
+  const text = typeof offer === 'string' ? offer : (offer.name && offer.description ? `${offer.name} — ${offer.description}` : offer.name || offer.description || '');
+  appendLines('ec-offers', [text]);
+  editClient.suggestedOffers.splice(i, 1);
+  renderSuggestedOffers();
+}
+
 function saveClient(isNew) {
   const name = document.getElementById('ec-name').value.trim();
   if (!name) return showNotif('Name required', true);
@@ -1631,7 +2180,11 @@ function saveClient(isNew) {
     },
     frameworkOverrides: editClient.overrides,
     competitorIntel: editClient.competitorIntel,
-    avoid: document.getElementById('ec-avoid').__arr
+    avoid: document.getElementById('ec-avoid').__arr,
+    guarantees: (document.getElementById('ec-guarantees').__arr || []).map(t => ({ id: uid('g'), text: String(t).trim() })).filter(g => g.text),
+    transcripts: editClient.transcripts,
+    scriptReservoir: (client(isNew ? null : state.editing?.id)?.scriptReservoir) || [],
+    savedAngles: (client(isNew ? null : state.editing?.id)?.savedAngles) || []
   };
   if (isNew) { config.clients.push(obj); state.clientId = obj.id; }
   else config.clients = config.clients.map(c => c.id === obj.id ? obj : c);
