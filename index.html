@@ -926,9 +926,9 @@
     <div class="modal-foot">
       <button class="mini-btn" onclick="modalSnapshot()">📌 Save as version</button>
       <div style="flex:1"></div>
-      <button class="mini-btn" onclick="modalFollowups()">↪ Follow-ups</button>
-      <button class="mini-btn" onclick="modalSaveReservoir()">💾 To Reservoir</button>
-      <button class="btn btn-primary" style="width:auto;padding:8px 18px" onclick="modalApply()">Apply to script</button>
+      <button class="mini-btn" id="modalFuBtn" onclick="modalFollowups()">↪ Follow-ups</button>
+      <button class="mini-btn" id="modalResBtn" onclick="modalSaveReservoir()">💾 To Reservoir</button>
+      <button class="btn btn-primary" id="modalApplyBtn" style="width:auto;padding:8px 18px" onclick="modalApply()">Apply to script</button>
     </div>
   </div>
 </div>
@@ -1958,35 +1958,117 @@ function toggleAngleGroup(el, angle) {
   else state.openAngles.add(angle);
 }
 
-// ── Script edit MODAL with version history + clean AI composer ──
-// Versions live on the variant object (vref) so they survive output re-renders
-// within a generation. Each AI rewrite or manual snapshot is a version you can
-// click back to.
-let modalIdx = -1;
+// ── Text edit MODAL with version history + clean AI composer ──
+// One modal, many editables: generated scripts, reservoir scripts, follow-ups.
+// modalCtx describes what's being edited; versions live on ctx.store so they
+// survive re-renders (and persist when the store is a config object).
+let modalIdx = -1;   // set only for the generated-script path
+let modalCtx = null; // {title, sub, store, fallbackText, applyLabel, showReservoir, showFollowups, onApply(text)}
 
-function ensureVersions(s) {
-  const v = s.vref;
-  if (!v) return [{ id: uid('v'), label: 'Original', tag: 'orig', text: s.script }];
-  if (!v._versions || !v._versions.length) {
-    v._versions = [{ id: uid('v'), label: 'Original', tag: 'orig', text: s.script }];
-    v._activeVersion = 0;
+function ensureCtxVersions() {
+  const st = modalCtx.store;
+  if (!st._versions || !st._versions.length) {
+    st._versions = [{ id: uid('v'), label: 'Original', tag: 'orig', text: modalCtx.fallbackText }];
+    st._activeVersion = 0;
   }
-  return v._versions;
+  return st._versions;
 }
 
-function openEditModal(idx) {
-  const s = scriptIndex[idx]; if (!s) return;
-  modalIdx = idx;
-  ensureVersions(s);
-  document.getElementById('editModalTitle').textContent = s.framework || 'Edit script';
-  document.getElementById('editModalSub').textContent = s.angle || '';
+// Modals can open over each other (edit a follow-up draft from inside the
+// follow-up modal, or launch follow-ups from the editor) — last opened wins.
+let zTop = 1000;
+function bringToTop(el) { if (el) el.style.zIndex = ++zTop; }
+
+function openModalCtx(ctx) {
+  modalCtx = ctx;
+  ensureCtxVersions();
+  bringToTop(document.getElementById('editModal'));
+  document.getElementById('editModalTitle').textContent = ctx.title || 'Edit';
+  document.getElementById('editModalSub').textContent = ctx.sub || '';
   document.getElementById('modalAiInput').value = '';
-  const active = s.vref?._activeVersion ?? 0;
-  document.getElementById('modalScript').value = (s.vref?._versions?.[active]?.text) ?? s.script;
+  const st = ctx.store;
+  const active = st._activeVersion ?? 0;
+  document.getElementById('modalScript').value = st._versions?.[active]?.text ?? ctx.fallbackText ?? '';
+  const resBtn = document.getElementById('modalResBtn');
+  const fuBtn = document.getElementById('modalFuBtn');
+  if (resBtn) resBtn.style.display = ctx.showReservoir ? '' : 'none';
+  if (fuBtn) fuBtn.style.display = ctx.showFollowups ? '' : 'none';
+  const applyBtn = document.getElementById('modalApplyBtn');
+  if (applyBtn) applyBtn.textContent = ctx.applyLabel || 'Apply';
   clearModalSelection();
   renderVersionList();
   document.getElementById('editModal').classList.add('show');
   setTimeout(() => document.getElementById('modalScript').focus(), 60);
+}
+
+// Generated-script path (Builder output cards)
+function openEditModal(idx) {
+  const s = scriptIndex[idx]; if (!s) return;
+  modalIdx = idx;
+  openModalCtx({
+    title: s.framework || 'Edit script', sub: s.angle || '',
+    store: s.vref || s, fallbackText: s.script,
+    applyLabel: 'Apply to script', showReservoir: true, showFollowups: true,
+    onApply(text) {
+      s.script = text;
+      if (s.vref) s.vref.script = text;
+      renderOutput();
+      showNotif('Applied to script');
+    }
+  });
+}
+
+// Reservoir-script path — same editor, edits persist to the saved script.
+function editReservoirScript(clientId, scriptId) {
+  const c = client(clientId);
+  const item = (c?.scriptReservoir || []).find(x => x.id === scriptId);
+  if (!item) return;
+  // Seed the version rail from versions stored at save time
+  if ((!item._versions || !item._versions.length) && Array.isArray(item.versions) && item.versions.length) {
+    item._versions = item.versions.map(v => ({ id: uid('v'), label: v.label, tag: v.tag, text: v.text }));
+    item._activeVersion = item._versions.length - 1;
+  }
+  openModalCtx({
+    title: item.framework || 'Reservoir script', sub: item.angle || item.label || '',
+    store: item, fallbackText: item.script,
+    applyLabel: 'Save changes', showReservoir: false, showFollowups: true,
+    onApply(text) {
+      item.script = text;
+      item.versions = (item._versions || []).map(v => ({ label: v.label, tag: v.tag, text: v.text }));
+      persistConfig();
+      if (state.screen === 'builder') renderOutput();
+      showNotif('Reservoir script updated');
+    }
+  });
+}
+
+// Follow-up item path — works for saved sequences AND drafts in the fu modal.
+function editFollowupItem(clientId, seqId, i) {
+  const c = client(clientId);
+  const seq = (c?.followups || []).find(x => x.id === seqId);
+  const it = seq?.items?.[i]; if (!it) return;
+  openModalCtx({
+    title: `Day +${it.day} follow-up`, sub: it.framework || seq.parentLabel || '',
+    store: it, fallbackText: it.text,
+    applyLabel: 'Save follow-up', showReservoir: false, showFollowups: false,
+    onApply(text) {
+      it.text = text;
+      persistConfig();
+      if (state.screen === 'builder') renderOutput();
+      if (state.screen === 'growth') renderGrowthPreview();
+      showNotif('Follow-up updated');
+    }
+  });
+}
+
+function editFollowupDraft(i) {
+  const it = fuState?.result?.[i]; if (!it) return;
+  openModalCtx({
+    title: `Day +${it.day} follow-up (draft)`, sub: it.framework || '',
+    store: it, fallbackText: it.text,
+    applyLabel: 'Apply to draft', showReservoir: false, showFollowups: false,
+    onApply(text) { it.text = text; renderFollowupModal(); showNotif('Draft updated'); }
+  });
 }
 
 // ── Highlight-to-edit: select part of the script, then the AI composer
@@ -2016,12 +2098,14 @@ function clearModalSelection() {
 function closeEditModal() {
   document.getElementById('editModal').classList.remove('show');
   modalIdx = -1;
+  modalCtx = null;
 }
 
 function renderVersionList() {
-  const s = scriptIndex[modalIdx]; if (!s) return;
-  const versions = s.vref?._versions || [];
-  const active = s.vref?._activeVersion ?? 0;
+  if (!modalCtx) return;
+  const st = modalCtx.store;
+  const versions = st._versions || [];
+  const active = st._activeVersion ?? 0;
   const list = document.getElementById('versionList');
   document.getElementById('versionCount').textContent = versions.length;
   list.innerHTML = versions.map((v, i) => `
@@ -2032,30 +2116,31 @@ function renderVersionList() {
 }
 
 function loadVersion(i) {
-  const s = scriptIndex[modalIdx]; if (!s?.vref?._versions?.[i]) return;
-  s.vref._activeVersion = i;
-  document.getElementById('modalScript').value = s.vref._versions[i].text;
+  const st = modalCtx?.store; if (!st?._versions?.[i]) return;
+  st._activeVersion = i;
+  document.getElementById('modalScript').value = st._versions[i].text;
   clearModalSelection();
   renderVersionList();
 }
 
 function pushVersion(label, tag, text) {
-  const s = scriptIndex[modalIdx]; if (!s?.vref) return;
-  s.vref._versions.push({ id: uid('v'), label, tag, text });
-  s.vref._activeVersion = s.vref._versions.length - 1;
+  const st = modalCtx?.store; if (!st) return;
+  st._versions = st._versions || [];
+  st._versions.push({ id: uid('v'), label, tag, text });
+  st._activeVersion = st._versions.length - 1;
   renderVersionList();
 }
 
 function modalSnapshot() {
-  const s = scriptIndex[modalIdx]; if (!s) return;
+  if (!modalCtx) return;
   const text = document.getElementById('modalScript').value;
-  const n = (s.vref?._versions || []).filter(v => v.tag === 'edit').length + 1;
+  const n = (modalCtx.store._versions || []).filter(v => v.tag === 'edit').length + 1;
   pushVersion('Manual edit ' + n, 'edit', text);
   showNotif('Version saved');
 }
 
 async function modalAiRefine() {
-  const s = scriptIndex[modalIdx]; if (!s) return;
+  if (!modalCtx) return;
   const input = document.getElementById('modalAiInput');
   const prompt = input.value.trim();
   if (!prompt) return showNotif('Tell the AI what to change', true);
@@ -2084,18 +2169,14 @@ async function modalAiRefine() {
 }
 
 function modalApply() {
-  const s = scriptIndex[modalIdx]; if (!s) return;
+  if (!modalCtx) return;
   const text = document.getElementById('modalScript').value;
-  s.script = text;
-  if (s.vref) {
-    s.vref.script = text;
-    // Make sure the applied text is captured as the active version
-    const active = s.vref._activeVersion ?? 0;
-    if (s.vref._versions?.[active]?.text !== text) pushVersion('Manual edit', 'edit', text);
-  }
+  const st = modalCtx.store;
+  const active = st._activeVersion ?? 0;
+  if (st._versions?.[active]?.text !== text) pushVersion('Manual edit', 'edit', text);
+  const apply = modalCtx.onApply;
   closeEditModal();
-  renderOutput();
-  showNotif('Applied to script');
+  if (apply) apply(text);
 }
 
 function modalSaveReservoir() {
@@ -2107,9 +2188,9 @@ function modalSaveReservoir() {
 }
 
 function modalFollowups() {
-  const s = scriptIndex[modalIdx]; if (!s) return;
+  if (!modalCtx) return;
   if (!state.clientId) return showNotif('Select a client first', true);
-  openFollowups(state.clientId, `${s.framework} · ${s.angle}`, document.getElementById('modalScript').value);
+  openFollowups(state.clientId, modalCtx.title + (modalCtx.sub ? ' · ' + modalCtx.sub : ''), document.getElementById('modalScript').value);
 }
 
 function saveToReservoir(idx, status) {
@@ -2144,14 +2225,7 @@ function renderReservoir(body) {
   const counts = { all: all.length, idea: all.filter(x=>x.status==='idea').length, testing: all.filter(x=>x.status==='testing').length, winning: all.filter(x=>x.status==='winning').length };
   const filterBtn = (f, label) => `<button class="tab-btn ${filter===f?'active':''}" onclick="state.reservoirFilter='${f}';renderOutput()">${label} <span style="opacity:.6">${counts[f]}</span></button>`;
 
-  if (!shown.length) {
-    body.innerHTML = `<div class="res-filter">${filterBtn('all','All')}${filterBtn('idea','Ideas')}${filterBtn('testing','Testing')}${filterBtn('winning','Winning')}</div>
-      <div class="placeholder-state" style="margin-top:32px"><div class="placeholder-icon">💾</div><div class="placeholder-text">${filter==='all'?'No scripts saved yet — generate scripts and hit 💾 to save.':'No scripts with this status.'}</div></div>`;
-    return;
-  }
-
-  const cards = shown.map(s => {
-    const statusCycle = { idea: 'testing', testing: 'winning', winning: 'idea' };
+  const cards = shown.length ? shown.map(s => {
     const nextLabel = { idea: '→ Testing', testing: '→ Winning', winning: '→ Idea' };
     return `<div class="res-card">
       <div class="res-card-head">
@@ -2163,6 +2237,7 @@ function renderReservoir(body) {
         </div>
         <div style="display:flex;gap:4px">
           <button class="copy-btn" onclick="navigator.clipboard.writeText(this.closest('.res-card').querySelector('.res-card-body').innerText);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1800)">Copy</button>
+          <button class="copy-btn" onclick="editReservoirScript('${c.id}','${s.id}')" title="Edit with the full editor — versions, AI, highlight-rewrite">✏️ Edit</button>
           <button class="copy-btn" onclick="openFollowupsFromReservoir('${c.id}','${s.id}')" style="color:var(--accent2);border-color:rgba(37,99,235,.4)" title="Write outbound follow-ups to this script">↪ Follow-ups</button>
           <button class="copy-btn" onclick="sendToGrowth('${c.id}','${s.id}')" style="color:var(--accent2);border-color:rgba(37,99,235,.4)" title="Add this script to a growth plan, carrying the niche + angles over">📈 Growth</button>
           <button class="copy-btn danger" onclick="deleteReservoirScript('${c.id}','${s.id}')" style="color:var(--red);border-color:rgba(239,68,68,.35)">Del</button>
@@ -2171,10 +2246,52 @@ function renderReservoir(body) {
       <div class="res-card-body" onclick="this.classList.toggle('expanded')">${esc(s.script)}</div>
       <div class="res-card-note"><input class="res-card-note-input" placeholder="Note: reply rate, test result…" value="${esc(s.note||'')}" onchange="updateReservoirNote('${c.id}','${s.id}',this.value)"></div>
     </div>`;
-  }).join('');
+  }).join('') : `<div class="placeholder-state" style="padding:32px 24px"><div class="placeholder-icon">💾</div><div class="placeholder-text">${filter==='all'?'No scripts saved yet — generate scripts and hit 💾 to save.':'No scripts with this status.'}</div></div>`;
+
+  // Saved follow-up sequences live here too, right under the scripts.
+  const seqs = c.followups || [];
+  const fuCards = seqs.map(seq => `
+    <div class="res-card" style="border-color:rgba(37,99,235,.35)">
+      <div class="res-card-head">
+        <div class="res-card-labels">
+          <span class="gp-badge strategy">↪ sequence</span>
+          <span style="font-size:11px;font-weight:600;color:var(--text)">${esc(seq.parentLabel)}</span>
+          <span style="font-size:10px;color:var(--muted)">${seq.items.length} follow-ups · every ${seq.gapDays || 2} days</span>
+          <span style="font-size:10px;color:var(--border)">${esc(seq.createdAt||'')}</span>
+        </div>
+        <div style="display:flex;gap:4px">
+          <button class="copy-btn" onclick="copyFollowupSeq('${c.id}','${seq.id}',this)">Copy all</button>
+          <button class="copy-btn danger" onclick="deleteFollowupSeq('${c.id}','${seq.id}')" style="color:var(--red);border-color:rgba(239,68,68,.35)">Del</button>
+        </div>
+      </div>
+      ${seq.items.map((it, i) => `
+        <div class="script-card">
+          <div class="script-card-head">
+            <span><span class="script-card-fw">Day +${it.day}</span><span class="script-card-cat">${esc(it.framework || '')}</span></span>
+            <span class="script-card-actions">
+              <button class="copy-btn" onclick="navigator.clipboard.writeText(this.closest('.script-card').querySelector('.script-body').innerText);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1800)">Copy</button>
+              <button class="copy-btn" onclick="editFollowupItem('${c.id}','${seq.id}',${i})">✏️ Edit</button>
+            </span>
+          </div>
+          <div class="script-body">${esc(it.text)}</div>
+        </div>`).join('')}
+    </div>`).join('');
 
   body.innerHTML = `<div class="res-filter" style="padding-bottom:10px">${filterBtn('all','All')}${filterBtn('idea','Ideas')}${filterBtn('testing','Testing')}${filterBtn('winning','Winning')}</div>
-    <div style="padding:0 14px 14px">${cards}</div>`;
+    <div style="padding:0 14px 14px">${cards}
+    ${seqs.length ? `<div class="section-label" style="margin:16px 0 8px">↪ Outbound follow-up sequences (${seqs.length})</div>${fuCards}` : ''}</div>`;
+}
+
+function deleteFollowupSeq(clientId, seqId) {
+  const c = client(clientId); if (!c || !confirm('Delete this follow-up sequence?')) return;
+  c.followups = (c.followups || []).filter(x => x.id !== seqId);
+  persistConfig(); renderOutput();
+}
+
+function copyFollowupSeq(clientId, seqId, btn) {
+  const seq = (client(clientId)?.followups || []).find(x => x.id === seqId); if (!seq) return;
+  navigator.clipboard.writeText(seq.items.map(i => `--- Day +${i.day} · ${i.framework || ''} ---\n${i.text}`).join('\n\n'));
+  btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy all', 1800);
 }
 
 function cycleReservoirStatus(clientId, scriptId, btn) {
@@ -3307,17 +3424,21 @@ function adminSettings() {
     </div>
     <div class="info-block">
       <div class="info-title">📊 Growth plan defaults (funnel + personalization)</div>
-      <div class="hint" style="margin-bottom:8px">Starting assumptions for new plans (each plan can override). Rates are decimals (0.04 = 4%).</div>
+      <div class="hint" style="margin-bottom:8px">Starting assumptions for new plans (each plan can override). Rates are percentages (4 = 4%).</div>
       <div class="grid2">
         <div>
           <div class="gp-sub" style="color:var(--accent2)">📧 Email</div>
-          ${['leadsPerMonth', 'verifyRate', 'sendsPerLead', 'replyRate', 'positiveRate', 'bookRate'].map(k =>
-            `<div class="assume-grid"><label>${k}</label><input class="num-input" type="number" step="0.01" id="pd-email-${k}" value="${config.settings.planDefaults.email[k]}"></div>`).join('')}
+          ${['leadsPerMonth', 'verifyRate', 'sendsPerLead', 'replyRate', 'positiveRate', 'bookRate'].map(k => {
+            const isRate = PD_RATE_KEYS.has(k), v = config.settings.planDefaults.email[k];
+            return `<div class="assume-grid"><label>${k}${isRate ? ' (%)' : ''}</label><input class="num-input" type="number" step="${isRate ? 0.5 : 1}" id="pd-email-${k}" value="${isRate ? Math.round(v * 1000) / 10 : v}"></div>`;
+          }).join('')}
         </div>
         <div>
           <div class="gp-sub" style="color:var(--accent2)">🔗 LinkedIn</div>
-          ${['connectsPerDay', 'daysPerMonth', 'acceptRate', 'replyRate', 'positiveRate', 'bookRate'].map(k =>
-            `<div class="assume-grid"><label>${k}</label><input class="num-input" type="number" step="0.01" id="pd-linkedin-${k}" value="${config.settings.planDefaults.linkedin[k]}"></div>`).join('')}
+          ${['connectsPerDay', 'daysPerMonth', 'acceptRate', 'replyRate', 'positiveRate', 'bookRate'].map(k => {
+            const isRate = PD_RATE_KEYS.has(k), v = config.settings.planDefaults.linkedin[k];
+            return `<div class="assume-grid"><label>${k}${isRate ? ' (%)' : ''}</label><input class="num-input" type="number" step="${isRate ? 0.5 : 1}" id="pd-linkedin-${k}" value="${isRate ? Math.round(v * 1000) / 10 : v}"></div>`;
+          }).join('')}
         </div>
       </div>
       <div class="gp-sub" style="color:var(--accent2)">✨ Personalization (Gemini 2.5)</div>
@@ -3393,10 +3514,12 @@ async function testNotion() {
   }
 }
 
+const PD_RATE_KEYS = new Set(['verifyRate', 'replyRate', 'positiveRate', 'bookRate', 'acceptRate']);
 function savePlanDefaults() {
   const pd = config.settings.planDefaults;
-  ['leadsPerMonth', 'verifyRate', 'sendsPerLead', 'replyRate', 'positiveRate', 'bookRate'].forEach(k => { pd.email[k] = +document.getElementById('pd-email-' + k).value || 0; });
-  ['connectsPerDay', 'daysPerMonth', 'acceptRate', 'replyRate', 'positiveRate', 'bookRate'].forEach(k => { pd.linkedin[k] = +document.getElementById('pd-linkedin-' + k).value || 0; });
+  const read = (ch, k) => { const v = +document.getElementById(`pd-${ch}-` + k).value || 0; return PD_RATE_KEYS.has(k) ? v / 100 : v; };
+  ['leadsPerMonth', 'verifyRate', 'sendsPerLead', 'replyRate', 'positiveRate', 'bookRate'].forEach(k => { pd.email[k] = read('email', k); });
+  ['connectsPerDay', 'daysPerMonth', 'acceptRate', 'replyRate', 'positiveRate', 'bookRate'].forEach(k => { pd.linkedin[k] = read('linkedin', k); });
   pd.personalization.inputTokensPerLead = +document.getElementById('pd-pers-inputTokensPerLead').value || 0;
   pd.personalization.outputTokensPerLead = +document.getElementById('pd-pers-outputTokensPerLead').value || 0;
   persistConfig(); showNotif('Plan defaults saved');
@@ -3640,12 +3763,13 @@ function renderGrowth() { renderGrowthForm(); renderGrowthPreview(); gpMaybeAuto
 function renderGrowthForm() {
   const el = document.getElementById('growthForm'); if (!el) return;
   const g = state.growth, c = gpClient();
-  const clientOpts = config.clients.map(x => `<option value="${x.id}" ${x.id === g.clientId ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
   const plans = c?.growthPlans || [];
 
   let html = `
-    <div class="form-group"><label class="form-label">Client</label>
-      <select class="form-select" onchange="gpSetClient(this.value)">${clientOpts}</select></div>
+    <div class="form-group"><label class="form-label">Client — type to search, or pick from the list</label>
+      <input class="form-input" list="gp-client-list" value="${esc(c?.name || '')}" placeholder="Start typing a client name…"
+        onfocus="this.select()" onchange="gpSetClientByName(this.value)">
+      <datalist id="gp-client-list">${config.clients.map(x => `<option value="${esc(x.name)}">`).join('')}</datalist></div>
     <div class="mode-toggle">
       <div class="mode-btn ${g.mode === 'strategy' ? 'on' : ''}" onclick="gpSetMode('strategy')">
         <div class="mt-title">🧪 Strategy</div><div class="mt-sub">Proof of concept — new client, find what works</div></div>
@@ -3800,7 +3924,10 @@ function gpGrowthForm(c) {
 function gpAssumptionsForm() {
   const g = state.growth;
   if (g.mode === 'growth') return ''; // growth mode derives rates from observed metrics
-  const num = (ch, key, label, pct) => `<label>${label}</label><input class="num-input" type="number" step="${pct ? '0.01' : '1'}" value="${g.assumptions[ch][key]}" onchange="gpNum('${ch}','${key}',this.value)">`;
+  // Rates show as percentages (4 = 4%), stored as decimals under the hood.
+  const num = (ch, key, label, pct) => pct
+    ? `<label>${label} (%)</label><input class="num-input" type="number" step="0.5" value="${Math.round((g.assumptions[ch][key] || 0) * 1000) / 10}" onchange="gpNumPct('${ch}','${key}',this.value)">`
+    : `<label>${label}</label><input class="num-input" type="number" step="1" value="${g.assumptions[ch][key]}" onchange="gpNum('${ch}','${key}',this.value)">`;
   let html = `<div class="step"><div class="step-head"><span class="step-title"><span class="step-num">3</span>Volumes, targets & assumptions</span></div>`;
   html += `<div class="gp-sub">🎯 Book-in target</div><div class="assume-grid">
     <label>Booked calls / mo to hit</label><input class="num-input" type="number" value="${g.targetBookings}" onchange="state.growth.targetBookings=+this.value;renderGrowthPreview()"></div>`;
@@ -3847,6 +3974,21 @@ function gpToolCostLabel(t) {
 
 // ── form interaction ──
 function gpSetClient(id) { initGrowth(id, state.growth.mode); renderGrowth(); }
+
+// Resolve a typed name (combobox) — exact match first, then unique prefix/contains.
+function findByName(list, name, key = 'name') {
+  const q = String(name || '').trim().toLowerCase();
+  if (!q) return null;
+  const val = x => String(x[key] || '').toLowerCase();
+  return list.find(x => val(x) === q)
+    || (list.filter(x => val(x).startsWith(q)).length === 1 ? list.find(x => val(x).startsWith(q)) : null)
+    || (list.filter(x => val(x).includes(q)).length === 1 ? list.find(x => val(x).includes(q)) : null);
+}
+function gpSetClientByName(name) {
+  const hit = findByName(config.clients, name);
+  if (hit) { gpSetClient(hit.id); }
+  else { showNotif('No client matches "' + name + '"', true); renderGrowthForm(); }
+}
 function gpSetMode(m) { if (state.growth.mode !== m) { state.growth.narrative = null; state.growth.docHtml = null; } state.growth.mode = m; renderGrowth(); }
 function gpToggleChannel(ch) {
   const g = state.growth, i = g.channels.indexOf(ch);
@@ -3854,6 +3996,7 @@ function gpToggleChannel(ch) {
   gpResetToolDefaults(); renderGrowth();
 }
 function gpNum(ch, key, val) { state.growth.assumptions[ch][key] = +val; renderGrowthPreview(); }
+function gpNumPct(ch, key, val) { state.growth.assumptions[ch][key] = (+val || 0) / 100; renderGrowthPreview(); }
 function gpPers(key, val) { state.growth.assumptions.personalization[key] = +val; renderGrowthPreview(); }
 function gpObs(ch, key, val) { state.growth.observed[ch][key] = +val; renderGrowthPreview(); }
 function gpToggleTool(id) { const a = state.growth.toolIds, i = a.indexOf(id); if (i === -1) a.push(id); else a.splice(i, 1); renderGrowth(); }
@@ -4052,12 +4195,29 @@ function gpFollowupsBlocks() {
 
 // ── preview document ──
 // Reverse funnel: target at the top, requirements derived beneath it.
+// Every metric carries a plain-English line so the client can read the table cold.
+function reverseRows(channel, m, T, a) {
+  return channel === 'email' ? [
+    ['🎯 Booked calls (target)', T, 'Sales calls on the calendar — the goal. Everything below is sized to hit this.', true],
+    ['Positive replies needed', m.positive, `Replies that say "interested, tell me more". ${gpPct(a.bookRate)} of these book a call.`],
+    ['Replies needed', m.replies, `Any response at all. About ${gpPct(a.positiveRate)} of replies are positive.`],
+    ['Verified emails needed', m.verified, `Leads whose email passed verification — safe to send. ${gpPct(a.replyRate)} of them reply.`],
+    ['Leads to scrape', m.leads, `Raw contacts to pull from the database. ~${gpPct(a.verifyRate)} survive verification.`, true],
+    ['Emails to send / mo', m.outreaches, `Total sends: each verified lead gets the ${gpInt(a.sendsPerLead)}-step sequence.`],
+  ] : [
+    ['🎯 Booked calls (target)', T, 'Sales calls on the calendar — the goal. Everything below is sized to hit this.', true],
+    ['Positive replies needed', m.positive, `Replies that say "interested". ${gpPct(a.bookRate)} of these book a call.`],
+    ['Replies needed', m.replies, `Responses from people who accepted. ~${gpPct(a.replyRate)} of accepted connections reply.`],
+    ['Accepted connections needed', m.accepted, `People who accept the invite. ~${gpPct(a.acceptRate)} of requests get accepted.`],
+    ['Connection requests / mo', m.connects, 'Invites to send this month.', true],
+    ['Connects / day needed', Math.ceil(m.connectsPerDayDerived || 0), 'Daily invite volume, spread across the LinkedIn profiles.'],
+  ];
+}
+
 function funnelTableReverse(channel, m, T) {
-  const rows = channel === 'email'
-    ? [['🎯 Booked calls (target)', T, true], ['Positive replies needed', m.positive], ['Replies needed', m.replies], ['Verified emails needed', m.verified], ['Leads to scrape', m.leads, true], ['Emails to send / mo', m.outreaches]]
-    : [['🎯 Booked calls (target)', T, true], ['Positive replies needed', m.positive], ['Replies needed', m.replies], ['Accepted connections needed', m.accepted], ['Connection requests / mo', m.connects, true], ['Connects / day needed', Math.ceil(m.connectsPerDayDerived || 0)]];
+  const a = state.growth.assumptions[channel];
   return `<table><thead><tr><th>Reverse funnel</th><th class="num">Per month</th></tr></thead><tbody>
-    ${rows.map(([k, v, strong]) => `<tr><td${strong ? ' class="tot"' : ''}>${k}</td><td class="num${strong ? ' tot' : ''}">${gpInt(v)}</td></tr>`).join('')}
+    ${reverseRows(channel, m, T, a).map(([k, v, desc, strong]) => `<tr><td${strong ? ' class="tot"' : ''}>${k}<br><span style="font-weight:400;font-size:10.5px;color:var(--muted)">${desc}</span></td><td class="num${strong ? ' tot' : ''}">${gpInt(v)}</td></tr>`).join('')}
   </tbody></table>`;
 }
 
@@ -4332,10 +4492,11 @@ function gpPreviewGrowth(c) {
     plannedLeadsAll += bulkOrder;
     h += `<h2>${CH_LABEL[ch]} — to hit ${g.targetBookings} bookings/mo</h2>`;
     if (!o.contacted || !o.booked) { h += `<p style="color:var(--amber)">Enter observed ${CH_LABEL[ch]} metrics on the left to compute this.</p>`; return; }
+    const drow = (k, v, desc, strong) => `<tr><td${strong ? ' class="tot"' : ''}>${k}<br><span style="font-weight:400;font-size:10.5px;color:var(--muted)">${desc}</span></td><td class="num${strong ? ' tot' : ''}">${v}</td></tr>`;
     h += `<table><tbody>
-      <tr><td>Observed booking rate</td><td class="num">${gpPct(bookedPer)} of contacts</td></tr>
-      <tr><td>Contacts needed / mo</td><td class="num">${gpInt(needContacted)}</td></tr>
-      <tr><td class="tot">Bulk lead order</td><td class="num tot">${gpInt(bulkOrder)} leads</td></tr>
+      ${drow('Observed booking rate', gpPct(bookedPer) + ' of contacts', 'Booked calls ÷ people contacted, from the real campaign — the rate we scale with.')}
+      ${drow('Contacts needed / mo', gpInt(needContacted), 'People to reach at that booking rate to hit the target.')}
+      ${drow('Bulk lead order', gpInt(bulkOrder) + ' leads', 'Leads to buy: contacts ÷ verify rate, rounded up to the nearest 1,000.', true)}
     </tbody></table>`;
   });
 
@@ -4546,10 +4707,8 @@ function gpBuildBlocks() {
     g.channels.forEach(ch => {
       const m = computeReverse(ch, g.assumptions[ch], T); per[ch] = m;
       B.push({ t: 'h2', text: `${CH_LABEL[ch]} funnel — reverse-engineered from ${gpInt(T)} booked calls/mo` });
-      const rows = ch === 'email'
-        ? [['🎯 Booked calls (target)', gpInt(T)], ['Positive replies needed', gpInt(m.positive)], ['Replies needed', gpInt(m.replies)], ['Verified emails needed', gpInt(m.verified)], ['Leads to scrape', gpInt(m.leads)], ['Emails to send / mo', gpInt(m.outreaches)]]
-        : [['🎯 Booked calls (target)', gpInt(T)], ['Positive replies needed', gpInt(m.positive)], ['Replies needed', gpInt(m.replies)], ['Accepted connections needed', gpInt(m.accepted)], ['Connection requests / mo', gpInt(m.connects)], ['Connects / day needed', gpInt(Math.ceil(m.connectsPerDayDerived || 0))]];
-      B.push({ t: 'table', headers: ['Reverse funnel', 'Per month'], rows });
+      const rows = reverseRows(ch, m, T, g.assumptions[ch]).map(([k, v, desc]) => [k, gpInt(v), desc]);
+      B.push({ t: 'table', headers: ['Reverse funnel', 'Per month', 'What this means'], rows });
     });
     const costRows = gpCostRows();
     const infra = gpInfraRows(per);
@@ -4636,15 +4795,21 @@ function openFollowupsBlank() {
 
 function openFollowups(clientId, label, text) {
   const c = client(clientId); if (!c) return;
+  // Default the ICP from wherever the user is working: the builder's selected
+  // target ICP, the growth plan's active target, then the client's first ICP.
+  const icps = c.icps || [];
+  const fromBuilder = icps.find(i => i.id === state.selectedIcpId)?.id;
+  const fromGrowth = state.screen === 'growth' ? icps.find(i => i.id === gpActiveTarget()?.icpId)?.id : null;
   fuState = {
     clientId, parentLabel: label || 'First script', parentText: text || '',
-    icpId: (c.icps || [])[0]?.id || '',
+    icpId: fromBuilder || fromGrowth || icps[0]?.id || '',
     use: { pains: true, desires: true, angles: false },
     frameworkIds: (config.followupFrameworks || []).slice(0, 2).map(f => f.id),
     gapDays: 2,
     result: null,
   };
   renderFollowupModal();
+  bringToTop(document.getElementById('followupModal'));
   document.getElementById('followupModal').classList.add('show');
 }
 function closeFollowupModal() { document.getElementById('followupModal').classList.remove('show'); fuState = null; }
@@ -4660,11 +4825,10 @@ function renderFollowupModal() {
     <div class="gp-sub">First script (these follow up on it)</div>
     <div class="scriptbox" style="background:var(--bg2);border:1px solid var(--border);border-radius:7px;padding:11px 13px;font-family:'Courier Prime',monospace;font-size:12px;white-space:pre-wrap;max-height:120px;overflow:auto">${esc(fuState.parentText) || '<span style="color:var(--muted)">No first script linked — follow-ups will stand alone.</span>'}</div>
 
-    <div class="gp-sub" style="margin-top:12px">Target ICP</div>
-    <select class="form-select" onchange="fuState.icpId=this.value">
-      <option value="">— no ICP —</option>
-      ${(c.icps || []).map(i => `<option value="${i.id}" ${fuState.icpId === i.id ? 'selected' : ''}>${esc(i.title)}</option>`).join('')}
-    </select>
+    <div class="gp-sub" style="margin-top:12px">Target ICP — type to search, or pick from the list</div>
+    <input class="form-input" list="fu-icp-list" value="${esc((c.icps || []).find(i => i.id === fuState.icpId)?.title || '')}"
+      placeholder="Start typing an ICP… (leave empty for none)" onfocus="this.select()" onchange="fuSetIcpByName(this.value)">
+    <datalist id="fu-icp-list">${(c.icps || []).map(i => `<option value="${esc(i.title)}">`).join('')}</datalist>
 
     <div class="gp-sub" style="margin-top:12px">Base the follow-ups on</div>
     <div class="chips">${useChip('pains', '🔴 Pains')}${useChip('desires', '🟢 Desires')}${useChip('angles', '🎯 Angles')}</div>
@@ -4678,13 +4842,21 @@ function renderFollowupModal() {
     <div class="assume-grid" style="margin-top:12px"><label>Days between follow-ups</label><input class="num-input" type="number" value="${fuState.gapDays}" onchange="fuState.gapDays=Math.max(1,+this.value||2);renderFollowupModal()"></div>
     <div class="hint">${fuState.frameworkIds.length ? 'Cadence: ' + fuState.frameworkIds.map((_, i) => 'Day +' + (fuState.gapDays * (i + 1))).join(' · ') : 'Pick at least one framework.'}</div>
 
-    ${fuState.result ? `<div class="gp-sub" style="margin-top:14px">✨ Generated follow-ups — edit freely</div>` +
+    ${fuState.result ? `<div class="gp-sub" style="margin-top:14px">✨ Generated follow-ups — edit inline, or open the full editor (versions + AI)</div>` +
       fuState.result.map((f, i) => `
         <div class="res-card" style="margin-top:7px">
-          <div class="res-card-head"><span class="res-card-labels"><span class="gp-badge growth">Day +${f.day}</span> <b style="font-size:12px">${esc(f.framework)}</b></span></div>
+          <div class="res-card-head"><span class="res-card-labels"><span class="gp-badge growth">Day +${f.day}</span> <b style="font-size:12px">${esc(f.framework)}</b></span>
+            <button class="copy-btn" onclick="editFollowupDraft(${i})" title="Full editor — versions, AI rewrite, highlight-to-edit">✏️ Full editor</button></div>
           <textarea class="script-edit-area" style="border-bottom:none;min-height:120px" onchange="fuState.result[${i}].text=this.value">${esc(f.text)}</textarea>
         </div>`).join('') : ''}
   `;
+}
+
+function fuSetIcpByName(name) {
+  if (!String(name).trim()) { fuState.icpId = ''; return; }
+  const hit = findByName(client(fuState.clientId)?.icps || [], name, 'title');
+  if (hit) fuState.icpId = hit.id;
+  else { showNotif('No ICP matches "' + name + '"', true); renderFollowupModal(); }
 }
 
 function fuToggleUse(kind) { fuState.use[kind] = !fuState.use[kind]; renderFollowupModal(); }
