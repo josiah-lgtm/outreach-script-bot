@@ -892,6 +892,8 @@ Deno.serve(async (req) => {
       case "compose_sales_plan": {
         const ctx = String(body.context ?? "").slice(0, 12_000);
         const rules = String(body.rules ?? "").trim();
+        const customPrompt = String(body.prompt ?? "").trim();
+        const mention = Array.isArray(body.mention) ? (body.mention as unknown[]).map(String).filter((s) => s.trim()) : [];
         const res = await claudeMessages({
           model: CLAUDE_MODEL,
           max_tokens: 1400,
@@ -902,6 +904,8 @@ Deno.serve(async (req) => {
             `No buzzwords, no AI sounding words (no "leverage", "utilize", "synergy", "robust", "seamless", "elevate", "unlock", "empower"). ` +
             `Only use facts from the notes, never invent numbers or names. Speak to the prospect as "you".\n` +
             (rules ? `HOUSE LANGUAGE RULES (also obey):\n${rules}\n` : "") +
+            (customPrompt ? `EXTRA INSTRUCTIONS FROM THE AGENCY OWNER (always obey):\n${customPrompt}\n` : "") +
+            (mention.length ? `ALWAYS WORK THESE POINTS IN NATURALLY (across intro and expectations, never as a list):\n${mention.map((m) => `- ${m}`).join("\n")}\n` : "") +
             `Return valid JSON only, no fences:\n` +
             `{"intro":"2 to 3 sentences: show you understand the prospect's business and what they want, warm and specific to them",` +
             `"expectations":"2 to 3 sentences: in plain words, what they can expect once this is running, framed around booked calls",` +

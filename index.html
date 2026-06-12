@@ -644,6 +644,7 @@
   .gp-badge { font-size: 9px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
   .gp-badge.strategy { background: rgba(245,158,11,.12); color: var(--amber); }
   .gp-badge.growth { background: rgba(16,185,129,.12); color: var(--green); }
+  .gp-badge.sales { background: rgba(37,99,235,.14); color: var(--accent2); }
 
   .gp-toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 11px; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 7px; }
   .gp-toggle-row .tg-label { font-size: 12px; color: var(--subtle); }
@@ -1206,7 +1207,45 @@ function migrateConfig(cfg) {
   if (!Array.isArray(cfg.toolsKB) || !cfg.toolsKB.length) cfg.toolsKB = structuredClone(DEFAULT_TOOLS_KB);
   // Our own agency profile (the seller) — powers the sales growth plan.
   if (!cfg.sellerProfile || !cfg.sellerProfile.name) cfg.sellerProfile = structuredClone(DEFAULT_SELLER_PROFILE);
+  // Sales-document defaults: per-section visibility + headings, extra AI
+  // prompt, always-mention list, custom sections. Merge new keys into old configs.
+  cfg.sellerProfile.salesDoc = { ...structuredClone(DEFAULT_SALES_DOC), ...(cfg.sellerProfile.salesDoc || {}) };
+  cfg.sellerProfile.salesDoc.show = { ...DEFAULT_SALES_DOC.show, ...(cfg.sellerProfile.salesDoc.show || {}) };
+  cfg.sellerProfile.salesDoc.headings = { ...DEFAULT_SALES_DOC.headings, ...(cfg.sellerProfile.salesDoc.headings || {}) };
+  if (!Array.isArray(cfg.sellerProfile.salesDoc.mention)) cfg.sellerProfile.salesDoc.mention = [];
+  if (!Array.isArray(cfg.sellerProfile.salesDoc.custom)) cfg.sellerProfile.salesDoc.custom = [];
   return cfg;
+}
+
+// The sales document, part by part. Headings support {client} as a placeholder.
+const SALES_SECTION_DEFS = [
+  ['intro', 'Personalised intro (AI written)'],
+  ['brief', 'Their research (services, positioning, case studies, competitors)'],
+  ['how', 'How we get them booked calls + process'],
+  ['expect', 'What they can expect'],
+  ['who', 'Who we are (proof, wins, links)'],
+  ['included', 'What is included + promise'],
+  ['investment', 'Investment'],
+  ['next', 'Next step'],
+];
+const DEFAULT_SALES_DOC = {
+  prompt: '',
+  mention: [],
+  custom: [],
+  show: { intro: true, brief: true, how: true, expect: true, who: true, included: true, investment: true, next: true },
+  headings: {
+    brief: 'About {client}',
+    how: 'How we get you booked calls',
+    expect: 'What you can expect',
+    who: 'Who we are',
+    included: "What's included",
+    investment: 'Your investment',
+    next: 'Next step',
+  },
+};
+function salesHeading(key, c) {
+  const sd = config.sellerProfile?.salesDoc || DEFAULT_SALES_DOC;
+  return String(sd.headings?.[key] || DEFAULT_SALES_DOC.headings[key] || '').replaceAll('{client}', c?.name || 'you');
 }
 
 // Agency Advanta's own profile — what we pitch in a sales plan. Seeded from the
@@ -2466,14 +2505,77 @@ function adminAgency() {
       <div class="grid2">${field('sp-cost', 'Program cost (number)', sp.programCost)}${field('sp-costnote', 'Cost note', sp.costNote)}</div>
       ${area('sp-guarantee', 'Guarantee / promise', sp.guarantee)}
       <div style="display:flex;gap:8px"><button class="mini-btn" onclick="saveAgency()">💾 Save agency profile</button></div>
+    </div>
+    ${adminSalesDoc(sp)}`;
+}
+
+// — Sales document customization: every part of the pitch, in your control —
+function adminSalesDoc(sp) {
+  const sd = sp.salesDoc || DEFAULT_SALES_DOC;
+  const customLines = (sd.custom || []).map(cs => `${cs.heading || ''} :: ${String(cs.body || '').replace(/\n/g, ' / ')}`).join('\n');
+  return `
+    <div class="editor" style="border-color:rgba(37,99,235,.5)">
+      <h3>🤝 Sales document — customize every part</h3>
+      <div class="hint" style="margin-bottom:10px">These are the defaults for every sales plan. Toggle parts on or off, rename headings (use {client} for the prospect's name), steer the AI, and add your own sections.</div>
+
+      <div class="gp-sub">Sections — show / hide / rename</div>
+      ${SALES_SECTION_DEFS.map(([key, label]) => `
+        <div style="display:grid;grid-template-columns:auto 1.1fr 1fr;gap:8px;align-items:center;margin-bottom:6px">
+          <label class="toggle" title="Show this section"><input type="checkbox" id="sd-show-${key}" ${sd.show?.[key] !== false ? 'checked' : ''}><span class="toggle-slider"></span></label>
+          <span style="font-size:12px;color:var(--subtle)">${esc(label)}</span>
+          ${DEFAULT_SALES_DOC.headings[key] !== undefined
+            ? `<input class="form-input" id="sd-head-${key}" value="${esc(sd.headings?.[key] || DEFAULT_SALES_DOC.headings[key])}" placeholder="heading">`
+            : `<span class="hint">no heading</span>`}
+        </div>`).join('')}
+
+      <div class="gp-sub" style="margin-top:12px">✨ Extra AI prompt (steers the personalised intro, expectations and closing)</div>
+      <textarea class="form-textarea" id="sd-prompt" style="min-height:70px" placeholder="e.g. Mention that we never lock clients into long contracts. Sound like Josiah texting a friend. Reference their industry by name.">${esc(sd.prompt || '')}</textarea>
+
+      <div class="gp-sub" style="margin-top:10px">📌 Always mention (one per line — woven in naturally, never as a list)</div>
+      <textarea class="form-textarea" id="sd-mention" style="min-height:70px" placeholder="e.g. We launch within 3 weeks\nThey keep the plan free even if we never work together">${esc((sd.mention || []).join('\n'))}</textarea>
+
+      <div class="gp-sub" style="margin-top:10px">➕ Custom sections (Heading :: body, one per line — use / for a paragraph break, {client} for their name)</div>
+      <textarea class="form-textarea" id="sd-custom" style="min-height:70px" placeholder="Why now :: Every week without outbound is booked calls your competitors take. / We can have {client} live in three weeks.">${esc(customLines)}</textarea>
+
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="mini-btn" onclick="saveSalesDoc()">💾 Save sales document defaults</button>
+        <button class="mini-btn danger" onclick="resetSalesDoc()">↺ Reset to defaults</button>
+      </div>
     </div>`;
+}
+
+function saveSalesDoc() {
+  const sp = config.sellerProfile;
+  const sd = sp.salesDoc = sp.salesDoc || structuredClone(DEFAULT_SALES_DOC);
+  SALES_SECTION_DEFS.forEach(([key]) => {
+    sd.show[key] = document.getElementById('sd-show-' + key).checked;
+    const h = document.getElementById('sd-head-' + key);
+    if (h) sd.headings[key] = h.value.trim() || DEFAULT_SALES_DOC.headings[key];
+  });
+  sd.prompt = document.getElementById('sd-prompt').value.trim();
+  sd.mention = document.getElementById('sd-mention').value.split('\n').map(s => s.trim()).filter(Boolean);
+  sd.custom = document.getElementById('sd-custom').value.split('\n').map(s => s.trim()).filter(Boolean).map(l => {
+    const [heading, body] = l.split('::');
+    return { heading: (heading || '').trim(), body: (body || '').split('/').map(p => p.trim()).filter(Boolean).join('\n') };
+  }).filter(cs => cs.heading || cs.body);
+  persistConfig();
+  if (state.growth) { state.growth._narratedSig = null; }  // re-narrate with the new prompt next time
+  showNotif('Sales document defaults saved');
+}
+
+function resetSalesDoc() {
+  if (!confirm('Reset the sales document sections, prompt and mentions to the defaults?')) return;
+  config.sellerProfile.salesDoc = structuredClone(DEFAULT_SALES_DOC);
+  persistConfig(); renderAdmin(); showNotif('Sales document reset');
 }
 
 function saveAgency() {
   const v = id => document.getElementById(id).value;
   const splitLines = id => v(id).split('\n').map(s => s.trim()).filter(Boolean);
   const sp = config.sellerProfile = config.sellerProfile || {};
-  sp.name = v('sp-name').trim(); sp.website = v('sp-website').trim(); sp.logo = v('sp-logo').trim();
+  // Never let the name go empty — migrate would re-seed defaults over your edits.
+  sp.name = v('sp-name').trim() || sp.name || DEFAULT_SELLER_PROFILE.name;
+  sp.website = v('sp-website').trim(); sp.logo = v('sp-logo').trim();
   sp.founder = v('sp-founder').trim(); sp.tagline = v('sp-tagline').trim();
   sp.whoWeAre = v('sp-whoweare').trim(); sp.trackRecord = v('sp-track').trim();
   sp.howWeFindLeads = v('sp-find').trim(); sp.howWeQualify = v('sp-qual').trim();
@@ -4403,11 +4505,11 @@ async function gpBuildClientBrief() {
 }
 
 // Preview HTML — rendered FIRST in the doc, before everything else.
-function gpBriefHtml(c) {
+function gpBriefHtml(c, heading) {
   const b = c?.brief;
   if (!b) return `<p style="color:var(--muted);font-size:12px">🧾 Build the client brief (left panel) to open the plan with ${esc(c?.name || 'the client')}'s services, positioning, case studies and competitors.</p>`;
   const icps = gpBriefTargetIcps().filter(i => i.example);
-  let h = `<h2>About ${esc(c.name)}</h2>`;
+  let h = `<h2>${esc(heading || ('About ' + c.name))}</h2>`;
   if (b.positioning) h += `<p>${esc(b.positioning)}</p>`;
   if (b.services?.length) h += `<h3>Services</h3><ul>${b.services.map(s => `<li>${esc(s)}</li>`).join('')}</ul>`;
   if (b.caseStudies?.length) h += `<h3>Case studies</h3><ul>${b.caseStudies.map(s => `<li>${esc(s)}</li>`).join('')}</ul>`;
@@ -4420,9 +4522,9 @@ function gpBriefHtml(c) {
 }
 
 // Export blocks — same content for Notion.
-function gpBriefBlocks(c) {
+function gpBriefBlocks(c, heading) {
   const b = c?.brief; if (!b) return [];
-  const B = [{ t: 'h2', text: `About ${c.name}` }];
+  const B = [{ t: 'h2', text: heading || `About ${c.name}` }];
   if (b.positioning) B.push({ t: 'p', text: b.positioning });
   if (b.services?.length) { B.push({ t: 'h3', text: 'Services' }); b.services.forEach(s => B.push({ t: 'bullet', text: s })); }
   if (b.caseStudies?.length) { B.push({ t: 'h3', text: 'Case studies' }); b.caseStudies.forEach(s => B.push({ t: 'bullet', text: s })); }
@@ -4631,8 +4733,9 @@ function gpBlocksFromDocHtml(html) {
       if (el.nodeType === 3) { const t = flat(el.textContent); if (t) B.push({ t: 'p', text: t }); continue; }
       if (el.nodeType !== 1) continue;
       const tag = el.tagName.toLowerCase();
+      if (tag === 'img') { const u = el.getAttribute('src'); if (u && /^https?:/.test(u)) B.push({ t: 'image', url: u }); continue; }
       const text = el.innerText?.trim() || '';
-      if (!text && tag !== 'table') continue;
+      if (!text && tag !== 'table') { if (el.querySelector?.('img')) [...el.querySelectorAll('img')].forEach(im => { const u = im.getAttribute('src'); if (u && /^https?:/.test(u)) B.push({ t: 'image', url: u }); }); continue; }
       if (tag === 'h1') B.push({ t: 'h1', text: flat(text) });
       else if (tag === 'h2') B.push({ t: 'h2', text: flat(text) });
       else if (tag === 'h3') B.push({ t: 'h3', text: flat(text) });
@@ -4696,52 +4799,74 @@ function gpPreviewSales(c) {
     <h1 style="margin:0">Growth Plan for ${esc(c?.name || 'your business')}</h1></div>
   <div class="doc-sub">Prepared by ${esc(sp.name || 'us')} · ${prog.ch}</div>`;
 
-  if (N?.intro) h += `<div class="callout">${esc(N.intro)}</div>`;
-  else h += `<p style="color:var(--amber)">Click “Draft” on the left to personalise the opening for ${esc(c?.name || 'this prospect')}.</p>`;
+  const sd = sp.salesDoc || DEFAULT_SALES_DOC;
+
+  if (sd.show.intro) {
+    if (N?.intro) h += `<div class="callout">${esc(N.intro)}</div>`;
+    else h += `<p style="color:var(--amber)">Click “Draft” on the left to personalise the opening for ${esc(c?.name || 'this prospect')}.</p>`;
+  }
 
   // Their research (services / positioning / case studies / who we'll reach + example)
-  h += gpBriefHtml(c);
+  if (sd.show.brief) h += gpBriefHtml(c, salesHeading('brief', c));
 
   // How we get them booked calls
-  h += `<h2>How we get you booked calls</h2>
-    <p>${esc(prog.chanLine)}</p>
-    <h3>How we find your leads</h3><p>${esc(prog.find)}</p>
-    <h3>How we keep them qualified</h3><p>${esc(prog.qual)}</p>`;
-  (sp.process || []).forEach(ph => {
-    h += `<h3>${esc(ph.phase)}</h3><ul>${(ph.items || []).map(it => `<li>${esc(it)}</li>`).join('')}</ul>`;
-  });
+  if (sd.show.how) {
+    h += `<h2>${esc(salesHeading('how', c))}</h2>
+      <p>${esc(prog.chanLine)}</p>
+      <h3>How we find your leads</h3><p>${esc(prog.find)}</p>
+      <h3>How we keep them qualified</h3><p>${esc(prog.qual)}</p>`;
+    (sp.process || []).forEach(ph => {
+      h += `<h3>${esc(ph.phase)}</h3><ul>${(ph.items || []).map(it => `<li>${esc(it)}</li>`).join('')}</ul>`;
+    });
+  }
 
   // What to expect (simple, from the reverse funnel)
-  h += `<h2>What you can expect</h2>`;
-  if (N?.expectations) h += `<p>${esc(N.expectations)}</p>`;
-  h += `<p>To book around <b>${gpInt(T)}</b> calls a month, we send about <b>${gpInt(m.outreaches || m.connects)}</b> messages to roughly <b>${gpInt(m.leads)}</b> of your ideal buyers. You only talk to the ones who put their hand up.</p>`;
+  if (sd.show.expect) {
+    h += `<h2>${esc(salesHeading('expect', c))}</h2>`;
+    if (N?.expectations) h += `<p>${esc(N.expectations)}</p>`;
+    h += `<p>To book around <b>${gpInt(T)}</b> calls a month, we send about <b>${gpInt(m.outreaches || m.connects)}</b> messages to roughly <b>${gpInt(m.leads)}</b> of your ideal buyers. You only talk to the ones who put their hand up.</p>`;
+  }
 
   // Who we are (proof)
-  h += `<h2>Who we are</h2>
-    ${sp.logo ? `<img src="${esc(sp.logo)}" alt="" style="height:34px;margin-bottom:8px" onerror="this.style.display='none'">` : ''}
-    <p>${esc(sp.whoWeAre || '')}</p>
-    ${sp.trackRecord ? `<p><b>${esc(sp.trackRecord)}</b></p>` : ''}
-    ${(sp.whyDifferent || []).length ? `<h3>Why we are different</h3><ul>${sp.whyDifferent.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}`;
-  if ((sp.caseStudies || []).length) {
-    h += `<h3>Recent wins</h3><ul>${sp.caseStudies.map(cstud => `<li>${esc(cstud.name)} ${esc(cstud.result)}${cstud.link ? ` — <a href="${esc(cstud.link)}" target="_blank" style="color:var(--accent2)">watch</a>` : ''}</li>`).join('')}</ul>`;
-  }
-  if ((sp.socialLinks || []).length) {
-    h += `<p>${sp.socialLinks.map(s => `<a href="${esc(s.url)}" target="_blank" style="color:var(--accent2);margin-right:12px">${esc(s.label)}</a>`).join('')}</p>`;
+  if (sd.show.who) {
+    h += `<h2>${esc(salesHeading('who', c))}</h2>
+      ${sp.logo ? `<img src="${esc(sp.logo)}" alt="" style="height:34px;margin-bottom:8px" onerror="this.style.display='none'">` : ''}
+      <p>${esc(sp.whoWeAre || '')}</p>
+      ${sp.trackRecord ? `<p><b>${esc(sp.trackRecord)}</b></p>` : ''}
+      ${(sp.whyDifferent || []).length ? `<h3>Why we are different</h3><ul>${sp.whyDifferent.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}`;
+    if ((sp.caseStudies || []).length) {
+      h += `<h3>Recent wins</h3><ul>${sp.caseStudies.map(cstud => `<li>${esc(cstud.name)} ${esc(cstud.result)}${cstud.link ? ` — <a href="${esc(cstud.link)}" target="_blank" style="color:var(--accent2)">watch</a>` : ''}</li>`).join('')}</ul>`;
+    }
+    if ((sp.socialLinks || []).length) {
+      h += `<p>${sp.socialLinks.map(s => `<a href="${esc(s.url)}" target="_blank" style="color:var(--accent2);margin-right:12px">${esc(s.label)}</a>`).join('')}</p>`;
+    }
   }
 
   // What's included + guarantee
-  h += `<h2>What's included</h2><ul>${(sp.deliverables || []).map(d => `<li>${esc(d)}</li>`).join('')}</ul>`;
-  if (sp.guarantee) h += `<div class="callout pledge"><b>Our promise:</b> ${esc(sp.guarantee)}</div>`;
+  if (sd.show.included) {
+    h += `<h2>${esc(salesHeading('included', c))}</h2><ul>${(sp.deliverables || []).map(d => `<li>${esc(d)}</li>`).join('')}</ul>`;
+    if (sp.guarantee) h += `<div class="callout pledge"><b>Our promise:</b> ${esc(sp.guarantee)}</div>`;
+  }
 
   // Investment
-  h += `<h2>Your investment</h2>
-    <p class="big-stat">${gpMoney(sp.programCost || 0)}</p>
-    <p>${esc(sp.costNote || '')}</p>`;
+  if (sd.show.investment) {
+    h += `<h2>${esc(salesHeading('investment', c))}</h2>
+      <p class="big-stat">${gpMoney(sp.programCost || 0)}</p>
+      <p>${esc(sp.costNote || '')}</p>`;
+  }
+
+  // Custom sections (yours, from Admin → Our Agency)
+  (sd.custom || []).forEach(cs2 => {
+    if (!cs2.heading && !cs2.body) return;
+    h += `${cs2.heading ? `<h2>${esc(String(cs2.heading).replaceAll('{client}', c?.name || 'you'))}</h2>` : ''}${String(cs2.body || '').split(/\n+/).filter(Boolean).map(p => `<p>${esc(p.replaceAll('{client}', c?.name || 'you'))}</p>`).join('')}`;
+  });
 
   // Next steps
-  h += `<h2>Next step</h2>`;
-  if (N?.closing) h += `<p>${esc(N.closing)}</p>`;
-  h += `<ul><li>Book a quick call with ${esc((sp.founder || '').split(',')[0] || sp.name || 'us')}</li><li>We walk you through this plan and answer anything</li><li>If it is a fit we start, if not you keep the plan for free</li></ul>`;
+  if (sd.show.next) {
+    h += `<h2>${esc(salesHeading('next', c))}</h2>`;
+    if (N?.closing) h += `<p>${esc(N.closing)}</p>`;
+    h += `<ul><li>Book a quick call with ${esc((sp.founder || '').split(',')[0] || sp.name || 'us')}</li><li>We walk you through this plan and answer anything</li><li>If it is a fit we start, if not you keep the plan for free</li></ul>`;
+  }
   h += `</div>`;
   return h;
 }
@@ -4754,38 +4879,56 @@ function gpSalesBlocks(c) {
   const m = computeReverse(g.channels[0] || 'email', g.assumptions[g.channels[0] || 'email'], T);
   const B = [];
   const pl = logoUrl(g.prospectWebsite);
+  const sd = sp.salesDoc || DEFAULT_SALES_DOC;
   if (pl) B.push({ t: 'image', url: pl });
   B.push({ t: 'h1', text: `Growth Plan for ${c?.name || 'your business'}` });
   B.push({ t: 'p', text: `Prepared by ${sp.name || 'us'} · ${prog.ch}` });
-  if (N?.intro) B.push({ t: 'callout', text: N.intro });
-  gpBriefBlocks(c).forEach(b => B.push(b));
-  B.push({ t: 'h2', text: 'How we get you booked calls' });
-  B.push({ t: 'p', text: prog.chanLine });
-  B.push({ t: 'h3', text: 'How we find your leads' }); B.push({ t: 'p', text: prog.find });
-  B.push({ t: 'h3', text: 'How we keep them qualified' }); B.push({ t: 'p', text: prog.qual });
-  (sp.process || []).forEach(ph => { B.push({ t: 'h3', text: ph.phase }); (ph.items || []).forEach(it => B.push({ t: 'bullet', text: it })); });
-  B.push({ t: 'h2', text: 'What you can expect' });
-  if (N?.expectations) B.push({ t: 'p', text: N.expectations });
-  B.push({ t: 'p', text: `To book around ${gpInt(T)} calls a month, we send about ${gpInt(m.outreaches || m.connects)} messages to roughly ${gpInt(m.leads)} of your ideal buyers. You only talk to the ones who put their hand up.` });
-  B.push({ t: 'h2', text: 'Who we are' });
-  if (sp.logo) B.push({ t: 'image', url: sp.logo });
-  if (sp.whoWeAre) B.push({ t: 'p', text: sp.whoWeAre });
-  if (sp.trackRecord) B.push({ t: 'p', text: sp.trackRecord });
-  if ((sp.whyDifferent || []).length) { B.push({ t: 'h3', text: 'Why we are different' }); sp.whyDifferent.forEach(w => B.push({ t: 'bullet', text: w })); }
-  if ((sp.caseStudies || []).length) {
-    B.push({ t: 'h3', text: 'Recent wins' });
-    sp.caseStudies.forEach(cs => { B.push({ t: 'bullet', text: `${cs.name} ${cs.result}` }); if (cs.link) B.push({ t: 'bookmark', url: cs.link }); });
+  if (sd.show.intro && N?.intro) B.push({ t: 'callout', text: N.intro });
+  if (sd.show.brief) gpBriefBlocks(c, salesHeading('brief', c)).forEach(b => B.push(b));
+  if (sd.show.how) {
+    B.push({ t: 'h2', text: salesHeading('how', c) });
+    B.push({ t: 'p', text: prog.chanLine });
+    B.push({ t: 'h3', text: 'How we find your leads' }); B.push({ t: 'p', text: prog.find });
+    B.push({ t: 'h3', text: 'How we keep them qualified' }); B.push({ t: 'p', text: prog.qual });
+    (sp.process || []).forEach(ph => { B.push({ t: 'h3', text: ph.phase }); (ph.items || []).forEach(it => B.push({ t: 'bullet', text: it })); });
   }
-  (sp.socialLinks || []).forEach(s => B.push({ t: 'bookmark', url: s.url }));
-  B.push({ t: 'h2', text: "What's included" });
-  (sp.deliverables || []).forEach(d => B.push({ t: 'bullet', text: d }));
-  if (sp.guarantee) B.push({ t: 'callout', text: 'Our promise: ' + sp.guarantee });
-  B.push({ t: 'h2', text: 'Your investment' });
-  B.push({ t: 'p', text: gpMoney(sp.programCost || 0) });
-  if (sp.costNote) B.push({ t: 'p', text: sp.costNote });
-  B.push({ t: 'h2', text: 'Next step' });
-  if (N?.closing) B.push({ t: 'p', text: N.closing });
-  ['Book a quick call with ' + ((sp.founder || '').split(',')[0] || sp.name || 'us'), 'We walk you through this plan and answer anything', 'If it is a fit we start, if not you keep the plan for free'].forEach(s => B.push({ t: 'todo', text: s }));
+  if (sd.show.expect) {
+    B.push({ t: 'h2', text: salesHeading('expect', c) });
+    if (N?.expectations) B.push({ t: 'p', text: N.expectations });
+    B.push({ t: 'p', text: `To book around ${gpInt(T)} calls a month, we send about ${gpInt(m.outreaches || m.connects)} messages to roughly ${gpInt(m.leads)} of your ideal buyers. You only talk to the ones who put their hand up.` });
+  }
+  if (sd.show.who) {
+    B.push({ t: 'h2', text: salesHeading('who', c) });
+    if (sp.logo) B.push({ t: 'image', url: sp.logo });
+    if (sp.whoWeAre) B.push({ t: 'p', text: sp.whoWeAre });
+    if (sp.trackRecord) B.push({ t: 'p', text: sp.trackRecord });
+    if ((sp.whyDifferent || []).length) { B.push({ t: 'h3', text: 'Why we are different' }); sp.whyDifferent.forEach(w => B.push({ t: 'bullet', text: w })); }
+    if ((sp.caseStudies || []).length) {
+      B.push({ t: 'h3', text: 'Recent wins' });
+      sp.caseStudies.forEach(cs => { B.push({ t: 'bullet', text: `${cs.name} ${cs.result}` }); if (cs.link) B.push({ t: 'bookmark', url: cs.link }); });
+    }
+    (sp.socialLinks || []).forEach(s => B.push({ t: 'bookmark', url: s.url }));
+  }
+  if (sd.show.included) {
+    B.push({ t: 'h2', text: salesHeading('included', c) });
+    (sp.deliverables || []).forEach(d => B.push({ t: 'bullet', text: d }));
+    if (sp.guarantee) B.push({ t: 'callout', text: 'Our promise: ' + sp.guarantee });
+  }
+  if (sd.show.investment) {
+    B.push({ t: 'h2', text: salesHeading('investment', c) });
+    B.push({ t: 'p', text: gpMoney(sp.programCost || 0) });
+    if (sp.costNote) B.push({ t: 'p', text: sp.costNote });
+  }
+  (sd.custom || []).forEach(cs2 => {
+    if (!cs2.heading && !cs2.body) return;
+    if (cs2.heading) B.push({ t: 'h2', text: String(cs2.heading).replaceAll('{client}', c?.name || 'you') });
+    String(cs2.body || '').split(/\n+/).filter(Boolean).forEach(p => B.push({ t: 'p', text: p.replaceAll('{client}', c?.name || 'you') }));
+  });
+  if (sd.show.next) {
+    B.push({ t: 'h2', text: salesHeading('next', c) });
+    if (N?.closing) B.push({ t: 'p', text: N.closing });
+    ['Book a quick call with ' + ((sp.founder || '').split(',')[0] || sp.name || 'us'), 'We walk you through this plan and answer anything', 'If it is a fit we start, if not you keep the plan for free'].forEach(s => B.push({ t: 'todo', text: s }));
+  }
   return B;
 }
 
@@ -4943,7 +5086,8 @@ async function gpComposeNarrative(silent) {
         `Booked calls a month we aim for: ${g.targetBookings}`,
         `Channel: ${g.channels.join(' and ')}`,
       ].filter(Boolean).join('\n');
-      const r = await api({ action: 'compose_sales_plan', context: ctx, rules: config.settings?.growthRules || '' });
+      const sd = config.sellerProfile?.salesDoc || {};
+      const r = await api({ action: 'compose_sales_plan', context: ctx, rules: config.settings?.growthRules || '', prompt: sd.prompt || '', mention: sd.mention || [] });
       g.narrative = { intro: r.intro || '', expectations: r.expectations || '', closing: r.closing || '' };
     } else {
       const numbers = g.channels.map(ch => ({ channel: ch, ...(g.mode === 'strategy' ? computeReverse(ch, g.assumptions[ch], g.targetBookings) : computeChannel(ch, g.assumptions[ch])) }));
@@ -5022,7 +5166,7 @@ function gpSnapshot() {
   return {
     id: g.planId || uid('gp'),
     mode: g.mode,
-    title: `${g.mode === 'strategy' ? 'POC' : 'Scale'} — ${(g.targets[0]?.title) || g.winningScript?.label || (gpClient()?.name) || ''}`.slice(0, 60),
+    title: `${g.mode === 'sales' ? 'Pitch' : g.mode === 'strategy' ? 'POC' : 'Scale'} — ${(g.targets[0]?.title) || g.winningScript?.label || (gpClient()?.name) || ''}`.slice(0, 60),
     channels: [...g.channels],
     targets: structuredClone(g.targets),
     assumptions: structuredClone(g.assumptions),
@@ -5163,7 +5307,7 @@ async function gpExportNotion() {
     const r = await api({
       action: 'export_notion',
       parentId: config.settings.notionParentId,
-      title: `Growth Plan — ${c.name} — ${state.growth.mode === 'strategy' ? 'Strategy' : 'Scaling'} — ${new Date().toISOString().slice(0, 10)}`,
+      title: `Growth Plan — ${c.name} — ${state.growth.mode === 'sales' ? 'Sales' : state.growth.mode === 'strategy' ? 'Strategy' : 'Scaling'} — ${new Date().toISOString().slice(0, 10)}`,
       // An edited doc exports exactly as edited; otherwise build from the form.
       blocks: state.growth.docHtml != null ? gpBlocksFromDocHtml(state.growth.docHtml) : gpBuildBlocks(),
     });

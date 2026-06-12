@@ -252,9 +252,10 @@ async function handle(req: Request): Promise<Response> {
     }
     if (body.action === "compose_sales_plan") {
       await new Promise((r) => setTimeout(r, 900));
+      const mention = Array.isArray(body.mention) ? (body.mention as string[]).join(" · ") : "";
       return json({
         ok: true,
-        intro: "(mock) We looked at your business and we get it. You help great clients but the pipeline is up and down, and chasing new ones eats your week. We can fix that for you.",
+        intro: "(mock) We looked at your business and we get it. You help great clients but the pipeline is up and down, and chasing new ones eats your week. We can fix that for you." + (mention ? ` [mentions: ${mention}]` : "") + (body.prompt ? ` [prompt: ${String(body.prompt).slice(0, 40)}]` : ""),
         expectations: "(mock) Once this is live, your calendar starts filling with calls from people who already match what you sell. You just show up and close. Most clients see the first booked calls within a few weeks.",
         closing: "(mock) If this feels right, the next step is a quick call. No pressure, and you keep the plan either way.",
       }, cors);
