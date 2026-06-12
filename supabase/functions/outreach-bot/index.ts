@@ -69,6 +69,14 @@ function toNotionBlock(b: { t: string; text?: string; headers?: string[]; rows?:
       const kids = (b.children ?? []).map(toNotionBlock);
       return { object: "block", type: "toggle", toggle: { rich_text: nRich(b.text ?? ""), children: kids.slice(0, 100) } };
     }
+    case "image": {
+      const url = String((b as { url?: string }).url ?? "");
+      return { object: "block", type: "image", image: { type: "external", external: { url } } };
+    }
+    case "bookmark": {
+      return { object: "block", type: "bookmark", bookmark: { url: String((b as { url?: string }).url ?? "") } };
+    }
+    case "divider": return { object: "block", type: "divider", divider: {} };
     case "table": {
       const headers = b.headers ?? [];
       const rows = b.rows ?? [];
@@ -879,6 +887,30 @@ Deno.serve(async (req) => {
         // Stamp the send-day cadence (Day +gap, +2*gap, …) server-side.
         const followups = parsed.followups.map((f, i) => ({ day: gapDays * (i + 1), framework: f.framework || frameworks[i]?.name || "", text: f.text || "" }));
         return json({ ok: true, followups });
+      }
+
+      case "compose_sales_plan": {
+        const ctx = String(body.context ?? "").slice(0, 12_000);
+        const rules = String(body.rules ?? "").trim();
+        const res = await claudeMessages({
+          model: CLAUDE_MODEL,
+          max_tokens: 1400,
+          system:
+            `You are an outreach expert writing a short, warm sales plan that an agency sends to a prospect to win their business. ` +
+            `The reader knows nothing about outreach tools or jargon. Write like a friendly human, not a marketer.\n` +
+            `HARD STYLE RULES: a 12 year old must understand every line. Short sentences. No dashes or hyphens anywhere, rephrase instead. ` +
+            `No buzzwords, no AI sounding words (no "leverage", "utilize", "synergy", "robust", "seamless", "elevate", "unlock", "empower"). ` +
+            `Only use facts from the notes, never invent numbers or names. Speak to the prospect as "you".\n` +
+            (rules ? `HOUSE LANGUAGE RULES (also obey):\n${rules}\n` : "") +
+            `Return valid JSON only, no fences:\n` +
+            `{"intro":"2 to 3 sentences: show you understand the prospect's business and what they want, warm and specific to them",` +
+            `"expectations":"2 to 3 sentences: in plain words, what they can expect once this is running, framed around booked calls",` +
+            `"closing":"1 or 2 sentences: a simple, low pressure nudge to take the next step"}`,
+          messages: [{ role: "user", content: ctx }],
+        });
+        const parsed = parseJson(textOf(res.content), null as Record<string, unknown> | null);
+        if (!parsed) return json({ ok: false, error: "could not parse sales plan — try again" }, 422);
+        return json({ ok: true, ...parsed });
       }
 
       case "compose_growth_plan": {

@@ -858,6 +858,7 @@
           <button class="tab-btn" id="atab-niches" onclick="switchAdminTab('niches')">Niches & Angles</button>
           <button class="tab-btn" id="atab-clients" onclick="switchAdminTab('clients')">Clients</button>
           <button class="tab-btn" id="atab-followups" onclick="switchAdminTab('followups')">↪ Follow-ups</button>
+          <button class="tab-btn" id="atab-agency" onclick="switchAdminTab('agency')">🤝 Our Agency</button>
           <button class="tab-btn" id="atab-tools" onclick="switchAdminTab('tools')">🧰 Tools KB</button>
           <button class="tab-btn" id="atab-settings" onclick="switchAdminTab('settings')">Settings</button>
         </div>
@@ -1203,8 +1204,57 @@ function migrateConfig(cfg) {
   });
   // Tools knowledge base — what we use, why, cost. Seed sensible defaults once.
   if (!Array.isArray(cfg.toolsKB) || !cfg.toolsKB.length) cfg.toolsKB = structuredClone(DEFAULT_TOOLS_KB);
+  // Our own agency profile (the seller) — powers the sales growth plan.
+  if (!cfg.sellerProfile || !cfg.sellerProfile.name) cfg.sellerProfile = structuredClone(DEFAULT_SELLER_PROFILE);
   return cfg;
 }
+
+// Agency Advanta's own profile — what we pitch in a sales plan. Seeded from the
+// company's real offer, contract and VSL; fully editable in Admin → Our Agency.
+const DEFAULT_SELLER_PROFILE = {
+  name: 'Agency Advanta',
+  legal: 'JA Jozy Media Ltd',
+  website: 'agencyadvanta.com',
+  logo: 'https://logo.clearbit.com/agencyadvanta.com',
+  founder: 'Josiah Ansu, Founder and CEO',
+  tagline: 'Done for you AI outreach that books you 10 to 40 qualified calls a month.',
+  whoWeAre: 'We build and run cold outreach systems for marketing agencies and consultants. We find your ideal clients, write the messages, set up the software, and fill your calendar with qualified calls so you can just show up and close.',
+  trackRecord: '400+ agencies and consultants served, over 500 verified results, scaled to $115k a month.',
+  whyDifferent: [
+    'Our own LinkedIn software multiplies your outreach volume at the lowest cost.',
+    'AI finds and scores the decision makers most ready to buy, for pennies.',
+    'AI reply agents book calls and follow up 24/7, sounding just like you.',
+    'Unlimited one to one coaching built around your business.',
+    'A scripting system that works without big guarantees or wild offers.'
+  ],
+  howWeFindLeads: 'We pull your ideal buyers from a live database of millions, then our AI scores every one so only the people most likely to buy make your list. Each message gets a personal first line written by AI, so it reads like one human writing to another, not spam.',
+  howWeQualify: 'We agree on exactly who counts as a good lead with you up front. Only people who match get contacted, and the AI reply agent asks the right questions before it books anyone, so your calendar fills with real prospects, not tire kickers.',
+  caseStudies: [
+    { name: 'Zach', result: 'added an extra $120k a month in 90 days', link: '' },
+    { name: 'Craig', result: 'added $30k in 30 days', link: '' },
+    { name: 'Vimmal', result: 'added $160k in 9 months', link: '' },
+    { name: 'Nana', result: 'added $20k a month in 4 months', link: '' },
+    { name: 'Abde', result: 'added $12k a month', link: '' },
+    { name: 'Aaman', result: 'added $40k a month', link: '' }
+  ],
+  socialLinks: [],
+  process: [
+    { phase: 'Week 1 to 2: Setup', items: ['Audit your offer, niche and positioning', 'Agree who counts as a qualified lead', 'Build your personalised growth plan', 'Set up the AI to score leads and write personal lines', 'Build your target list of ideal clients'] },
+    { phase: 'Week 3 to 8: Launch and improve', items: ['Launch your campaigns and watch the numbers', 'Test the messaging and the targeting', 'Find what books qualified calls', 'Install AI reply agents to book calls for you', 'Review your sales calls together'] },
+    { phase: 'Week 9 to 12: Scale and step back', items: ['Turn up the volume or add new systems', 'Add fresh angles', 'Book more calls', 'Hand calls to setters so you step out of chasing leads', 'Grow your revenue'] }
+  ],
+  deliverables: [
+    'Full cold outreach setup: lead list, AI personalisation, scripts and software',
+    'Access to our proprietary software for the whole support period',
+    '12 months of hands on support',
+    'Weekly performance reviews and campaign updates',
+    'One to one support calls whenever you need them',
+    '24 hour Slack support from Josiah and the client success team'
+  ],
+  programCost: 15000,
+  guarantee: 'If you do not book at least 50 calls in 180 days, you get every penny back. Simple conditions apply, like staying active and replying to your leads.',
+  costNote: 'The fee covers everything we build and run for you. You pay the email and sending tools (inboxes, domains, sending software) directly to those providers, and we set them all up for you.'
+};
 
 // Outbound follow-up frameworks — models the AI bases each follow-up on.
 const DEFAULT_FOLLOWUP_FRAMEWORKS = [
@@ -2348,7 +2398,7 @@ function adminEdit(type, id) {
 }
 
 function renderAdmin() {
-  ['frameworks', 'winning', 'niches', 'clients', 'followups', 'tools', 'settings'].forEach(t =>
+  ['frameworks', 'winning', 'niches', 'clients', 'followups', 'agency', 'tools', 'settings'].forEach(t =>
     document.getElementById('atab-' + t).classList.toggle('active', t === state.adminTab));
   const body = document.getElementById('adminBody');
 
@@ -2384,7 +2434,55 @@ function adminTabHtml() {
   if (t === 'clients') return adminClients();
   if (t === 'tools') return adminToolsKB();
   if (t === 'followups') return adminFollowups();
+  if (t === 'agency') return adminAgency();
   return adminSettings();
+}
+
+// — Our Agency (seller profile that powers the Sales growth plan) —
+function adminAgency() {
+  const sp = config.sellerProfile || {};
+  const lines = a => (a || []).join('\n');
+  const csLines = (sp.caseStudies || []).map(c => `${c.name} | ${c.result}${c.link ? ' | ' + c.link : ''}`).join('\n');
+  const socialLines = (sp.socialLinks || []).map(s => `${s.label} | ${s.url}`).join('\n');
+  const processLines = (sp.process || []).map(p => `${p.phase} :: ${(p.items || []).join('; ')}`).join('\n');
+  const field = (id, label, val) => `<div class="form-group"><label class="form-label">${label}</label><input class="form-input" id="${id}" value="${esc(val || '')}"></div>`;
+  const area = (id, label, val, h) => `<div class="form-group"><label class="form-label">${label}</label><textarea class="form-textarea" id="${id}" style="min-height:${h || 70}px">${esc(val || '')}</textarea></div>`;
+  return `
+    <div class="info-block"><div class="info-title">🤝 Our agency profile</div>
+      <div class="hint">This is what the Sales growth plan pitches. The prospect's own research is pulled per client; this is the part about us. Everything here is editable.</div></div>
+    <div class="editor">
+      <div class="grid2">${field('sp-name', 'Name', sp.name)}${field('sp-website', 'Website', sp.website)}</div>
+      <div class="grid2">${field('sp-logo', 'Logo image URL', sp.logo)}${field('sp-founder', 'Founder (name, title)', sp.founder)}</div>
+      ${field('sp-tagline', 'Tagline', sp.tagline)}
+      ${area('sp-whoweare', 'Who we are', sp.whoWeAre)}
+      ${field('sp-track', 'Track record (one line)', sp.trackRecord)}
+      ${area('sp-find', 'How we find leads', sp.howWeFindLeads)}
+      ${area('sp-qual', 'How we keep leads qualified', sp.howWeQualify)}
+      ${area('sp-why', 'Why we are different (one per line)', lines(sp.whyDifferent), 90)}
+      ${area('sp-cases', 'Case studies (Name | result | optional video link, one per line)', csLines, 110)}
+      ${area('sp-social', 'Social / proof links (Label | url, one per line)', socialLines, 70)}
+      ${area('sp-deliverables', 'What is included (one per line)', lines(sp.deliverables), 110)}
+      ${area('sp-process', 'Process (Phase :: item; item; item, one phase per line)', processLines, 90)}
+      <div class="grid2">${field('sp-cost', 'Program cost (number)', sp.programCost)}${field('sp-costnote', 'Cost note', sp.costNote)}</div>
+      ${area('sp-guarantee', 'Guarantee / promise', sp.guarantee)}
+      <div style="display:flex;gap:8px"><button class="mini-btn" onclick="saveAgency()">💾 Save agency profile</button></div>
+    </div>`;
+}
+
+function saveAgency() {
+  const v = id => document.getElementById(id).value;
+  const splitLines = id => v(id).split('\n').map(s => s.trim()).filter(Boolean);
+  const sp = config.sellerProfile = config.sellerProfile || {};
+  sp.name = v('sp-name').trim(); sp.website = v('sp-website').trim(); sp.logo = v('sp-logo').trim();
+  sp.founder = v('sp-founder').trim(); sp.tagline = v('sp-tagline').trim();
+  sp.whoWeAre = v('sp-whoweare').trim(); sp.trackRecord = v('sp-track').trim();
+  sp.howWeFindLeads = v('sp-find').trim(); sp.howWeQualify = v('sp-qual').trim();
+  sp.whyDifferent = splitLines('sp-why'); sp.deliverables = splitLines('sp-deliverables');
+  sp.caseStudies = splitLines('sp-cases').map(l => { const [name, result, link] = l.split('|').map(s => (s || '').trim()); return { name: name || '', result: result || '', link: link || '' }; });
+  sp.socialLinks = splitLines('sp-social').map(l => { const [label, url] = l.split('|').map(s => (s || '').trim()); return { label: label || url, url: url || '' }; }).filter(s => s.url);
+  sp.process = splitLines('sp-process').map(l => { const [phase, items] = l.split('::'); return { phase: (phase || '').trim(), items: (items || '').split(';').map(s => s.trim()).filter(Boolean) }; });
+  sp.programCost = +v('sp-cost') || 0; sp.costNote = v('sp-costnote').trim(); sp.guarantee = v('sp-guarantee').trim();
+  persistConfig(); showNotif('Agency profile saved');
 }
 
 // — Follow-up frameworks —
@@ -3636,6 +3734,7 @@ function initGrowth(clientId, mode = 'strategy') {
     observed: { email: { contacted: 0, replies: 0, positive: 0, booked: 0 }, linkedin: { contacted: 0, replies: 0, positive: 0, booked: 0 } },
     nicheSize: '', targetBookings: 10, narrative: null,
     followupIds: [],
+    prospectWebsite: '',
   };
   gpResetToolDefaults();
 }
@@ -3808,10 +3907,12 @@ function renderGrowthForm() {
         onfocus="this.select()" onchange="gpSetClientByName(this.value)">
       <datalist id="gp-client-list">${config.clients.map(x => `<option value="${esc(x.name)}">`).join('')}</datalist></div>
     <div class="mode-toggle">
+      <div class="mode-btn ${g.mode === 'sales' ? 'on' : ''}" onclick="gpSetMode('sales')">
+        <div class="mt-title">🤝 Sales</div><div class="mt-sub">Growth plan for sales — pitch a prospect</div></div>
       <div class="mode-btn ${g.mode === 'strategy' ? 'on' : ''}" onclick="gpSetMode('strategy')">
-        <div class="mt-title">🧪 Strategy</div><div class="mt-sub">Proof of concept — new client, find what works</div></div>
+        <div class="mt-title">🧪 Strategy</div><div class="mt-sub">Proof of concept — find what works</div></div>
       <div class="mode-btn ${g.mode === 'growth' ? 'on' : ''}" onclick="gpSetMode('growth')">
-        <div class="mt-title">📈 Growth</div><div class="mt-sub">Scaling — proven script, scale to X bookings</div></div>
+        <div class="mt-title">📈 Growth</div><div class="mt-sub">Scaling — proven script to X bookings</div></div>
     </div>`;
 
   // Context carried over from the Builder/Reservoir
@@ -3862,15 +3963,14 @@ function renderGrowthForm() {
       ${['email', 'linkedin'].map(ch => `<div class="chip ${g.channels.includes(ch) ? 'on' : ''}" onclick="gpToggleChannel('${ch}')">${CH_LABEL[ch]}</div>`).join('')}
     </div></div>`;
 
-  html += (g.mode === 'strategy') ? gpStrategyForm(c) : gpGrowthForm(c);
+  html += (g.mode === 'sales') ? gpSalesForm(c) : (g.mode === 'strategy') ? gpStrategyForm(c) : gpGrowthForm(c);
 
-  // Pull from the reservoir without leaving the view
-  html += gpReservoirPicker(c);
-  html += gpFollowupsSection(c);
+  // Pull from the reservoir without leaving the view (not needed for a sales pitch)
+  if (g.mode !== 'sales') { html += gpReservoirPicker(c); html += gpFollowupsSection(c); }
 
-  // Assumptions (shared) + tools + cost
-  html += gpAssumptionsForm();
-  html += gpToolsForm();
+  // Assumptions (shared) + tools + cost — hidden in sales mode (the pitch keeps
+  // its own simple expectations; the program fee is fixed, not tool-summed)
+  if (g.mode !== 'sales') { html += gpAssumptionsForm(); html += gpToolsForm(); }
 
   // Narrative — auto-drafts as you build; obeys the house rules from Admin
   html += `<div class="step"><div class="step-head"><span class="step-title">✨ Narrative &amp; house style</span></div>
@@ -3888,6 +3988,29 @@ function renderGrowthForm() {
     </div>`;
 
   el.innerHTML = html;
+}
+
+function gpSalesForm(c) {
+  const g = state.growth;
+  const icps = c?.icps || [];
+  let html = `<div class="step"><div class="step-head"><span class="step-title"><span class="step-num">2</span>Who we will target for them</span><span class="step-count">${g.targets.length}/3</span></div>
+    <div class="hint" style="margin-bottom:7px">Pick the ICPs we will go after. Each one shows a real example company in the pitch.</div>`;
+  if (!icps.length) {
+    html += `<div class="proof-empty">No ICPs for ${esc(c?.name || 'this client')} yet. Build them in the client profile (✏️ Edit profile → 🎯 ICP Builder).</div>`;
+  } else {
+    html += `<div class="chips">${icps.map(i => {
+      const on = g.targets.some(t => t.icpId === i.id);
+      return `<div class="chip ${on ? 'on' : ''}" onclick="gpToggleTarget('${i.id}')">${on ? '★ ' : '☆ '}${esc(i.title)}</div>`;
+    }).join('')}</div>`;
+  }
+  html += `</div>`;
+
+  html += `<div class="step"><div class="step-head"><span class="step-title"><span class="step-num">3</span>Their prospect &amp; goal</span></div>
+    <div class="form-group"><label class="form-label">Prospect's website (we pull their logo for the pitch)</label>
+      <input class="form-input" value="${esc(g.prospectWebsite || '')}" placeholder="theirsite.com" onchange="state.growth.prospectWebsite=this.value.trim();renderGrowthPreview()"></div>
+    <div class="assume-grid"><label>Booked calls / month we aim for</label><input class="num-input" type="number" value="${g.targetBookings}" onchange="state.growth.targetBookings=+this.value;renderGrowthPreview()"></div>
+    <div class="hint">Channel above sets which program steps appear. Everything else comes from the client brief and your agency profile (Admin → Our Agency).</div></div>`;
+  return html;
 }
 
 function gpStrategyForm(c) {
@@ -4237,7 +4360,7 @@ function gpFollowupsDocHtml() {
 // via web search, cached on the ICP.
 function gpBriefTargetIcps() {
   const c = gpClient(), g = state.growth;
-  if (g.mode === 'strategy') return g.targets.map(t => (c.icps || []).find(i => i.id === t.icpId)).filter(Boolean);
+  if (g.mode === 'strategy' || g.mode === 'sales') return g.targets.map(t => (c.icps || []).find(i => i.id === t.icpId)).filter(Boolean);
   return [];
 }
 
@@ -4376,7 +4499,7 @@ function renderGrowthPreview() {
       `<div class="edit-note">✏️ Editing the doc — select text to format or ask AI. Form changes are paused. <a onclick="gpRegenDoc()">↺ Regenerate from form</a></div>` +
       `<div class="doc" contenteditable="true" id="gpDoc" oninput="gpDocInput()" onmouseup="gpDocSel()" onkeyup="gpDocSel()">${g.docHtml}</div>`;
   } else {
-    el.innerHTML = actions + (g.mode === 'strategy' ? gpPreviewStrategy(c) : gpPreviewGrowth(c));
+    el.innerHTML = actions + (g.mode === 'sales' ? gpPreviewSales(c) : g.mode === 'strategy' ? gpPreviewStrategy(c) : gpPreviewGrowth(c));
   }
 }
 
@@ -4540,6 +4663,132 @@ function gpBlocksFromDocHtml(html) {
   return B;
 }
 
+// ── Sales growth plan — a personalised pitch document for a prospect ──
+const domainOf = u => String(u || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '').trim();
+const logoUrl = u => { const d = domainOf(u); return d ? 'https://logo.clearbit.com/' + d : ''; };
+
+// How we work, per chosen channel — driven by the agency profile.
+function salesProgramSteps(sp, channels) {
+  const ch = channels.includes('linkedin') && channels.includes('email') ? 'email and LinkedIn'
+    : channels.includes('linkedin') ? 'LinkedIn' : 'email';
+  const find = sp.howWeFindLeads || '';
+  const qual = sp.howWeQualify || '';
+  const chanLine = channels.includes('linkedin') && !channels.includes('email')
+    ? 'We run everything through LinkedIn, sending connection requests and messages for you every day.'
+    : channels.includes('email') && !channels.includes('linkedin')
+    ? 'We set up your inboxes and sending tools, then send your emails automatically every day.'
+    : 'We run both email and LinkedIn, sending automatically every day across both.';
+  return { ch, find, qual, chanLine };
+}
+
+function gpPreviewSales(c) {
+  const g = state.growth, N = g.narrative, sp = config.sellerProfile || {};
+  const T = +g.targetBookings || 0;
+  const prospectLogo = logoUrl(g.prospectWebsite);
+  const prog = salesProgramSteps(sp, g.channels);
+  const briefIcps = gpBriefTargetIcps();
+  const m = computeReverse(g.channels[0] || 'email', g.assumptions[g.channels[0] || 'email'], T);
+
+  let h = `<div class="doc">`;
+  // Header with prospect logo
+  h += `<div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
+    ${prospectLogo ? `<img src="${esc(prospectLogo)}" alt="" style="height:40px;width:40px;border-radius:8px;object-fit:contain;background:#fff" onerror="this.style.display='none'">` : ''}
+    <h1 style="margin:0">Growth Plan for ${esc(c?.name || 'your business')}</h1></div>
+  <div class="doc-sub">Prepared by ${esc(sp.name || 'us')} · ${prog.ch}</div>`;
+
+  if (N?.intro) h += `<div class="callout">${esc(N.intro)}</div>`;
+  else h += `<p style="color:var(--amber)">Click “Draft” on the left to personalise the opening for ${esc(c?.name || 'this prospect')}.</p>`;
+
+  // Their research (services / positioning / case studies / who we'll reach + example)
+  h += gpBriefHtml(c);
+
+  // How we get them booked calls
+  h += `<h2>How we get you booked calls</h2>
+    <p>${esc(prog.chanLine)}</p>
+    <h3>How we find your leads</h3><p>${esc(prog.find)}</p>
+    <h3>How we keep them qualified</h3><p>${esc(prog.qual)}</p>`;
+  (sp.process || []).forEach(ph => {
+    h += `<h3>${esc(ph.phase)}</h3><ul>${(ph.items || []).map(it => `<li>${esc(it)}</li>`).join('')}</ul>`;
+  });
+
+  // What to expect (simple, from the reverse funnel)
+  h += `<h2>What you can expect</h2>`;
+  if (N?.expectations) h += `<p>${esc(N.expectations)}</p>`;
+  h += `<p>To book around <b>${gpInt(T)}</b> calls a month, we send about <b>${gpInt(m.outreaches || m.connects)}</b> messages to roughly <b>${gpInt(m.leads)}</b> of your ideal buyers. You only talk to the ones who put their hand up.</p>`;
+
+  // Who we are (proof)
+  h += `<h2>Who we are</h2>
+    ${sp.logo ? `<img src="${esc(sp.logo)}" alt="" style="height:34px;margin-bottom:8px" onerror="this.style.display='none'">` : ''}
+    <p>${esc(sp.whoWeAre || '')}</p>
+    ${sp.trackRecord ? `<p><b>${esc(sp.trackRecord)}</b></p>` : ''}
+    ${(sp.whyDifferent || []).length ? `<h3>Why we are different</h3><ul>${sp.whyDifferent.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}`;
+  if ((sp.caseStudies || []).length) {
+    h += `<h3>Recent wins</h3><ul>${sp.caseStudies.map(cstud => `<li>${esc(cstud.name)} ${esc(cstud.result)}${cstud.link ? ` — <a href="${esc(cstud.link)}" target="_blank" style="color:var(--accent2)">watch</a>` : ''}</li>`).join('')}</ul>`;
+  }
+  if ((sp.socialLinks || []).length) {
+    h += `<p>${sp.socialLinks.map(s => `<a href="${esc(s.url)}" target="_blank" style="color:var(--accent2);margin-right:12px">${esc(s.label)}</a>`).join('')}</p>`;
+  }
+
+  // What's included + guarantee
+  h += `<h2>What's included</h2><ul>${(sp.deliverables || []).map(d => `<li>${esc(d)}</li>`).join('')}</ul>`;
+  if (sp.guarantee) h += `<div class="callout pledge"><b>Our promise:</b> ${esc(sp.guarantee)}</div>`;
+
+  // Investment
+  h += `<h2>Your investment</h2>
+    <p class="big-stat">${gpMoney(sp.programCost || 0)}</p>
+    <p>${esc(sp.costNote || '')}</p>`;
+
+  // Next steps
+  h += `<h2>Next step</h2>`;
+  if (N?.closing) h += `<p>${esc(N.closing)}</p>`;
+  h += `<ul><li>Book a quick call with ${esc((sp.founder || '').split(',')[0] || sp.name || 'us')}</li><li>We walk you through this plan and answer anything</li><li>If it is a fit we start, if not you keep the plan for free</li></ul>`;
+  h += `</div>`;
+  return h;
+}
+
+// Sales plan as portable blocks for Notion (logos as images, videos as bookmarks).
+function gpSalesBlocks(c) {
+  const g = state.growth, N = g.narrative, sp = config.sellerProfile || {};
+  const T = +g.targetBookings || 0;
+  const prog = salesProgramSteps(sp, g.channels);
+  const m = computeReverse(g.channels[0] || 'email', g.assumptions[g.channels[0] || 'email'], T);
+  const B = [];
+  const pl = logoUrl(g.prospectWebsite);
+  if (pl) B.push({ t: 'image', url: pl });
+  B.push({ t: 'h1', text: `Growth Plan for ${c?.name || 'your business'}` });
+  B.push({ t: 'p', text: `Prepared by ${sp.name || 'us'} · ${prog.ch}` });
+  if (N?.intro) B.push({ t: 'callout', text: N.intro });
+  gpBriefBlocks(c).forEach(b => B.push(b));
+  B.push({ t: 'h2', text: 'How we get you booked calls' });
+  B.push({ t: 'p', text: prog.chanLine });
+  B.push({ t: 'h3', text: 'How we find your leads' }); B.push({ t: 'p', text: prog.find });
+  B.push({ t: 'h3', text: 'How we keep them qualified' }); B.push({ t: 'p', text: prog.qual });
+  (sp.process || []).forEach(ph => { B.push({ t: 'h3', text: ph.phase }); (ph.items || []).forEach(it => B.push({ t: 'bullet', text: it })); });
+  B.push({ t: 'h2', text: 'What you can expect' });
+  if (N?.expectations) B.push({ t: 'p', text: N.expectations });
+  B.push({ t: 'p', text: `To book around ${gpInt(T)} calls a month, we send about ${gpInt(m.outreaches || m.connects)} messages to roughly ${gpInt(m.leads)} of your ideal buyers. You only talk to the ones who put their hand up.` });
+  B.push({ t: 'h2', text: 'Who we are' });
+  if (sp.logo) B.push({ t: 'image', url: sp.logo });
+  if (sp.whoWeAre) B.push({ t: 'p', text: sp.whoWeAre });
+  if (sp.trackRecord) B.push({ t: 'p', text: sp.trackRecord });
+  if ((sp.whyDifferent || []).length) { B.push({ t: 'h3', text: 'Why we are different' }); sp.whyDifferent.forEach(w => B.push({ t: 'bullet', text: w })); }
+  if ((sp.caseStudies || []).length) {
+    B.push({ t: 'h3', text: 'Recent wins' });
+    sp.caseStudies.forEach(cs => { B.push({ t: 'bullet', text: `${cs.name} ${cs.result}` }); if (cs.link) B.push({ t: 'bookmark', url: cs.link }); });
+  }
+  (sp.socialLinks || []).forEach(s => B.push({ t: 'bookmark', url: s.url }));
+  B.push({ t: 'h2', text: "What's included" });
+  (sp.deliverables || []).forEach(d => B.push({ t: 'bullet', text: d }));
+  if (sp.guarantee) B.push({ t: 'callout', text: 'Our promise: ' + sp.guarantee });
+  B.push({ t: 'h2', text: 'Your investment' });
+  B.push({ t: 'p', text: gpMoney(sp.programCost || 0) });
+  if (sp.costNote) B.push({ t: 'p', text: sp.costNote });
+  B.push({ t: 'h2', text: 'Next step' });
+  if (N?.closing) B.push({ t: 'p', text: N.closing });
+  ['Book a quick call with ' + ((sp.founder || '').split(',')[0] || sp.name || 'us'), 'We walk you through this plan and answer anything', 'If it is a fit we start, if not you keep the plan for free'].forEach(s => B.push({ t: 'todo', text: s }));
+  return B;
+}
+
 function gpPreviewStrategy(c) {
   const g = state.growth;
   const costRows = gpCostRows();
@@ -4684,16 +4933,30 @@ async function gpComposeNarrative(silent) {
   if (btn) { btn.textContent = '✨ Drafting…'; btn.disabled = true; }
   if (st) st.textContent = 'Writing…';
   try {
-    const numbers = g.channels.map(ch => ({ channel: ch, ...(g.mode === 'strategy' ? computeReverse(ch, g.assumptions[ch], g.targetBookings) : computeChannel(ch, g.assumptions[ch])) }));
-    const r = await api({
-      action: 'compose_growth_plan',
-      mode: g.mode,
-      client: { name: c.name, proofLine: c.caseStudy?.proofLine || '', mechanism: c.caseStudy?.mechanism || '' },
-      targets: g.targets.map(t => ({ title: t.title, niche: t.niche, pains: t.pains, angles: t.angles, offer: t.offer })),
-      numbers, channels: g.channels, targetBookings: g.targetBookings, nicheSize: g.nicheSize,
-      rules: config.settings?.growthRules || '',
-    });
-    g.narrative = { execSummary: r.execSummary || '', targetRationales: r.targetRationales || [], closing: r.closing || '' };
+    if (g.mode === 'sales') {
+      const b = c.brief || {};
+      const ctx = [
+        `Prospect: ${c.name} (${c.meta || ''})`,
+        b.positioning ? `What they do: ${b.positioning}` : '',
+        (b.services || []).length ? `Their services: ${b.services.join('; ')}` : '',
+        `Who we will target for them: ${gpBriefTargetIcps().map(i => i.title).join('; ') || 'their ideal customers'}`,
+        `Booked calls a month we aim for: ${g.targetBookings}`,
+        `Channel: ${g.channels.join(' and ')}`,
+      ].filter(Boolean).join('\n');
+      const r = await api({ action: 'compose_sales_plan', context: ctx, rules: config.settings?.growthRules || '' });
+      g.narrative = { intro: r.intro || '', expectations: r.expectations || '', closing: r.closing || '' };
+    } else {
+      const numbers = g.channels.map(ch => ({ channel: ch, ...(g.mode === 'strategy' ? computeReverse(ch, g.assumptions[ch], g.targetBookings) : computeChannel(ch, g.assumptions[ch])) }));
+      const r = await api({
+        action: 'compose_growth_plan',
+        mode: g.mode,
+        client: { name: c.name, proofLine: c.caseStudy?.proofLine || '', mechanism: c.caseStudy?.mechanism || '' },
+        targets: g.targets.map(t => ({ title: t.title, niche: t.niche, pains: t.pains, angles: t.angles, offer: t.offer })),
+        numbers, channels: g.channels, targetBookings: g.targetBookings, nicheSize: g.nicheSize,
+        rules: config.settings?.growthRules || '',
+      });
+      g.narrative = { execSummary: r.execSummary || '', targetRationales: r.targetRationales || [], closing: r.closing || '' };
+    }
     if (!g.docHtml) renderGrowthPreview();
     if (st) st.textContent = '✅ Drafted';
     if (!silent) showNotif('Narrative drafted');
@@ -4745,9 +5008,9 @@ async function gpApplyHouseRules() {
 function gpMaybeAutoNarrate() {
   const g = state.growth;
   if (!g || !adminKey || g.docHtml) return;
-  const hasContent = g.mode === 'strategy' ? g.targets.length : !!g.winningScript;
+  const hasContent = g.mode === 'sales' ? (g.targets.length || !!gpClient()?.brief) : g.mode === 'strategy' ? g.targets.length : !!g.winningScript;
   if (!hasContent) return;
-  const sig = JSON.stringify({ m: g.mode, ch: g.channels, t: g.targets.map(t => t.icpId + '|' + t.angles.join(',') + '|' + t.scripts.length), w: g.winningScript?.text || '', tb: g.targetBookings });
+  const sig = JSON.stringify({ m: g.mode, ch: g.channels, t: g.targets.map(t => t.icpId + '|' + t.angles.join(',') + '|' + t.scripts.length), w: g.winningScript?.text || '', tb: g.targetBookings, pw: g.prospectWebsite || '' });
   if (g._narratedSig === sig || g._narrating) return;
   g._narratedSig = sig;
   clearTimeout(g._narrTimer);
@@ -4769,6 +5032,7 @@ function gpSnapshot() {
     narrative: g.narrative ? structuredClone(g.narrative) : null,
     docHtml: g.docHtml ?? null,
     followupIds: [...(g.followupIds || [])],
+    prospectWebsite: g.prospectWebsite || '',
     notionUrl: g._notionUrl || '',
     createdAt: new Date().toISOString().slice(0, 10),
   };
@@ -4806,6 +5070,7 @@ function gpLoadPlan(id) {
     narrative: p.narrative ? structuredClone(p.narrative) : null, _notionUrl: p.notionUrl || '',
     docHtml: p.docHtml ?? null,
     followupIds: [...(p.followupIds || [])],
+    prospectWebsite: p.prospectWebsite || '',
   };
   renderGrowth(); showNotif('Plan loaded');
 }
@@ -4820,6 +5085,7 @@ function gpDeletePlan(id) {
 // Portable block list → Notion (server converts). Built from the same numbers as the preview.
 function gpBuildBlocks() {
   const g = state.growth, c = gpClient(), N = g.narrative, B = [];
+  if (g.mode === 'sales') return gpSalesBlocks(c);
   const strat = g.mode === 'strategy';
   B.push({ t: 'h1', text: `Growth Plan — ${c.name}` });
   B.push({ t: 'p', text: `${strat ? '🧪 Strategy · Proof of Concept' : '📈 Growth · Scaling'} · ${g.channels.map(ch => CH_LABEL[ch]).join(' · ')} · ${new Date().toISOString().slice(0, 10)}` });
