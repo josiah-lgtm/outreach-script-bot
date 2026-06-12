@@ -733,6 +733,7 @@
     <div class="logo">script<span>.</span>bot</div>
     <button class="nav-btn active" id="nav-builder" onclick="showScreen('builder')">Builder</button>
     <button class="nav-btn" id="nav-growth" onclick="showScreen('growth')">📈 Growth</button>
+    <button class="nav-btn" id="nav-sales" onclick="showScreen('sales')">🤝 Sales</button>
     <button class="nav-btn" id="nav-admin" onclick="showScreen('admin')">⚙ Admin</button>
   </div>
   <div class="header-right">
@@ -873,6 +874,14 @@
     <div class="growth-wrap">
       <div class="growth-form" id="growthForm"></div>
       <div class="growth-preview" id="growthPreview"></div>
+    </div>
+  </div>
+
+  <!-- SALES — prospects pipeline (full-width view, separate from clients) -->
+  <div class="panel" id="panelSales" style="display:none">
+    <div class="growth-wrap">
+      <div class="growth-form" id="salesForm"></div>
+      <div class="growth-preview" id="salesPreview"></div>
     </div>
   </div>
 
@@ -1123,6 +1132,7 @@ let state = {
   growth: null,                // working growth-plan object (built in initGrowth)
   angleMix: [],                // ingredients picked in the angle composer [{kind,text}]
   angleMixOpen: false,         // composer fold open?
+  prospectId: null,            // selected prospect in the Sales tab
 };
 let scriptIndex = []; // flat ordered list built during renderOutput; each {framework,angle,label,script,nicheId}
 
@@ -1203,6 +1213,9 @@ function migrateConfig(cfg) {
   ['email', 'linkedin', 'personalization'].forEach(k => {
     cfg.settings.planDefaults[k] = { ...DEFAULT_CONFIG.settings.planDefaults[k], ...(cfg.settings.planDefaults[k] || {}) };
   });
+  // Prospects (Sales tab) — pre-sale pipeline, completely separate from clients.
+  cfg.prospects = cfg.prospects || [];
+  cfg.prospects.forEach(p => { p.icps = p.icps || []; p.targetIcpIds = p.targetIcpIds || []; p.sampleScripts = p.sampleScripts || []; p.channels = p.channels || ['email']; p.caseStudy = p.caseStudy || {}; });
   // Tools knowledge base — what we use, why, cost. Seed sensible defaults once.
   if (!Array.isArray(cfg.toolsKB) || !cfg.toolsKB.length) cfg.toolsKB = structuredClone(DEFAULT_TOOLS_KB);
   // Our own agency profile (the seller) — powers the sales growth plan.
@@ -1366,22 +1379,21 @@ function setConfigPill(mode) {
 // ─── SCREENS / TABS ────────────────────────────────────────────────────────────
 function showScreen(s) {
   state.screen = s;
-  document.getElementById('nav-builder').classList.toggle('active', s === 'builder');
-  document.getElementById('nav-growth').classList.toggle('active', s === 'growth');
-  document.getElementById('nav-admin').classList.toggle('active', s === 'admin');
-  const adminMode = s === 'admin';
-  const growthMode = s === 'growth';
+  ['builder', 'growth', 'sales', 'admin'].forEach(n =>
+    document.getElementById('nav-' + n).classList.toggle('active', s === n));
   const builderMode = s === 'builder';
   document.getElementById('panelClients').style.display = builderMode ? 'flex' : 'none';
   document.getElementById('panelBuild').style.display   = builderMode ? 'flex' : 'none';
   document.getElementById('panelOutput').style.display  = builderMode ? 'flex' : 'none';
-  document.getElementById('panelAdmin').style.display   = adminMode ? 'flex' : 'none';
-  document.getElementById('panelGrowth').style.display  = growthMode ? 'flex' : 'none';
-  document.getElementById('main').classList.toggle('admin-mode', adminMode);
-  document.getElementById('main').classList.toggle('growth-mode', growthMode);
+  document.getElementById('panelAdmin').style.display   = s === 'admin' ? 'flex' : 'none';
+  document.getElementById('panelGrowth').style.display  = s === 'growth' ? 'flex' : 'none';
+  document.getElementById('panelSales').style.display   = s === 'sales' ? 'flex' : 'none';
+  document.getElementById('main').classList.toggle('admin-mode', s === 'admin');
+  document.getElementById('main').classList.toggle('growth-mode', s === 'growth' || s === 'sales');
   fmtHide();
-  if (adminMode) renderAdmin();
-  if (growthMode) openGrowth();
+  if (s === 'admin') renderAdmin();
+  if (s === 'growth') openGrowth();
+  if (s === 'sales') renderSales();
 }
 
 function switchTab(tab) {
@@ -4009,12 +4021,10 @@ function renderGrowthForm() {
         onfocus="this.select()" onchange="gpSetClientByName(this.value)">
       <datalist id="gp-client-list">${config.clients.map(x => `<option value="${esc(x.name)}">`).join('')}</datalist></div>
     <div class="mode-toggle">
-      <div class="mode-btn ${g.mode === 'sales' ? 'on' : ''}" onclick="gpSetMode('sales')">
-        <div class="mt-title">🤝 Sales</div><div class="mt-sub">Growth plan for sales — pitch a prospect</div></div>
       <div class="mode-btn ${g.mode === 'strategy' ? 'on' : ''}" onclick="gpSetMode('strategy')">
-        <div class="mt-title">🧪 Strategy</div><div class="mt-sub">Proof of concept — find what works</div></div>
+        <div class="mt-title">🧪 Strategy</div><div class="mt-sub">Proof of concept — new client, find what works</div></div>
       <div class="mode-btn ${g.mode === 'growth' ? 'on' : ''}" onclick="gpSetMode('growth')">
-        <div class="mt-title">📈 Growth</div><div class="mt-sub">Scaling — proven script to X bookings</div></div>
+        <div class="mt-title">📈 Growth</div><div class="mt-sub">Scaling — proven script, scale to X bookings</div></div>
     </div>`;
 
   // Context carried over from the Builder/Reservoir
@@ -4065,14 +4075,15 @@ function renderGrowthForm() {
       ${['email', 'linkedin'].map(ch => `<div class="chip ${g.channels.includes(ch) ? 'on' : ''}" onclick="gpToggleChannel('${ch}')">${CH_LABEL[ch]}</div>`).join('')}
     </div></div>`;
 
-  html += (g.mode === 'sales') ? gpSalesForm(c) : (g.mode === 'strategy') ? gpStrategyForm(c) : gpGrowthForm(c);
+  html += (g.mode === 'strategy') ? gpStrategyForm(c) : gpGrowthForm(c);
 
-  // Pull from the reservoir without leaving the view (not needed for a sales pitch)
-  if (g.mode !== 'sales') { html += gpReservoirPicker(c); html += gpFollowupsSection(c); }
+  // Pull from the reservoir without leaving the view
+  html += gpReservoirPicker(c);
+  html += gpFollowupsSection(c);
 
-  // Assumptions (shared) + tools + cost — hidden in sales mode (the pitch keeps
-  // its own simple expectations; the program fee is fixed, not tool-summed)
-  if (g.mode !== 'sales') { html += gpAssumptionsForm(); html += gpToolsForm(); }
+  // Assumptions (shared) + tools + cost
+  html += gpAssumptionsForm();
+  html += gpToolsForm();
 
   // Narrative — auto-drafts as you build; obeys the house rules from Admin
   html += `<div class="step"><div class="step-head"><span class="step-title">✨ Narrative &amp; house style</span></div>
@@ -4090,29 +4101,6 @@ function renderGrowthForm() {
     </div>`;
 
   el.innerHTML = html;
-}
-
-function gpSalesForm(c) {
-  const g = state.growth;
-  const icps = c?.icps || [];
-  let html = `<div class="step"><div class="step-head"><span class="step-title"><span class="step-num">2</span>Who we will target for them</span><span class="step-count">${g.targets.length}/3</span></div>
-    <div class="hint" style="margin-bottom:7px">Pick the ICPs we will go after. Each one shows a real example company in the pitch.</div>`;
-  if (!icps.length) {
-    html += `<div class="proof-empty">No ICPs for ${esc(c?.name || 'this client')} yet. Build them in the client profile (✏️ Edit profile → 🎯 ICP Builder).</div>`;
-  } else {
-    html += `<div class="chips">${icps.map(i => {
-      const on = g.targets.some(t => t.icpId === i.id);
-      return `<div class="chip ${on ? 'on' : ''}" onclick="gpToggleTarget('${i.id}')">${on ? '★ ' : '☆ '}${esc(i.title)}</div>`;
-    }).join('')}</div>`;
-  }
-  html += `</div>`;
-
-  html += `<div class="step"><div class="step-head"><span class="step-title"><span class="step-num">3</span>Their prospect &amp; goal</span></div>
-    <div class="form-group"><label class="form-label">Prospect's website (we pull their logo for the pitch)</label>
-      <input class="form-input" value="${esc(g.prospectWebsite || '')}" placeholder="theirsite.com" onchange="state.growth.prospectWebsite=this.value.trim();renderGrowthPreview()"></div>
-    <div class="assume-grid"><label>Booked calls / month we aim for</label><input class="num-input" type="number" value="${g.targetBookings}" onchange="state.growth.targetBookings=+this.value;renderGrowthPreview()"></div>
-    <div class="hint">Channel above sets which program steps appear. Everything else comes from the client brief and your agency profile (Admin → Our Agency).</div></div>`;
-  return html;
 }
 
 function gpStrategyForm(c) {
@@ -4462,7 +4450,7 @@ function gpFollowupsDocHtml() {
 // via web search, cached on the ICP.
 function gpBriefTargetIcps() {
   const c = gpClient(), g = state.growth;
-  if (g.mode === 'strategy' || g.mode === 'sales') return g.targets.map(t => (c.icps || []).find(i => i.id === t.icpId)).filter(Boolean);
+  if (g.mode === 'strategy') return g.targets.map(t => (c.icps || []).find(i => i.id === t.icpId)).filter(Boolean);
   return [];
 }
 
@@ -4505,10 +4493,10 @@ async function gpBuildClientBrief() {
 }
 
 // Preview HTML — rendered FIRST in the doc, before everything else.
-function gpBriefHtml(c, heading) {
+function gpBriefHtml(c, heading, icpsOverride) {
   const b = c?.brief;
   if (!b) return `<p style="color:var(--muted);font-size:12px">🧾 Build the client brief (left panel) to open the plan with ${esc(c?.name || 'the client')}'s services, positioning, case studies and competitors.</p>`;
-  const icps = gpBriefTargetIcps().filter(i => i.example);
+  const icps = (icpsOverride || gpBriefTargetIcps()).filter(i => i.example);
   let h = `<h2>${esc(heading || ('About ' + c.name))}</h2>`;
   if (b.positioning) h += `<p>${esc(b.positioning)}</p>`;
   if (b.services?.length) h += `<h3>Services</h3><ul>${b.services.map(s => `<li>${esc(s)}</li>`).join('')}</ul>`;
@@ -4522,17 +4510,17 @@ function gpBriefHtml(c, heading) {
 }
 
 // Export blocks — same content for Notion.
-function gpBriefBlocks(c, heading) {
+function gpBriefBlocks(c, heading, icpsOverride) {
   const b = c?.brief; if (!b) return [];
+  const briefIcpList = (icpsOverride || gpBriefTargetIcps()).filter(i => i.example);
   const B = [{ t: 'h2', text: heading || `About ${c.name}` }];
   if (b.positioning) B.push({ t: 'p', text: b.positioning });
   if (b.services?.length) { B.push({ t: 'h3', text: 'Services' }); b.services.forEach(s => B.push({ t: 'bullet', text: s })); }
   if (b.caseStudies?.length) { B.push({ t: 'h3', text: 'Case studies' }); b.caseStudies.forEach(s => B.push({ t: 'bullet', text: s })); }
   if (b.competitors?.length) { B.push({ t: 'h3', text: 'Competitors' }); b.competitors.forEach(s => B.push({ t: 'bullet', text: s })); }
-  const icps = gpBriefTargetIcps().filter(i => i.example);
-  if (icps.length) {
+  if (briefIcpList.length) {
     B.push({ t: 'h3', text: 'Who we will target, with a real example' });
-    icps.forEach(i => B.push({ t: 'p', text: `${i.title} → ${i.example.company}${i.example.website ? ` (${i.example.website})` : ''}. ${i.example.why}` }));
+    briefIcpList.forEach(i => B.push({ t: 'p', text: `${i.title} → ${i.example.company}${i.example.website ? ` (${i.example.website})` : ''}. ${i.example.why}` }));
   }
   return B;
 }
@@ -4601,7 +4589,7 @@ function renderGrowthPreview() {
       `<div class="edit-note">✏️ Editing the doc — select text to format or ask AI. Form changes are paused. <a onclick="gpRegenDoc()">↺ Regenerate from form</a></div>` +
       `<div class="doc" contenteditable="true" id="gpDoc" oninput="gpDocInput()" onmouseup="gpDocSel()" onkeyup="gpDocSel()">${g.docHtml}</div>`;
   } else {
-    el.innerHTML = actions + (g.mode === 'sales' ? gpPreviewSales(c) : g.mode === 'strategy' ? gpPreviewStrategy(c) : gpPreviewGrowth(c));
+    el.innerHTML = actions + (g.mode === 'strategy' ? gpPreviewStrategy(c) : gpPreviewGrowth(c));
   }
 }
 
@@ -4784,13 +4772,21 @@ function salesProgramSteps(sp, channels) {
   return { ch, find, qual, chanLine };
 }
 
-function gpPreviewSales(c) {
-  const g = state.growth, N = g.narrative, sp = config.sellerProfile || {};
-  const T = +g.targetBookings || 0;
-  const prospectLogo = logoUrl(g.prospectWebsite);
-  const prog = salesProgramSteps(sp, g.channels);
-  const briefIcps = gpBriefTargetIcps();
-  const m = computeReverse(g.channels[0] || 'email', g.assumptions[g.channels[0] || 'email'], T);
+// ── The prospect pitch document (Sales tab) ──
+// p is a PROSPECT record (config.prospects) — completely separate from clients.
+function prospectChosenIcps(p) {
+  return (p.icps || []).filter(i => (p.targetIcpIds || []).includes(i.id));
+}
+
+function prospectDocHtml(p) {
+  const c = p, N = p.narrative, sp = config.sellerProfile || {};
+  const T = +p.targetBookings || 10;
+  const channels = p.channels || ['email'];
+  const pd = config.settings.planDefaults;
+  const prospectLogo = logoUrl(p.website);
+  const prog = salesProgramSteps(sp, channels);
+  const chosenIcps = prospectChosenIcps(p);
+  const m = computeReverse(channels[0] || 'email', pd[channels[0] || 'email'], T);
 
   let h = `<div class="doc">`;
   // Header with prospect logo
@@ -4807,7 +4803,7 @@ function gpPreviewSales(c) {
   }
 
   // Their research (services / positioning / case studies / who we'll reach + example)
-  if (sd.show.brief) h += gpBriefHtml(c, salesHeading('brief', c));
+  if (sd.show.brief) h += gpBriefHtml(c, salesHeading('brief', c), chosenIcps);
 
   // How we get them booked calls
   if (sd.show.how) {
@@ -4825,6 +4821,13 @@ function gpPreviewSales(c) {
     h += `<h2>${esc(salesHeading('expect', c))}</h2>`;
     if (N?.expectations) h += `<p>${esc(N.expectations)}</p>`;
     h += `<p>To book around <b>${gpInt(T)}</b> calls a month, we send about <b>${gpInt(m.outreaches || m.connects)}</b> messages to roughly <b>${gpInt(m.leads)}</b> of your ideal buyers. You only talk to the ones who put their hand up.</p>`;
+  }
+
+  // Draft scripts — what their messages could look like
+  if ((p.sampleScripts || []).length) {
+    h += `<h2>What your messages could look like</h2>
+      <p>Real drafts written for your buyers. We sharpen these together before anything goes out.</p>`;
+    p.sampleScripts.forEach(s => { h += `${s.label ? `<h3>${esc(s.label)}</h3>` : ''}<div class="scriptbox">${esc(s.text)}</div>`; });
   }
 
   // Who we are (proof)
@@ -4871,20 +4874,22 @@ function gpPreviewSales(c) {
   return h;
 }
 
-// Sales plan as portable blocks for Notion (logos as images, videos as bookmarks).
-function gpSalesBlocks(c) {
-  const g = state.growth, N = g.narrative, sp = config.sellerProfile || {};
-  const T = +g.targetBookings || 0;
-  const prog = salesProgramSteps(sp, g.channels);
-  const m = computeReverse(g.channels[0] || 'email', g.assumptions[g.channels[0] || 'email'], T);
+// Prospect pitch as portable blocks for Notion (logos as images, videos as bookmarks).
+function prospectDocBlocks(p) {
+  const c = p, N = p.narrative, sp = config.sellerProfile || {};
+  const T = +p.targetBookings || 10;
+  const channels = p.channels || ['email'];
+  const pd = config.settings.planDefaults;
+  const prog = salesProgramSteps(sp, channels);
+  const m = computeReverse(channels[0] || 'email', pd[channels[0] || 'email'], T);
   const B = [];
-  const pl = logoUrl(g.prospectWebsite);
+  const pl = logoUrl(p.website);
   const sd = sp.salesDoc || DEFAULT_SALES_DOC;
   if (pl) B.push({ t: 'image', url: pl });
   B.push({ t: 'h1', text: `Growth Plan for ${c?.name || 'your business'}` });
   B.push({ t: 'p', text: `Prepared by ${sp.name || 'us'} · ${prog.ch}` });
   if (sd.show.intro && N?.intro) B.push({ t: 'callout', text: N.intro });
-  if (sd.show.brief) gpBriefBlocks(c, salesHeading('brief', c)).forEach(b => B.push(b));
+  if (sd.show.brief) gpBriefBlocks(c, salesHeading('brief', c), prospectChosenIcps(p)).forEach(b => B.push(b));
   if (sd.show.how) {
     B.push({ t: 'h2', text: salesHeading('how', c) });
     B.push({ t: 'p', text: prog.chanLine });
@@ -4896,6 +4901,11 @@ function gpSalesBlocks(c) {
     B.push({ t: 'h2', text: salesHeading('expect', c) });
     if (N?.expectations) B.push({ t: 'p', text: N.expectations });
     B.push({ t: 'p', text: `To book around ${gpInt(T)} calls a month, we send about ${gpInt(m.outreaches || m.connects)} messages to roughly ${gpInt(m.leads)} of your ideal buyers. You only talk to the ones who put their hand up.` });
+  }
+  if ((p.sampleScripts || []).length) {
+    B.push({ t: 'h2', text: 'What your messages could look like' });
+    B.push({ t: 'p', text: 'Real drafts written for your buyers. We sharpen these together before anything goes out.' });
+    p.sampleScripts.forEach(s => { if (s.label) B.push({ t: 'h3', text: s.label }); B.push({ t: 'code', text: s.text }); });
   }
   if (sd.show.who) {
     B.push({ t: 'h2', text: salesHeading('who', c) });
@@ -5076,31 +5086,16 @@ async function gpComposeNarrative(silent) {
   if (btn) { btn.textContent = '✨ Drafting…'; btn.disabled = true; }
   if (st) st.textContent = 'Writing…';
   try {
-    if (g.mode === 'sales') {
-      const b = c.brief || {};
-      const ctx = [
-        `Prospect: ${c.name} (${c.meta || ''})`,
-        b.positioning ? `What they do: ${b.positioning}` : '',
-        (b.services || []).length ? `Their services: ${b.services.join('; ')}` : '',
-        `Who we will target for them: ${gpBriefTargetIcps().map(i => i.title).join('; ') || 'their ideal customers'}`,
-        `Booked calls a month we aim for: ${g.targetBookings}`,
-        `Channel: ${g.channels.join(' and ')}`,
-      ].filter(Boolean).join('\n');
-      const sd = config.sellerProfile?.salesDoc || {};
-      const r = await api({ action: 'compose_sales_plan', context: ctx, rules: config.settings?.growthRules || '', prompt: sd.prompt || '', mention: sd.mention || [] });
-      g.narrative = { intro: r.intro || '', expectations: r.expectations || '', closing: r.closing || '' };
-    } else {
-      const numbers = g.channels.map(ch => ({ channel: ch, ...(g.mode === 'strategy' ? computeReverse(ch, g.assumptions[ch], g.targetBookings) : computeChannel(ch, g.assumptions[ch])) }));
-      const r = await api({
-        action: 'compose_growth_plan',
-        mode: g.mode,
-        client: { name: c.name, proofLine: c.caseStudy?.proofLine || '', mechanism: c.caseStudy?.mechanism || '' },
-        targets: g.targets.map(t => ({ title: t.title, niche: t.niche, pains: t.pains, angles: t.angles, offer: t.offer })),
-        numbers, channels: g.channels, targetBookings: g.targetBookings, nicheSize: g.nicheSize,
-        rules: config.settings?.growthRules || '',
-      });
-      g.narrative = { execSummary: r.execSummary || '', targetRationales: r.targetRationales || [], closing: r.closing || '' };
-    }
+    const numbers = g.channels.map(ch => ({ channel: ch, ...(g.mode === 'strategy' ? computeReverse(ch, g.assumptions[ch], g.targetBookings) : computeChannel(ch, g.assumptions[ch])) }));
+    const r = await api({
+      action: 'compose_growth_plan',
+      mode: g.mode,
+      client: { name: c.name, proofLine: c.caseStudy?.proofLine || '', mechanism: c.caseStudy?.mechanism || '' },
+      targets: g.targets.map(t => ({ title: t.title, niche: t.niche, pains: t.pains, angles: t.angles, offer: t.offer })),
+      numbers, channels: g.channels, targetBookings: g.targetBookings, nicheSize: g.nicheSize,
+      rules: config.settings?.growthRules || '',
+    });
+    g.narrative = { execSummary: r.execSummary || '', targetRationales: r.targetRationales || [], closing: r.closing || '' };
     if (!g.docHtml) renderGrowthPreview();
     if (st) st.textContent = '✅ Drafted';
     if (!silent) showNotif('Narrative drafted');
@@ -5152,7 +5147,7 @@ async function gpApplyHouseRules() {
 function gpMaybeAutoNarrate() {
   const g = state.growth;
   if (!g || !adminKey || g.docHtml) return;
-  const hasContent = g.mode === 'sales' ? (g.targets.length || !!gpClient()?.brief) : g.mode === 'strategy' ? g.targets.length : !!g.winningScript;
+  const hasContent = g.mode === 'strategy' ? g.targets.length : !!g.winningScript;
   if (!hasContent) return;
   const sig = JSON.stringify({ m: g.mode, ch: g.channels, t: g.targets.map(t => t.icpId + '|' + t.angles.join(',') + '|' + t.scripts.length), w: g.winningScript?.text || '', tb: g.targetBookings, pw: g.prospectWebsite || '' });
   if (g._narratedSig === sig || g._narrating) return;
@@ -5229,7 +5224,6 @@ function gpDeletePlan(id) {
 // Portable block list → Notion (server converts). Built from the same numbers as the preview.
 function gpBuildBlocks() {
   const g = state.growth, c = gpClient(), N = g.narrative, B = [];
-  if (g.mode === 'sales') return gpSalesBlocks(c);
   const strat = g.mode === 'strategy';
   B.push({ t: 'h1', text: `Growth Plan — ${c.name}` });
   B.push({ t: 'p', text: `${strat ? '🧪 Strategy · Proof of Concept' : '📈 Growth · Scaling'} · ${g.channels.map(ch => CH_LABEL[ch]).join(' · ')} · ${new Date().toISOString().slice(0, 10)}` });
@@ -5460,6 +5454,227 @@ function fuSave() {
   closeFollowupModal();
   if (state.screen === 'builder') renderBuilder();
   if (state.screen === 'growth') renderGrowth();
+}
+
+// ─── SALES TAB — PROSPECTS (separate database from clients) ──────────────────
+const prospect = id => (config.prospects || []).find(p => p.id === id);
+function curProspect() { return prospect(state.prospectId) || (config.prospects || [])[0] || null; }
+
+function renderSales() {
+  const p = curProspect();
+  if (p && state.prospectId !== p.id) state.prospectId = p.id;
+  renderSalesForm();
+  renderSalesPreview();
+}
+
+function renderSalesForm() {
+  const el = document.getElementById('salesForm'); if (!el) return;
+  const p = curProspect();
+  let html = `
+    <div class="info-block" style="border-color:rgba(37,99,235,.45)">
+      <div class="info-title">🤝 New prospect — one input, the whole pitch</div>
+      <div class="hint" style="margin-bottom:8px">Paste their website. We research the site, build their ICPs, write the client brief, find a real example company, draft the narrative — and the pitch document appears on the right. Prospects live separately from your clients.</div>
+      <div style="display:flex;gap:8px">
+        <input class="form-input" id="ps-website" placeholder="prospect-website.com" onkeydown="if(event.key==='Enter')prospectIntake()">
+        <button class="mini-btn" id="ps-go" onclick="prospectIntake()" style="white-space:nowrap">🚀 Research &amp; build</button>
+      </div>
+      <div class="hint" id="ps-status" style="min-height:16px;margin-top:6px"></div>
+    </div>`;
+
+  const list = config.prospects || [];
+  if (list.length) {
+    html += `<div class="gp-sub">Prospects (${list.length})</div>`;
+    html += list.map(x => `
+      <div class="plan-row" style="${x.id === state.prospectId ? 'border-color:var(--accent)' : ''}">
+        <div style="min-width:0;cursor:pointer" onclick="state.prospectId='${x.id}';renderSales()">
+          <b style="font-size:12px">${esc(x.name || domainOf(x.website))}</b> <span class="gp-badge sales">prospect</span>
+          <div class="pl-meta">${esc(domainOf(x.website))} · ${(x.icps || []).length} ICPs${x.brief ? ' · brief ✓' : ''}${(x.sampleScripts || []).length ? ' · ' + x.sampleScripts.length + ' drafts' : ''} · ${esc(x.createdAt || '')}${x.notionUrl ? ' · <a href="' + esc(x.notionUrl) + '" target="_blank" style="color:var(--accent2)">Notion ↗</a>' : ''}</div></div>
+        <button class="mini-btn danger" onclick="deleteProspect('${x.id}')">Del</button>
+      </div>`).join('');
+  }
+
+  if (p) {
+    const chosen = new Set(p.targetIcpIds || []);
+    html += `<div style="height:10px"></div>
+      <div class="step"><div class="step-head"><span class="step-title">🎯 ICPs to pitch for ${esc(p.name || 'them')}</span><span class="step-count">${chosen.size}/3</span></div>
+        ${(p.icps || []).length ? `<div class="chips">${p.icps.map(i =>
+          `<div class="chip ${chosen.has(i.id) ? 'on' : ''}" onclick="prospectToggleIcp('${i.id}')" title="${esc((i.jobTitles || []).join(', '))}">${esc(i.title)}${i.example ? ' ✓' : ''}</div>`).join('')}</div>`
+        : '<div class="proof-empty">No ICPs yet — run the research above.</div>'}
+      </div>
+      <div class="step"><div class="step-head"><span class="step-title">⚙ Pitch settings</span></div>
+        <div class="chips" style="margin-bottom:8px">${['email', 'linkedin'].map(ch =>
+          `<div class="chip ${(p.channels || []).includes(ch) ? 'on' : ''}" onclick="prospectToggleChannel('${ch}')">${CH_LABEL[ch]}</div>`).join('')}</div>
+        <div class="assume-grid"><label>Booked calls / month we aim for</label><input class="num-input" type="number" value="${p.targetBookings || 10}" onchange="curProspect().targetBookings=+this.value;persistConfig();renderSales()"></div>
+      </div>
+      <div class="step"><div class="step-head"><span class="step-title">✍️ Draft scripts — show them what it looks like</span></div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select class="form-select" id="ps-fw" style="flex:1;font-size:12px;padding:6px 9px">
+            ${config.frameworks.map(f => `<option value="${f.id}">${esc(f.name)}</option>`).join('')}
+          </select>
+          <button class="mini-btn" id="ps-draft" onclick="prospectDraftScripts()">✨ Write 2 drafts</button>
+        </div>
+        ${(p.sampleScripts || []).length ? `<div class="hint" style="margin-top:6px">${p.sampleScripts.length} draft${p.sampleScripts.length > 1 ? 's' : ''} in the doc · <a onclick="curProspect().sampleScripts=[];persistConfig();renderSales()" style="color:var(--red);cursor:pointer">remove</a></div>` : ''}
+      </div>
+      <div style="display:flex;gap:8px;margin:14px 0 40px">
+        <button class="mini-btn" style="flex:1" onclick="prospectNarrate()">↻ Redraft narrative</button>
+        <button class="btn btn-primary" style="flex:1" onclick="prospectExportNotion()">📤 Export to Notion</button>
+      </div>`;
+  }
+  el.innerHTML = html;
+}
+
+function renderSalesPreview() {
+  const el = document.getElementById('salesPreview'); if (!el) return;
+  const p = curProspect();
+  if (!p) { el.innerHTML = `<div class="doc-empty">🤝<br>Paste a prospect's website on the left.<br>The full personalised pitch builds itself here.</div>`; return; }
+  el.innerHTML = prospectDocHtml(p);
+}
+
+// The one-input pipeline: scrape → ICPs → brief → example client → narrative.
+async function prospectIntake() {
+  if (!adminKey) return showNotif('Sign in first', true);
+  const url = document.getElementById('ps-website').value.trim();
+  if (!url) return showNotif('Paste the prospect website first', true);
+  const btn = document.getElementById('ps-go'), st = document.getElementById('ps-status');
+  const say = m => { if (st) st.textContent = m; };
+  btn.disabled = true; btn.textContent = '🚀 Working…';
+  const p = { id: uid('pros'), website: url, name: domainOf(url), meta: '', caseStudy: {}, icps: [], targetIcpIds: [], brief: null, sampleScripts: [], channels: ['email'], targetBookings: 10, narrative: null, notionUrl: '', createdAt: new Date().toISOString().slice(0, 10) };
+  config.prospects.push(p);
+  state.prospectId = p.id;
+  persistConfig(); renderSalesForm();
+  try {
+    say('1/5 Reading their website…');
+    const r = await api({ action: 'research_client_site', url });
+    p.name = r.name || p.name; p.meta = r.meta || '';
+    p.caseStudy = { size: r.size || '', result: r.result || '', mechanism: r.mechanism || '', proofLine: r.proofLine || '', offers: r.offers || [], caseStudies: r.caseStudies || [], pains: r.pains || [], desires: r.desires || [], objections: r.objections || [] };
+    persistConfig(); renderSales();
+
+    say('2/5 Building their ideal customer profiles…');
+    const dossier = [`Client: ${p.name} (${p.meta})`, r.summary || '', `Mechanism: ${r.mechanism || ''}`, `Offers: ${(r.offers || []).join('; ')}`, `Case studies: ${(r.caseStudies || []).join('; ')}`, `Customer pains: ${(r.pains || []).join('; ')}`].join('\n');
+    const icpRes = await api({ action: 'build_icp', context: dossier });
+    p.icps = (icpRes.icps || []).map(i => ({ ...i, id: uid('icp') }));
+    p.targetIcpIds = p.icps.slice(0, 2).map(i => i.id);
+    persistConfig(); renderSales();
+
+    say('3/5 Writing the client brief…');
+    const briefRes = await api({ action: 'compose_client_brief', context: dossier, rules: config.settings?.growthRules || '' });
+    p.brief = { services: briefRes.services || [], positioning: briefRes.positioning || '', caseStudies: briefRes.caseStudies || [], competitors: briefRes.competitors || [], builtAt: new Date().toISOString().slice(0, 10) };
+    persistConfig(); renderSales();
+
+    say('4/5 Finding a real example of their ideal client…');
+    const first = p.icps.find(i => p.targetIcpIds.includes(i.id));
+    if (first) {
+      try {
+        const ex = await api({ action: 'find_icp_example', icp: { title: first.title, niche: first.niche, jobTitles: first.jobTitles, employeeSize: first.employeeSize, locations: first.locations } });
+        if (ex.company) first.example = { company: ex.company, website: ex.website || '', why: ex.why || '' };
+        persistConfig(); renderSales();
+      } catch {}
+    }
+
+    say('5/5 Writing the pitch…');
+    await prospectNarrate(true);
+    say('');
+    showNotif('🤝 Pitch ready for ' + p.name);
+    document.getElementById('ps-website').value = '';
+  } catch (e) {
+    say('⚠️ ' + e.message);
+    showNotif('Prospect research failed: ' + e.message, true);
+  }
+  btn.disabled = false; btn.textContent = '🚀 Research & build';
+}
+
+async function prospectNarrate(silent) {
+  const p = curProspect(); if (!p) return;
+  if (!adminKey) { if (!silent) showNotif('Sign in first', true); return; }
+  const b = p.brief || {};
+  const ctx = [
+    `Prospect: ${p.name} (${p.meta || ''})`,
+    b.positioning ? `What they do: ${b.positioning}` : '',
+    (b.services || []).length ? `Their services: ${b.services.join('; ')}` : '',
+    `Who we will target for them: ${prospectChosenIcps(p).map(i => i.title).join('; ') || 'their ideal customers'}`,
+    `Booked calls a month we aim for: ${p.targetBookings || 10}`,
+    `Channel: ${(p.channels || ['email']).join(' and ')}`,
+  ].filter(Boolean).join('\n');
+  const sd = config.sellerProfile?.salesDoc || {};
+  try {
+    const r = await api({ action: 'compose_sales_plan', context: ctx, rules: config.settings?.growthRules || '', prompt: sd.prompt || '', mention: sd.mention || [] });
+    p.narrative = { intro: r.intro || '', expectations: r.expectations || '', closing: r.closing || '' };
+    persistConfig(); renderSalesPreview();
+    if (!silent) showNotif('Narrative redrafted');
+  } catch (e) { if (!silent) showNotif('Draft failed: ' + e.message, true); }
+}
+
+function prospectToggleIcp(icpId) {
+  const p = curProspect(); if (!p) return;
+  const i = p.targetIcpIds.indexOf(icpId);
+  if (i !== -1) p.targetIcpIds.splice(i, 1);
+  else { if (p.targetIcpIds.length >= 3) return showNotif('Max 3 ICPs — keep the pitch focused', true); p.targetIcpIds.push(icpId); }
+  persistConfig(); renderSales();
+}
+
+function prospectToggleChannel(ch) {
+  const p = curProspect(); if (!p) return;
+  const i = (p.channels = p.channels || ['email']).indexOf(ch);
+  if (i !== -1) { if (p.channels.length > 1) p.channels.splice(i, 1); } else p.channels.push(ch);
+  persistConfig(); renderSales();
+}
+
+// Draft scripts the prospect can see — written as if THEY are the sender,
+// using OUR frameworks and their scraped pains + chosen ICP persona.
+async function prospectDraftScripts() {
+  const p = curProspect(); if (!p) return;
+  if (!adminKey) return showNotif('Sign in first', true);
+  const fw = framework(document.getElementById('ps-fw')?.value) || config.frameworks[0];
+  if (!fw) return showNotif('No frameworks in the library', true);
+  const icp = prospectChosenIcps(p)[0] || p.icps[0];
+  const angles = dedupeStr(p.caseStudy?.pains || []).slice(0, 2);
+  if (!angles.length) return showNotif('No pains found on their site — run research first', true);
+  const btn = document.getElementById('ps-draft');
+  if (btn) { btn.disabled = true; btn.textContent = '✨ Writing…'; }
+  try {
+    const r = await api({
+      action: 'generate',
+      prospect: {},
+      client: { name: p.name, caseStudy: p.caseStudy || {}, avoid: [], competitorIntel: '' },
+      niche: { name: icp?.niche || p.meta || '', triggerWords: [] },
+      frameworks: [{ id: fw.id, name: fw.name, category: fw.category, template: fw.template, rules: fw.rules }],
+      angles,
+      variantsPerAngle: 1,
+      globalRules: config.settings?.globalRules || '',
+      icp: icp ? { title: icp.title, niche: icp.niche, jobTitles: icp.jobTitles || [], locations: icp.locations || [], employeeSize: icp.employeeSize || '', revenue: icp.revenue || '', outboundNotes: icp.outboundNotes || '' } : undefined
+    });
+    const variants = (r.results || []).flatMap(res => (res.variants || []).map(v => ({ label: `${res.framework} · ${v.angle || ''}`, text: v.script || '' })));
+    if (!variants.length) throw new Error('no scripts returned');
+    p.sampleScripts = variants.slice(0, 2);
+    persistConfig(); renderSales();
+    showNotif('✍️ 2 draft scripts added to the pitch');
+  } catch (e) { showNotif('Draft failed: ' + e.message, true); }
+  if (btn) { btn.disabled = false; btn.textContent = '✨ Write 2 drafts'; }
+}
+
+async function prospectExportNotion() {
+  const p = curProspect(); if (!p) return;
+  if (!adminKey) return showNotif('Sign in first', true);
+  showNotif('Exporting to Notion…');
+  try {
+    const r = await api({
+      action: 'export_notion',
+      parentId: config.settings.notionParentId,
+      title: `Growth Plan for ${p.name} — ${new Date().toISOString().slice(0, 10)}`,
+      blocks: prospectDocBlocks(p),
+    });
+    p.notionUrl = r.url || '';
+    persistConfig(); renderSalesForm();
+    showNotif('✅ Exported to Notion');
+    if (r.url) window.open(r.url, '_blank');
+  } catch (e) { showNotif('Notion export failed: ' + e.message, true); }
+}
+
+function deleteProspect(id) {
+  if (!confirm('Delete this prospect and their pitch?')) return;
+  config.prospects = (config.prospects || []).filter(x => x.id !== id);
+  if (state.prospectId === id) state.prospectId = config.prospects[0]?.id || null;
+  persistConfig(); renderSales();
 }
 
 // ─── TEAM LOGIN ───────────────────────────────────────────────────────────────
