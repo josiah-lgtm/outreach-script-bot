@@ -5495,6 +5495,19 @@ function renderSalesForm() {
 
   if (p) {
     const chosen = new Set(p.targetIcpIds || []);
+    // Anything the pipeline didn't finish gets a one-click repair
+    const missing = [];
+    if (!(p.caseStudy?.pains || []).length && !p.caseStudy?.mechanism) missing.push('website research');
+    if (!(p.icps || []).length) missing.push('ICPs');
+    if (!p.brief) missing.push('client brief');
+    if (!p.narrative) missing.push('pitch narrative');
+    if (missing.length && !psRunning) {
+      html += `<div class="info-block" style="border-color:rgba(245,158,11,.45);margin-top:10px">
+        <div class="info-title">⚠️ Research incomplete for ${esc(p.name || 'this prospect')}</div>
+        <div class="hint" style="margin-bottom:8px">Missing: ${esc(missing.join(', '))}. One click re-runs just the missing parts.</div>
+        <button class="mini-btn" onclick="prospectRepair()">↻ Finish research</button>
+      </div>`;
+    }
     html += `<div style="height:10px"></div>
       <div class="step"><div class="step-head"><span class="step-title">🎯 ICPs to pitch for ${esc(p.name || 'them')}</span><span class="step-count">${chosen.size}/3</span></div>
         ${(p.icps || []).length ? `<div class="chips">${p.icps.map(i =>
@@ -5531,61 +5544,127 @@ function renderSalesPreview() {
 }
 
 // The one-input pipeline: scrape → ICPs → brief → example client → narrative.
+// Every step retries once and a failed step never kills the rest; whatever is
+// still missing gets a '↻ Finish research' button on the prospect.
+let psRunning = false;
+let _psLastSay = '';
+// The form re-renders mid-pipeline (to show ICPs as they land), which replaces
+// the status/button nodes — so always look them up fresh.
+function psSay(m) { _psLastSay = m; const st = document.getElementById('ps-status'); if (st) st.innerHTML = m; }
+function psApplyBusy() {
+  const b = document.getElementById('ps-go');
+  if (b) { b.disabled = psRunning; b.textContent = psRunning ? '🚀 Working…' : '🚀 Research & build'; }
+  if (psRunning) psSay(_psLastSay);
+}
+function psRender() { renderSales(); psApplyBusy(); }
+
+async function tryStep(label, fn) {
+  try { return await fn(); }
+  catch (e1) {
+    psSay(_psLastSay + ' (retrying…)');
+    try { return await fn(); }
+    catch (e2) { throw new Error(label + ' failed: ' + e2.message); }
+  }
+}
+
+// Runs whichever pieces are missing on the prospect. Used by the intake AND
+// the repair button, so a hiccup never strands a half-built pitch.
+async function prospectPipeline(p) {
+  const failures = [];
+  const dossier = () => [
+    `Client: ${p.name} (${p.meta || ''})`, p.summary || '',
+    `Mechanism: ${p.caseStudy?.mechanism || ''}`,
+    `Offers: ${(p.caseStudy?.offers || []).join('; ')}`,
+    `Case studies: ${(p.caseStudy?.caseStudies || []).join('; ')}`,
+    `Customer pains: ${(p.caseStudy?.pains || []).join('; ')}`,
+  ].join('\n');
+
+  const scraped = (p.caseStudy?.pains || []).length || p.caseStudy?.mechanism;
+  if (!scraped) {
+    psSay('1/5 Reading their website… (~1 min)');
+    try {
+      const r = await tryStep('Website research', () => api({ action: 'research_client_site', url: p.website }));
+      p.name = r.name || p.name; p.meta = r.meta || p.meta; p.summary = r.summary || '';
+      p.caseStudy = { size: r.size || '', result: r.result || '', mechanism: r.mechanism || '', proofLine: r.proofLine || '', offers: r.offers || [], caseStudies: r.caseStudies || [], pains: r.pains || [], desires: r.desires || [], objections: r.objections || [] };
+      persistConfig(); psRender();
+    } catch (e) { failures.push(e.message); }
+  }
+
+  if (!(p.icps || []).length) {
+    psSay('2/5 Building their ideal customer profiles… (real web research, ~2 min — leave this tab open)');
+    try {
+      const icpRes = await tryStep('ICP builder', () => api({ action: 'build_icp', context: dossier() }));
+      p.icps = (icpRes.icps || []).map(i => ({ ...i, id: uid('icp') }));
+      p.targetIcpIds = p.icps.slice(0, 2).map(i => i.id);
+      persistConfig(); psRender();
+    } catch (e) { failures.push(e.message); }
+  }
+
+  if (!p.brief) {
+    psSay('3/5 Writing the client brief…');
+    try {
+      const briefRes = await tryStep('Client brief', () => api({ action: 'compose_client_brief', context: dossier(), rules: config.settings?.growthRules || '' }));
+      p.brief = { services: briefRes.services || [], positioning: briefRes.positioning || '', caseStudies: briefRes.caseStudies || [], competitors: briefRes.competitors || [], builtAt: new Date().toISOString().slice(0, 10) };
+      persistConfig(); psRender();
+    } catch (e) { failures.push(e.message); }
+  }
+
+  const first = (p.icps || []).find(i => (p.targetIcpIds || []).includes(i.id));
+  if (first && !first.example) {
+    psSay('4/5 Finding a real example of their ideal client… (~1 min)');
+    try {
+      const ex = await tryStep('Example client', () => api({ action: 'find_icp_example', icp: { title: first.title, niche: first.niche, jobTitles: first.jobTitles, employeeSize: first.employeeSize, locations: first.locations } }));
+      if (ex.company) first.example = { company: ex.company, website: ex.website || '', why: ex.why || '' };
+      persistConfig(); psRender();
+    } catch (e) { failures.push(e.message); }
+  }
+
+  if (!p.narrative) {
+    psSay('5/5 Writing the pitch…');
+    try { await tryStep('Pitch narrative', () => prospectNarrateRaw(p)); persistConfig(); psRender(); }
+    catch (e) { failures.push(e.message); }
+  }
+  return failures;
+}
+
 async function prospectIntake() {
+  if (psRunning) return showNotif('Already researching — give it a minute', true);
   if (!adminKey) return showNotif('Sign in first', true);
   const url = document.getElementById('ps-website').value.trim();
   if (!url) return showNotif('Paste the prospect website first', true);
-  const btn = document.getElementById('ps-go'), st = document.getElementById('ps-status');
-  const say = m => { if (st) st.textContent = m; };
-  btn.disabled = true; btn.textContent = '🚀 Working…';
-  const p = { id: uid('pros'), website: url, name: domainOf(url), meta: '', caseStudy: {}, icps: [], targetIcpIds: [], brief: null, sampleScripts: [], channels: ['email'], targetBookings: 10, narrative: null, notionUrl: '', createdAt: new Date().toISOString().slice(0, 10) };
+  const p = { id: uid('pros'), website: url, name: domainOf(url), meta: '', summary: '', caseStudy: {}, icps: [], targetIcpIds: [], brief: null, sampleScripts: [], channels: ['email'], targetBookings: 10, narrative: null, notionUrl: '', createdAt: new Date().toISOString().slice(0, 10) };
   config.prospects.push(p);
   state.prospectId = p.id;
-  persistConfig(); renderSalesForm();
-  try {
-    say('1/5 Reading their website…');
-    const r = await api({ action: 'research_client_site', url });
-    p.name = r.name || p.name; p.meta = r.meta || '';
-    p.caseStudy = { size: r.size || '', result: r.result || '', mechanism: r.mechanism || '', proofLine: r.proofLine || '', offers: r.offers || [], caseStudies: r.caseStudies || [], pains: r.pains || [], desires: r.desires || [], objections: r.objections || [] };
-    persistConfig(); renderSales();
-
-    say('2/5 Building their ideal customer profiles…');
-    const dossier = [`Client: ${p.name} (${p.meta})`, r.summary || '', `Mechanism: ${r.mechanism || ''}`, `Offers: ${(r.offers || []).join('; ')}`, `Case studies: ${(r.caseStudies || []).join('; ')}`, `Customer pains: ${(r.pains || []).join('; ')}`].join('\n');
-    const icpRes = await api({ action: 'build_icp', context: dossier });
-    p.icps = (icpRes.icps || []).map(i => ({ ...i, id: uid('icp') }));
-    p.targetIcpIds = p.icps.slice(0, 2).map(i => i.id);
-    persistConfig(); renderSales();
-
-    say('3/5 Writing the client brief…');
-    const briefRes = await api({ action: 'compose_client_brief', context: dossier, rules: config.settings?.growthRules || '' });
-    p.brief = { services: briefRes.services || [], positioning: briefRes.positioning || '', caseStudies: briefRes.caseStudies || [], competitors: briefRes.competitors || [], builtAt: new Date().toISOString().slice(0, 10) };
-    persistConfig(); renderSales();
-
-    say('4/5 Finding a real example of their ideal client…');
-    const first = p.icps.find(i => p.targetIcpIds.includes(i.id));
-    if (first) {
-      try {
-        const ex = await api({ action: 'find_icp_example', icp: { title: first.title, niche: first.niche, jobTitles: first.jobTitles, employeeSize: first.employeeSize, locations: first.locations } });
-        if (ex.company) first.example = { company: ex.company, website: ex.website || '', why: ex.why || '' };
-        persistConfig(); renderSales();
-      } catch {}
-    }
-
-    say('5/5 Writing the pitch…');
-    await prospectNarrate(true);
-    say('');
+  psRunning = true;
+  persistConfig(); psRender();
+  document.getElementById('ps-website').value = '';
+  const failures = await prospectPipeline(p);
+  psRunning = false;
+  if (failures.length) {
+    psSay('⚠️ ' + esc(failures.join(' · ')) + ' — hit “↻ Finish research” on the prospect to retry the missing parts.');
+    showNotif('Research finished with gaps — see the ↻ button', true);
+  } else {
+    psSay('✅ Pitch ready. Want sample scripts in it? Hit “✍️ Write 2 drafts” below.');
     showNotif('🤝 Pitch ready for ' + p.name);
-    document.getElementById('ps-website').value = '';
-  } catch (e) {
-    say('⚠️ ' + e.message);
-    showNotif('Prospect research failed: ' + e.message, true);
   }
-  btn.disabled = false; btn.textContent = '🚀 Research & build';
+  psApplyBusy(); renderSalesForm(); psSay(_psLastSay);
 }
 
-async function prospectNarrate(silent) {
+// Re-run only the missing pieces of a half-built prospect.
+async function prospectRepair() {
+  if (psRunning) return showNotif('Already running — give it a minute', true);
+  if (!adminKey) return showNotif('Sign in first', true);
   const p = curProspect(); if (!p) return;
-  if (!adminKey) { if (!silent) showNotif('Sign in first', true); return; }
+  psRunning = true; psApplyBusy();
+  const failures = await prospectPipeline(p);
+  psRunning = false;
+  psSay(failures.length ? '⚠️ Still missing: ' + esc(failures.join(' · ')) : '✅ All pieces in place.');
+  showNotif(failures.length ? 'Some parts still failed — try again in a minute' : '✅ Research complete', !!failures.length);
+  psApplyBusy(); renderSalesForm(); psSay(_psLastSay);
+}
+
+// Core narrative call — throws on failure so the pipeline's retry sees it.
+async function prospectNarrateRaw(p) {
   const b = p.brief || {};
   const ctx = [
     `Prospect: ${p.name} (${p.meta || ''})`,
@@ -5596,9 +5675,15 @@ async function prospectNarrate(silent) {
     `Channel: ${(p.channels || ['email']).join(' and ')}`,
   ].filter(Boolean).join('\n');
   const sd = config.sellerProfile?.salesDoc || {};
+  const r = await api({ action: 'compose_sales_plan', context: ctx, rules: config.settings?.growthRules || '', prompt: sd.prompt || '', mention: sd.mention || [] });
+  p.narrative = { intro: r.intro || '', expectations: r.expectations || '', closing: r.closing || '' };
+}
+
+async function prospectNarrate(silent) {
+  const p = curProspect(); if (!p) return;
+  if (!adminKey) { if (!silent) showNotif('Sign in first', true); return; }
   try {
-    const r = await api({ action: 'compose_sales_plan', context: ctx, rules: config.settings?.growthRules || '', prompt: sd.prompt || '', mention: sd.mention || [] });
-    p.narrative = { intro: r.intro || '', expectations: r.expectations || '', closing: r.closing || '' };
+    await prospectNarrateRaw(p);
     persistConfig(); renderSalesPreview();
     if (!silent) showNotif('Narrative redrafted');
   } catch (e) { if (!silent) showNotif('Draft failed: ' + e.message, true); }
