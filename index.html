@@ -1193,6 +1193,10 @@ function migrateConfig(cfg) {
     if (!Array.isArray(c.nicheIds)) c.nicheIds = c.nicheId ? [c.nicheId] : [];
     delete c.nicheId;
     c.website = c.website || '';
+    c.contact = c.contact || '';   // client contact person (v9)
+    c.csm = c.csm || '';           // CSM owner (v9)
+    c.stage = c.stage || '';       // Testing | Proof of concept | Scaling (v9)
+    if (!Array.isArray(c.tags)) c.tags = [];
     c.competitorIntel = c.competitorIntel || [];
     c.frameworkOverrides = c.frameworkOverrides || {};
     c.caseStudy = c.caseStudy || {};
@@ -5915,10 +5919,19 @@ loadConfigAndRender();
   .v9-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
   .v9-h{font-size:18px;font-weight:600}
   .v9-sub{font-size:13px;color:var(--muted)}
-  .v9-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
   .v9-fchip{font-size:12px;padding:5px 11px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--muted)}
   .v9-fchip.on{border-color:var(--accent);color:var(--text)}
-  #v9-search{margin-left:auto;width:200px}
+  .v9-fpanel{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px}
+  .v9-frow,.v9-bulkrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+  .v9-flabel{font-size:12px;color:var(--muted);min-width:46px}
+  .v9-bulk{background:var(--bg2);border:1px solid var(--accent);border-radius:12px;padding:12px 14px;margin-bottom:14px}
+  .v9-bulkhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:14px}
+  .v9-cbox{width:20px;height:20px;border-radius:5px;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;color:#fff;flex:none}
+  .v9-cbox.on{background:var(--accent);border-color:var(--accent)}
+  .v9-card.sel{border-color:var(--accent)}
+  .v9-stage{font-size:11px;padding:2px 9px;border-radius:999px;background:var(--bg3);color:var(--subtle);white-space:nowrap}
+  .v9-cardtags{display:flex;flex-wrap:wrap;gap:4px}
+  .v9-tagpill{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--bg3);color:var(--subtle)}
   .v9-grouplabel{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 8px}
   .v9-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
   .v9-card{text-align:left;cursor:pointer;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:13px;display:flex;flex-direction:column;gap:10px;font:inherit;color:inherit}
@@ -5953,31 +5966,48 @@ loadConfigAndRender();
 </style>
 <script>
 (function(){
-  window.V9 = window.V9 || { client:null, sec:'overview', filterNiche:'All', search:'' };
+  window.V9 = window.V9 || { client:null, sec:'overview', filterNiche:'All', filterCsm:'All', filterTag:'All', filterStage:'All', search:'', filterOpen:false, selectMode:false, selected:{} };
   function v9ini(s){return (s||'?').split(/\s+/).map(function(w){return w[0]}).slice(0,2).join('').toUpperCase();}
   function v9board(c){var g={idea:[],testing:[],winning:[]};(c.scriptReservoir||[]).forEach(function(s){(g[s.status]||(g[s.status]=[])).push(s);});return g;}
   function v9niche(c){return config.niches.find(function(n){return n.id===primaryNicheId(c)})||null;}
 
-  function v9Card(c){var b=v9board(c);return '<button class="v9-card" onclick="osOpenClient(\''+c.id+'\')"><div class="v9-cardtop"><div class="v9-av">'+v9ini(c.name)+'</div><div style="flex:1;min-width:0"><div class="v9-name">'+esc(c.name)+'</div><div class="v9-meta">'+esc(c.meta||'')+'</div></div></div><div class="v9-counts"><span><i class="ti ti-bulb"></i> '+b.idea.length+'</span><span><i class="ti ti-flask"></i> '+b.testing.length+'</span><span><i class="ti ti-trophy"></i> '+b.winning.length+'</span></div></button>';}
+  function v9Card(c){var b=v9board(c);
+    var sel=!!V9.selected[c.id];
+    var cb=V9.selectMode?'<div class="v9-cbox '+(sel?'on':'')+'">'+(sel?'<i class="ti ti-check"></i>':'')+'</div>':'';
+    var primary=c.contact||c.name, secondary=c.contact?c.name:(c.meta||'');
+    var stage=c.stage?'<span class="v9-stage">'+esc(c.stage)+'</span>':'';
+    var tags=(c.tags||[]).map(function(t){return '<span class="v9-tagpill">'+esc(t)+'</span>';}).join('');
+    return '<div class="v9-card'+(sel?' sel':'')+'" onclick="osCardClick(\''+c.id+'\')"><div class="v9-cardtop">'+cb+'<div class="v9-av">'+v9ini(primary)+'</div><div style="flex:1;min-width:0"><div class="v9-name">'+esc(primary)+'</div><div class="v9-meta">'+esc(secondary)+'</div></div>'+stage+'</div>'+(tags?'<div class="v9-cardtags">'+tags+'</div>':'')+'<div class="v9-counts"><span><i class="ti ti-bulb"></i> '+b.idea.length+'</span><span><i class="ti ti-flask"></i> '+b.testing.length+'</span><span><i class="ti ti-trophy"></i> '+b.winning.length+'</span>'+(c.csm?'<span style="margin-left:auto">'+esc(c.csm)+'</span>':'')+'</div></div>';}
 
+  var STAGES=['Testing','Proof of concept','Scaling'];
   function v9Match(c){
     if(V9.filterNiche && V9.filterNiche!=='All' && primaryNicheId(c)!==V9.filterNiche) return false;
+    if(V9.filterCsm && V9.filterCsm!=='All' && (c.csm||'')!==V9.filterCsm) return false;
+    if(V9.filterStage && V9.filterStage!=='All' && (c.stage||'')!==V9.filterStage) return false;
+    if(V9.filterTag && V9.filterTag!=='All' && (c.tags||[]).indexOf(V9.filterTag)<0) return false;
     var q=(V9.search||'').trim().toLowerCase();
-    if(q && (((c.name||'')+' '+(c.meta||'')).toLowerCase().indexOf(q)<0)) return false;
+    if(q && (((c.name||'')+' '+(c.contact||'')+' '+(c.meta||'')).toLowerCase().indexOf(q)<0)) return false;
     return true;
   }
+  function uniqVals(get){var o={};config.clients.forEach(function(c){var v=get(c);(Array.isArray(v)?v:[v]).forEach(function(x){if(x)o[x]=1;});});return Object.keys(o);}
+  function frow(label,dim,opts){return '<div class="v9-frow"><span class="v9-flabel">'+label+'</span>'+['All'].concat(opts).map(function(o){var on=(V9['filter'+dim]||'All')===o; var oid=(dim==='Niche')?o:o; return '<button class="v9-fchip '+(on?'on':'')+'" onclick="osSetF(\''+dim+'\',\''+esc(o).replace(/'/g,"\\'")+'\')">'+esc(o)+'</button>';}).join('')+'</div>';}
   function v9List(){
-    var top='<div class="v9-top"><div><div class="v9-h">Clients</div><div class="v9-sub">Open a client — overview, scripts, growth, history</div></div><button class="mini-btn" onclick="adminEdit(\'clients\',\'__new__\')">+ New client</button></div>';
-    var fchips='<button class="v9-fchip '+((!V9.filterNiche||V9.filterNiche==='All')?'on':'')+'" onclick="osFilterNiche(\'All\')">All</button>'+config.niches.map(function(n){return '<button class="v9-fchip '+(V9.filterNiche===n.id?'on':'')+'" onclick="osFilterNiche(\''+n.id+'\')">'+esc(n.name)+'</button>';}).join('');
-    var filters='<div class="v9-filters"><span class="v9-meta"><i class="ti ti-filter"></i> Niche</span>'+fchips+'<input id="v9-search" placeholder="Search clients…" value="'+esc(V9.search||'')+'" oninput="osSearch(this.value)"></div>';
+    var fcount=['Niche','Csm','Tag','Stage'].filter(function(d){return (V9['filter'+d]||'All')!=='All';}).length;
+    var n=Object.keys(V9.selected).length;
+    var top='<div class="v9-top"><div><div class="v9-h">Clients</div><div class="v9-sub">Open a client — overview, scripts, growth, history</div></div><div style="display:flex;gap:8px"><button class="mini-btn" onclick="osToggleFilter()"><i class="ti ti-filter"></i> Filter'+(fcount?(' ('+fcount+')'):'')+'</button><button class="mini-btn" onclick="osToggleSelectMode()"><i class="ti ti-checkbox"></i> '+(V9.selectMode?'Done':'Select')+'</button><button class="mini-btn" onclick="adminEdit(\'clients\',\'__new__\')">+ New client</button></div></div>';
+    // filter panel
+    var nicheRow='<div class="v9-frow"><span class="v9-flabel">Niche</span><button class="v9-fchip '+((!V9.filterNiche||V9.filterNiche==='All')?'on':'')+'" onclick="osFilterNiche(\'All\')">All</button>'+config.niches.map(function(nn){return '<button class="v9-fchip '+(V9.filterNiche===nn.id?'on':'')+'" onclick="osFilterNiche(\''+nn.id+'\')">'+esc(nn.name)+'</button>';}).join('')+'</div>';
+    var panel=V9.filterOpen?('<div class="v9-fpanel">'+nicheRow+frow('CSM','Csm',uniqVals(function(c){return c.csm;}))+frow('Tag','Tag',uniqVals(function(c){return c.tags;}))+frow('Stage','Stage',STAGES.concat(uniqVals(function(c){return c.stage;}).filter(function(s){return STAGES.indexOf(s)<0;})))+'<div style="margin-top:8px"><input id="v9-search" placeholder="Search clients…" value="'+esc(V9.search||'')+'" oninput="osSearch(this.value)" style="width:240px"></div></div>'):'';
+    // bulk bar
+    var bulk=V9.selectMode?('<div class="v9-bulk"><div class="v9-bulkhead"><b>'+n+' selected</b><span><button class="mini-btn" onclick="osSelectAllShown()">Select all</button> <button class="mini-btn" onclick="osClearSel()">Clear</button></span></div><div class="v9-bulkrow"><span class="v9-flabel">Stage</span>'+STAGES.map(function(s){return '<button class="v9-fchip" onclick="osBulkStage(\''+s+'\')">'+s+'</button>';}).join('')+'</div><div class="v9-bulkrow"><span class="v9-flabel">CSM</span><input id="v9-bulkcsm" placeholder="Name" style="width:120px"><button class="mini-btn" onclick="osBulkCsm()">Assign</button> &nbsp; <span class="v9-flabel">Tag</span><input id="v9-bulktag" placeholder="Tag" style="width:110px"><button class="mini-btn" onclick="osBulkTag()">Add</button></div></div>'):'';
     var byN={};config.clients.filter(v9Match).forEach(function(c){var k=primaryNicheId(c);(byN[k]=byN[k]||[]).push(c);});
     var body='';
-    config.niches.forEach(function(n){var cs=byN[n.id];if(!cs||!cs.length)return;body+='<div class="v9-grouplabel">'+esc(n.name)+'</div><div class="v9-grid">'+cs.map(v9Card).join('')+'</div>';});
+    config.niches.forEach(function(nn){var cs=byN[nn.id];if(!cs||!cs.length)return;body+='<div class="v9-grouplabel">'+esc(nn.name)+'</div><div class="v9-grid">'+cs.map(v9Card).join('')+'</div>';});
     var orphans=config.clients.filter(function(c){return v9Match(c)&&!niche(primaryNicheId(c))});
     if(orphans.length)body+='<div class="v9-grouplabel">No niche yet</div><div class="v9-grid">'+orphans.map(v9Card).join('')+'</div>';
     if(!config.clients.length)body='<div class="v9-sub" style="margin-top:14px">No clients yet — add one.</div>';
     else if(!body)body='<div class="v9-sub" style="margin-top:14px">No clients match these filters.</div>';
-    return top+filters+body;
+    return top+panel+bulk+body;
   }
 
   function v9BoardHtml(c){var g=v9board(c);var cols=[['idea','Ideas','ti-bulb'],['testing','Testing','ti-flask'],['winning','Winning','ti-trophy']];
@@ -6028,7 +6058,18 @@ loadConfigAndRender();
 
   window.renderV9=function(){var el=document.getElementById('panelV9');if(!el||typeof config==='undefined'||!config)return;el.innerHTML=(V9.client===null||!client(V9.client))?v9List():v9Detail(client(V9.client));if(V9._refocus){var si=document.getElementById('v9-search');if(si){si.focus();try{si.setSelectionRange(si.value.length,si.value.length);}catch(e){}}V9._refocus=false;}};
   window.osFilterNiche=function(id){V9.filterNiche=id;renderV9();};
+  window.osSetF=function(dim,val){V9['filter'+dim]=val;renderV9();};
+  window.osToggleFilter=function(){V9.filterOpen=!V9.filterOpen;renderV9();};
   window.osSearch=function(v){V9.search=v;V9._refocus=true;renderV9();};
+  window.osToggleSelectMode=function(){V9.selectMode=!V9.selectMode;if(!V9.selectMode)V9.selected={};renderV9();};
+  window.osCardClick=function(id){ if(V9.selectMode){ if(V9.selected[id])delete V9.selected[id]; else V9.selected[id]=true; renderV9(); } else { osOpenClient(id); } };
+  function v9Shown(){return config.clients.filter(v9Match);}
+  window.osSelectAllShown=function(){v9Shown().forEach(function(c){V9.selected[c.id]=true;});renderV9();};
+  window.osClearSel=function(){V9.selected={};renderV9();};
+  function v9eachSelected(fn){Object.keys(V9.selected).forEach(function(id){var c=client(id);if(c)fn(c);});persistConfig();renderV9();}
+  window.osBulkStage=function(s){v9eachSelected(function(c){c.stage=s;});};
+  window.osBulkCsm=function(){var el=document.getElementById('v9-bulkcsm');var v=el?el.value.trim():'';if(v)v9eachSelected(function(c){c.csm=v;});};
+  window.osBulkTag=function(){var el=document.getElementById('v9-bulktag');var v=el?el.value.trim():'';if(v)v9eachSelected(function(c){if(!Array.isArray(c.tags))c.tags=[];if(c.tags.indexOf(v)<0)c.tags.push(v);});};
   window.osOpenClient=function(id){V9.client=id;V9.sec='overview';state.clientId=id;renderV9();};
   window.osBackClients=function(){V9.client=null;renderV9();};
   window.osSec=function(k){V9.sec=k;renderV9();};
