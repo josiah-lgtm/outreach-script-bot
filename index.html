@@ -1050,18 +1050,14 @@ function withSystemFilter(body) {
     if (!body || !body.action || !LENS_ACTIONS[body.action]) return body;
     const lens = composeLens();
     if (!lens) return body;
-    const sf = config.settings.systemFilter || {};
     body = Object.assign({}, body);
-    body.systemFilter = lens;        // structured field for the backend when supported
-    body.lens = lens;                // alias
-    if (sf.model) { body.filterModel = sf.model; body.model = body.model || sf.model; }
-    // Immediate effect on the shared backend: fold the lens into the first free-text
-    // field it already reads, so it works even before any server-side change.
+    // Backend-safe: never add unknown top-level keys (some backends reject them) and
+    // never override `model` (a friendly name like "sonnet" isn't a valid model id).
+    // Just fold the lens into a free-text field the backend already reads.
     const block = '\n\n' + lens;
     const fields = ['prompt', 'context', 'clientContext', 'rules', 'globalRules'];
-    let placed = false;
-    for (const f of fields) { if (typeof body[f] === 'string') { body[f] += block; placed = true; break; } }
-    if (!placed) body.globalRules = lens;
+    for (const f of fields) { if (typeof body[f] === 'string') { body[f] += block; return body; } }
+    if (body.action === 'generate') body.globalRules = (body.globalRules || '') + block;
     return body;
   } catch (e) { return body; }
 }
@@ -2616,7 +2612,7 @@ async function runFilterAcrossAll() {
   if (!confirm(`Run the filter through ${jobs.length} item(s) across all clients?\n\nThis rewrites existing text to match your filter. Scripts keep their previous version; angles, desires and offers are replaced in place. Continue?`)) return;
   const btn = document.getElementById('cf-run'); if (btn) btn.disabled = true;
   const status = document.getElementById('cf-status');
-  let done = 0, failed = 0;
+  let done = 0, failed = 0, firstErr = '';
   for (let i = 0; i < jobs.length; i++) {
     const job = jobs[i];
     if (status) status.textContent = `Filtering ${i + 1} / ${jobs.length} (${job.kind})…`;
@@ -2625,15 +2621,16 @@ async function runFilterAcrossAll() {
       : 'Rewrite this script to match our house messaging and lens. Keep every {{merge_tag}} exactly and keep about the same length. Return only the rewritten script.';
     try {
       const r = await api({ action: 'refine_script', script: job.text, prompt });
-      let out = (r && (r.script || r.text)) || '';
-      out = out.replace(/\n*\(mock refinement applied\)\s*$/, '').trim();
-      if (out) { job.apply(out); done++; } else failed++;
-    } catch (e) { failed++; }
+      let out = (r && (r.script || r.text || r.result || r.refined || r.output || r.content || r.rewrite)) || (typeof r === 'string' ? r : '');
+      out = String(out).replace(/\n*\(mock refinement applied\)\s*$/, '').trim();
+      if (out) { job.apply(out); done++; } else { failed++; if (!firstErr) firstErr = 'empty response (' + JSON.stringify(Object.keys(r || {})) + ')'; }
+    } catch (e) { failed++; if (!firstErr) firstErr = e.message || ('' + e); }
   }
   persistConfig();
-  if (status) status.textContent = `Done — ${done} updated${failed ? `, ${failed} skipped` : ''}.`;
+  const tail = `${done} updated${failed ? `, ${failed} skipped` : ''}` + (failed && firstErr ? ` — first issue: ${firstErr}` : '');
+  if (status) status.textContent = `Done — ${tail}`;
   if (btn) btn.disabled = false;
-  showNotif(`Filter run complete — ${done} updated${failed ? `, ${failed} skipped` : ''}`);
+  showNotif(`Filter run complete — ${tail}`, failed > 0 && done === 0);
   if (typeof renderV9 === 'function') { try { renderV9(); } catch (e) {} }
 }
 function saveSystemFilter() {
