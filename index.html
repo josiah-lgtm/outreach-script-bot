@@ -96,6 +96,8 @@
   }
   .client-card:hover { border-color: var(--border); background: var(--bg3); }
   .client-card.active { border-color: var(--accent); background: var(--bg2); }
+  .cl-av { width: 30px; height: 30px; border-radius: 50%; background: var(--bg3); color: var(--subtle);
+    display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
   .client-name { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
   .client-meta { font-size: 11px; color: var(--muted); }
   .mini-btn {
@@ -1418,9 +1420,15 @@ function switchAdminTab(tab) {
 // ─── BUILDER RENDER ────────────────────────────────────────────────────────────
 function renderClientList() {
   const el = document.getElementById('clientList');
+  const initials = s => (s || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
   const card = c => `<div class="client-card ${c.id === state.clientId ? 'active' : ''}" onclick="selectClient('${c.id}')">
-    <div class="client-name">${esc(c.name)}</div>
-    <div class="client-meta">${esc(c.meta || '')}${c.nicheIds.length > 1 ? ` · ${c.nicheIds.length} niches` : ''}</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="cl-av">${esc(initials(c.name))}</div>
+      <div style="flex:1;min-width:0">
+        <div class="client-name">${esc(c.name)}</div>
+        <div class="client-meta">${esc(c.meta || '')}${c.nicheIds.length > 1 ? ` · ${c.nicheIds.length} niches` : ''}</div>
+      </div>
+    </div>
   </div>`;
   let html = '';
   config.niches.forEach(n => {
