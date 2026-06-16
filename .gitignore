@@ -7,3 +7,9 @@ supabase/functions/outreach-bot/html.ts
 *.key
 
 .DS_Store
+
+# live data backup for migration (never commit)
+live-config.json
+
+# local preview config
+.claude/
