@@ -1036,6 +1036,7 @@ function composeLens() {
   if (!sf || sf.enabled === false) return '';
   const parts = [];
   if (sf.lens)         parts.push('OUR LENS (the overall filter — read everything below through this):\n' + sf.lens);
+  if (sf.messaging)    parts.push('MESSAGING (voice, tone and rules EVERY script must follow):\n' + sf.messaging);
   if (sf.angleLogic)   parts.push('ANGLE LOGIC (how to find, create and judge angles):\n' + sf.angleLogic);
   if (sf.scriptFilter) parts.push('SCRIPT FILTER (how to write and choose scripts):\n' + sf.scriptFilter);
   if (sf.offersKB)     parts.push('WHAT WE KNOW ABOUT OFFERS:\n' + sf.offersKB);
@@ -1264,7 +1265,7 @@ function migrateConfig(cfg) {
     cfg.settings.notionParentId = '3744fd2a4cfe8015830fc724e06dcdb3';
   }
   cfg.settings.growthRules = cfg.settings.growthRules || '';
-  cfg.settings.systemFilter = Object.assign({ enabled: true, model: 'sonnet', lens: '', angleLogic: '', scriptFilter: '', offersKB: '', guaranteesKB: '', offerSheet: '' }, cfg.settings.systemFilter || {});
+  cfg.settings.systemFilter = Object.assign({ enabled: true, model: 'sonnet', lens: '', messaging: '', angleLogic: '', scriptFilter: '', offersKB: '', guaranteesKB: '', offerSheet: '' }, cfg.settings.systemFilter || {});
   // Backfill any planDefaults fields added in later versions (inbox/profile math).
   cfg.settings.planDefaults = cfg.settings.planDefaults || structuredClone(DEFAULT_CONFIG.settings.planDefaults);
   ['email', 'linkedin', 'personalization'].forEach(k => {
@@ -2576,6 +2577,7 @@ function adminSystemFilter() {
       </div>
       <div class="hint" style="margin:-4px 0 12px">The knowledge below applies immediately (it's folded into the prompt). The model choice takes effect on the server when supported.</div>
       ${area('sf-lens', 'Our lens — the overall system prompt', sf.lens, 100, 'How we see outreach. What good looks like. What to always avoid. The bot reads everything else through this.')}
+      ${area('sf-messaging', 'Messaging — voice & rules every script runs through', sf.messaging, 100, 'Add this once: tone of voice, sentence length, openers/CTAs to use or avoid, banned words, formatting. Every script the bot writes is filtered through this.')}
       ${area('sf-anglelogic', 'Angle logic — how to find & judge angles', sf.angleLogic, 90, 'How a strong angle is built, what makes one weak, what to prioritise when creating new angles…')}
       ${area('sf-scriptfilter', 'Script filter — how to write & choose scripts', sf.scriptFilter, 90, 'What makes a script worth keeping — structure, tone, what to cut…')}
       ${area('sf-offers', 'What we know about offers', sf.offersKB, 90, 'Everything you know about offers — what works, by niche, by stage…')}
@@ -2590,6 +2592,7 @@ function saveSystemFilter() {
     enabled: document.getElementById('sf-enabled').checked,
     model: document.getElementById('sf-model').value,
     lens: document.getElementById('sf-lens').value,
+    messaging: document.getElementById('sf-messaging').value,
     angleLogic: document.getElementById('sf-anglelogic').value,
     scriptFilter: document.getElementById('sf-scriptfilter').value,
     offersKB: document.getElementById('sf-offers').value,
