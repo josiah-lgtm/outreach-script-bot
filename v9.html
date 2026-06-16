@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Outreach Studio — v9 design preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.24.0/dist/tabler-icons.min.css">
+<style>
+  :root{
+    --font-sans:'Inter',-apple-system,system-ui,sans-serif;
+    --font-mono:ui-monospace,'SFMono-Regular',Menlo,monospace;
+    --color-background-primary:#FFFFFF;
+    --color-background-secondary:#F3F2ED;
+    --color-background-tertiary:#FBFBF9;
+    --color-background-info:#E6F1FB;   --color-text-info:#185FA5;
+    --color-background-success:#E1F5EE;--color-text-success:#0F6E56;
+    --color-background-warning:#FAEEDA;--color-text-warning:#854F0B;
+    --color-background-danger:#FCEBEB; --color-text-danger:#A32D2D;
+    --color-text-primary:#1F1E1C; --color-text-secondary:#45443F; --color-text-tertiary:#79766F;
+    --color-border-tertiary:rgba(0,0,0,.10); --color-border-secondary:rgba(0,0,0,.18); --color-border-primary:rgba(0,0,0,.28);
+    --color-border-info:#378ADD; --color-border-success:#1D9E75; --color-border-danger:#E24B4A; --color-border-warning:#EF9F27;
+    --border-radius-md:8px; --border-radius-lg:12px; --border-radius-xl:16px;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--color-background-tertiary);color:var(--color-text-primary);font-family:var(--font-sans);margin:0;padding:24px;-webkit-font-smoothing:antialiased}
+  .page{max-width:880px;margin:0 auto}
+  .demoflag{max-width:880px;margin:0 auto 14px;font-size:12px;color:var(--color-text-secondary);background:var(--color-background-info);color:var(--color-text-info);border-radius:var(--border-radius-md);padding:8px 12px}
+  input,textarea,button,select{font-family:inherit}
+  input,textarea{background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:8px 11px;font-size:14px;color:var(--color-text-primary);outline:none}
+  input:focus,textarea:focus{box-shadow:0 0 0 2px var(--color-border-info)}
+  button{background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:7px 13px;font-size:14px;color:var(--color-text-primary);cursor:pointer}
+  button:hover{background:var(--color-background-secondary)}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+  a{color:var(--color-text-info)}
+</style>
+</head>
+<body>
+<div class="demoflag"><i class="ti ti-eye"></i> v9 design preview — interactive mock-up with sample data (not yet wired to the live backend). Click around: open a client, drag scripts, Create new script, Niche → Add niche.</div>
+<div class="page" id="mount"></div>
+<script>
+  window.sendPrompt = function(t){ alert('(demo action) '+t); };
+  window.openLink = function(u){ window.open(u,'_blank'); };
+</script>
+<!-- ===== v9 widget ===== -->
+<div id="v9root"></div>
+<style>
+  .os-wrap{font-family:var(--font-sans);color:var(--color-text-primary);min-height:480px}
+  .os-seg{display:inline-flex;gap:4px;background:var(--color-background-secondary);padding:4px;border-radius:var(--border-radius-md)}
+  .os-seg button{border:none;background:transparent;padding:6px 16px;border-radius:var(--border-radius-md);font-size:14px;cursor:pointer;color:var(--color-text-secondary)}
+  .os-seg button.on{background:var(--color-background-primary);color:var(--color-text-primary);border:0.5px solid var(--color-border-tertiary)}
+  .os-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.1rem}
+  .os-cardbtn{text-align:left;cursor:pointer;font:inherit;color:inherit;width:100%}
+  .os-cardbtn:hover{border-color:var(--color-border-secondary)}
+  .os-av{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:13px;flex:none}
+  .os-tag{font-size:12px;padding:3px 10px;border-radius:var(--border-radius-md);background:var(--color-background-secondary)}
+  .os-pill{font-size:12px;padding:2px 9px;border-radius:999px;background:var(--color-background-secondary)}
+  .os-nav button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:none;background:transparent;padding:8px 11px;border-radius:var(--border-radius-md);font-size:14px;cursor:pointer;color:var(--color-text-secondary)}
+  .os-nav button.on{background:var(--color-background-secondary);color:var(--color-text-primary)}
+  .os-muted{color:var(--color-text-secondary)}
+  .os-mono{font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary)}
+  .os-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--color-border-tertiary)}
+  .os-chip{font-size:12px;padding:5px 11px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);cursor:pointer;background:transparent;display:inline-flex;align-items:center;gap:5px}
+  .os-chip.on{border:1.5px solid var(--color-border-info);color:var(--color-text-info)}
+  .os-h{font-size:16px;font-weight:500;margin-bottom:4px}
+  .os-sub{font-size:13px;color:var(--color-text-secondary);margin-bottom:14px}
+  .os-sec{font-weight:500;margin-bottom:8px}
+  .os-step{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--color-text-tertiary)}
+  .os-step.on{color:var(--color-text-primary)}
+  .os-step .n{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;background:var(--color-background-secondary)}
+  .os-step.on .n{background:var(--color-background-info);color:var(--color-text-info)}
+  .os-pick{cursor:pointer}.os-pick.sel{border:2px solid var(--color-border-info)}
+  .os-swipe{width:48px;height:48px;border-radius:50%;border:0.5px solid var(--color-border-secondary);background:transparent;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center}
+  .os-swipe.no{color:var(--color-text-danger);border-color:var(--color-border-danger)}
+  .os-swipe.yes{color:var(--color-text-success);border-color:var(--color-border-success)}
+  .os-snif{position:relative}
+  .os-snif .tip{display:none;position:absolute;left:0;top:100%;z-index:6;width:170px;background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:8px 10px;font-size:12px;color:var(--color-text-secondary);margin-top:4px;line-height:1.5}
+  .os-snif:hover .tip{display:block}
+  .os-drop.over{outline:2px dashed var(--color-border-info);outline-offset:-2px}
+</style>
+<script>
+(function(){
+  var ramps=[['#E6F1FB','#0C447C'],['#E1F5EE','#085041'],['#EEEDFE','#3C3489'],['#FAECE7','#712B13']];
+  var niches=['Dental clinics','Boutique gyms','Legal firms','E-commerce'];
+  var bucketOf={'Dental clinics':'Local businesses','Boutique gyms':'Local businesses','Legal firms':'B2B','E-commerce':'E-commerce'};
+  var nd={
+    'Dental clinics':{persona:'Practice owner / principal dentist',triggers:['new chairs','associate hire','Invisalign'],angles:['Empty hygiene slots','No-show rate','Slow reactivation'],pains:['High no-show rate','Lapsed patients not recalled','Idle chair time costs daily'],offers:['Predictable full schedule','Fewer no-shows','Reactivated patients'],fw:['Proof-led','Pain-led','Curiosity-led','Ultra-short'],notes:[],transcripts:[]},
+    'Boutique gyms':{persona:'Gym founder / head coach',triggers:['new location','class waitlist','PT hire'],angles:['Member churn','Off-peak empty','Trial-to-paid'],pains:['Churn eats sign-ups','Off-peak hours empty','Trials rarely convert'],offers:['Members who stay 12+ months','Full off-peak classes','Referrals'],fw:['Pain-led','Proof-led','Curiosity-led'],notes:[],transcripts:[]},
+    'Legal firms':{persona:'Managing partner',triggers:['new partner','office move','new practice area'],angles:['Inconsistent intake','Low referral volume','Slow follow-up'],pains:['Intake varies','Referrals unpredictable','Leads go cold'],offers:['Consistent intake','Fewer cold leads','Steady caseload'],fw:['Proof-led','Ultra-short'],notes:[],transcripts:[]},
+    'E-commerce':{persona:'Founder / head of growth',triggers:['new SKU','retail listing','funding'],angles:['Rising CAC','Low repeat rate','Win-back lapsed'],pains:['CAC climbing','Buyers do not return','Carts abandoned'],offers:['Higher repeat rate','Lower CAC','Predictable LTV'],fw:['Proof-led','Pain-led','Curiosity-led','Ultra-short'],notes:[],transcripts:[]}
+  };
+  function mkScripts(prefix,arr){return arr.map(function(a,i){return {name:a[0],code:prefix+'-'+String(i+1).padStart(3,'0'),status:a[1],followups:a[2]||[],text:a[3]||''}})}
+  var clients=[
+    {id:0,co:'Lumen Dental',who:'Dr. Sarah Whitfield',site:'lumendental.co.uk',niche:'Dental clinics',niches:['Dental clinics'],stage:'Scaling',csm:'Aisha K.',tags:['Priority'],scripts:mkScripts('LUM',[['Proof-led · Capacity','Winner',['Day 2 nudge','Day 5 proof point'],'We helped a similar clinic fill idle chair time — worth a quick look?'],['Pain-led · No-shows','Testing',[],'Most clinics quietly lose revenue to no-shows. Happening to you?'],['Curiosity-led · Reactivation','Testing',[],'Quick idea to win back lapsed patients — mind if I share?'],['Ultra-short · Booking','Draft',[],'Worth a 10-min chat on booking? Yes/no.']])},
+    {id:1,co:'NorthPeak Fitness',who:'Marcus Lee',site:'northpeakfitness.com',niche:'Boutique gyms',niches:['Boutique gyms'],stage:'Testing',csm:'Tom R.',tags:['New'],scripts:mkScripts('NOR',[['Pain-led · Churn','Testing',[],'New members churning after week 3 — here is a fix.'],['Proof-led · Retention','Winner',['Day 3 follow-up'],'We kept 24% more members for a similar gym.'],['Curiosity-led · Off-peak','Draft',[],'Idea to fill your off-peak classes.']])},
+    {id:2,co:'Clearpath Law',who:'Eleanor Voss',site:'clearpathlaw.co.uk',niche:'Legal firms',niches:['Legal firms'],stage:'Proof of concept',csm:'Aisha K.',tags:['Onboarding'],scripts:mkScripts('CLE',[['Proof-led · Authority','Draft',[],'A similar firm made intake consistent in weeks.'],['Ultra-short · Intake','Failed',[],'10 mins on intake?']])},
+    {id:3,co:'Verde Skincare',who:'Priya Nair',site:'verdeskincare.com',niche:'E-commerce',niches:['E-commerce'],stage:'Scaling',csm:'Tom R.',tags:['Priority'],scripts:mkScripts('VER',[['Proof-led · ROAS','Winner',['Day 2','Day 6'],'We lifted blended ROAS for a similar DTC brand.'],['Pain-led · CAC','Testing',[],'CAC climbing? Here is where most DTC brands leak.'],['Ultra-short · Win-back','Draft',[],'Quick win-back idea for lapsed buyers.']])}
+  ];
+  function ini(n){return n.split(' ').map(function(w){return w[0]}).slice(0,2).join('')}
+  function board(c){var b={Draft:0,Testing:0,Winner:0,Failed:0};c.scripts.forEach(function(s){b[s.status]++});return b;}
+  function nextCode(c){return c.co.replace(/[^A-Za-z]/g,'').slice(0,3).toUpperCase()+'-'+String(c.scripts.length+1).padStart(3,'0');}
+  function prev(c,s){return s.text?('“'+s.text+'”'):('“'+s.name+' — opener for '+c.niche.toLowerCase()+'…”');}
+
+  var area='clients',client=null,csec='overview';
+  var cc=null,sw=null,openNiche=null,nw=null,drag=null;
+  var body=document.getElementById('v9root');
+
+  function boardI(c){var cols=[['Draft','ti-pencil'],['Testing','ti-flask'],['Winner','ti-trophy'],['Failed','ti-circle-x']];var b=board(c);
+    return '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">'+cols.map(function(col){var items=c.scripts.filter(function(s){return s.status===col[0]});
+      return '<div class="os-drop" ondragover="osAllow(event)" ondragenter="this.classList.add(\'over\')" ondragleave="this.classList.remove(\'over\')" ondrop="osDrop(event,\''+col[0]+'\')" style="background:var(--color-background-secondary);border-radius:var(--border-radius-lg);padding:8px;min-height:88px"><div style="font-size:12px;font-weight:500;margin-bottom:8px"><i class="ti '+col[1]+'"></i> '+col[0]+' <span class="os-muted">'+b[col[0]]+'</span></div>'+items.map(function(s){return '<div draggable="true" ondragstart="osDragS(event,\''+s.code+'\')" class="os-card os-snif" style="padding:.45rem .55rem;margin-bottom:6px;font-size:12px;cursor:grab;position:relative"><div class="os-mono">'+s.code+'</div><div style="font-weight:500;margin-top:1px">'+s.name+'</div>'+(s.followups.length?'<span class="os-pill" style="margin-top:4px;display:inline-block"><i class="ti ti-arrow-forward-up"></i> '+s.followups.length+'</span>':'')+'<span class="tip">'+prev(c,s)+'</span></div>'}).join('')+'</div>';
+    }).join('')+'</div>';
+  }
+  function followupsOf(c){return c.scripts.filter(function(s){return s.followups.length})}
+
+  function clientList(){
+    if(cc)return createClient();
+    return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem"><div><div class="os-h">Clients</div><div class="os-sub" style="margin:0">Open a client — everything lives in the overview</div></div><button onclick="osNewClient()"><i class="ti ti-plus"></i> New client</button></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px">'+clients.map(function(c){var r=ramps[c.id%4];var b=board(c);
+      return '<button class="os-card os-cardbtn" onclick="osOpen('+c.id+')" style="display:flex;flex-direction:column;gap:10px"><div style="display:flex;align-items:center;gap:11px"><div class="os-av" style="background:'+r[0]+';color:'+r[1]+'">'+ini(c.who)+'</div><div style="flex:1"><div style="font-weight:500">'+c.who+'</div><div class="os-muted" style="font-size:13px">'+c.co+'</div></div><span class="os-pill">'+c.stage+'</span></div><div><span class="os-tag">'+c.niche+'</span></div><div class="os-muted" style="font-size:12px;display:flex;gap:12px;border-top:0.5px solid var(--color-border-tertiary);padding-top:8px"><span><i class="ti ti-pencil"></i> '+b.Draft+'</span><span><i class="ti ti-flask"></i> '+b.Testing+'</span><span><i class="ti ti-trophy"></i> '+b.Winner+'</span><span style="margin-left:auto">'+c.csm+'</span></div></button>';
+    }).join('')+'</div>';
+  }
+
+  function createClient(){
+    var steps=['Company','Niche','Team','Review'];
+    var bar='<div style="display:flex;gap:14px;margin-bottom:1.1rem;flex-wrap:wrap">'+steps.map(function(s,i){var st=i+1;return '<div class="os-step '+(cc.step>=st?'on':'')+'"><span class="n">'+(cc.step>st?'<i class="ti ti-check"></i>':st)+'</span>'+s+'</div>'}).join('')+'</div>';
+    var bd='';
+    if(cc.step===1)bd='<div class="os-card"><div class="os-sec">Company & contact</div><div style="display:flex;flex-direction:column;gap:8px"><input id="cc-co" placeholder="Company name" value="'+cc.co+'"><input id="cc-who" placeholder="Client (contact) name" value="'+cc.who+'"><input id="cc-site" placeholder="website.com" value="'+cc.site+'"></div></div>';
+    else if(cc.step===2)bd='<div class="os-card"><div class="os-sec">Niche</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">'+niches.map(function(n){return '<button class="os-chip '+(cc.niche===n?'on':'')+'" onclick="ccNiche(\''+n+'\')">'+n+'</button>'}).join('')+'</div>'+(cc.niche?'<div class="os-muted" style="font-size:13px">Bucket: '+bucketOf[cc.niche]+'</div>':'')+'</div>';
+    else if(cc.step===3)bd='<div class="os-card"><div class="os-sec">Team & tags</div><div class="os-muted" style="font-size:13px;margin-bottom:6px">Stage</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+['Testing','Proof of concept','Scaling'].map(function(s){return '<button class="os-chip '+(cc.stage===s?'on':'')+'" onclick="ccStage(\''+s+'\')">'+s+'</button>'}).join('')+'</div><input id="cc-csm" placeholder="CSM owner" value="'+cc.csm+'" style="margin-bottom:8px;width:100%"><input id="cc-tag" placeholder="Tags (comma separated)" value="'+cc.tags+'" style="width:100%"></div>';
+    else bd='<div class="os-card"><div class="os-sec">Review</div><div class="os-row"><span class="os-muted">Company</span><span>'+cc.co+'</span></div><div class="os-row"><span class="os-muted">Contact</span><span>'+cc.who+'</span></div><div class="os-row"><span class="os-muted">Niche</span><span>'+cc.niche+'</span></div><div class="os-row"><span class="os-muted">Stage</span><span>'+cc.stage+'</span></div></div>';
+    var foot;
+    if(cc.step===1)foot='<button onclick="ccCancel()" style="margin-right:8px">Cancel</button><button onclick="ccNext()">Next <i class="ti ti-arrow-right"></i></button>';
+    else if(cc.step<4)foot='<button onclick="ccBack()" style="margin-right:8px">Back</button><button onclick="ccNext()">Next <i class="ti ti-arrow-right"></i></button>';
+    else foot='<button onclick="ccBack()" style="margin-right:8px">Back</button><button onclick="ccCreate()"><i class="ti ti-check"></i> Create client</button>';
+    return '<div class="os-h">New client</div><div class="os-sub">Same step-by-step flow as creating a script</div>'+bar+bd+'<div style="display:flex;justify-content:flex-end;margin-top:14px">'+foot+'</div>';
+  }
+
+  var csecs=[{k:'overview',i:'ti-layout-dashboard',l:'Overview'},{k:'niche',i:'ti-crosshair',l:'Niche'},{k:'growth',i:'ti-trending-up',l:'Growth plan'},{k:'client',i:'ti-id-badge-2',l:'Client'},{k:'history',i:'ti-history',l:'History'}];
+
+  function clientDetail(c){var r=ramps[c.id%4];
+    var nav=csecs.map(function(s){return '<button class="'+(csec===s.k?'on':'')+'" onclick="osSec(\''+s.k+'\')"><i class="ti '+s.i+'"></i> '+s.l+'</button>'}).join('');
+    var head='<button onclick="osBackClients()" style="border:none;background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:14px;padding:0;margin-bottom:14px"><i class="ti ti-arrow-left"></i> All clients</button><div style="display:flex;align-items:center;gap:12px;margin-bottom:1.1rem"><div class="os-av" style="width:48px;height:48px;font-size:16px;background:'+r[0]+';color:'+r[1]+'">'+ini(c.who)+'</div><div style="flex:1"><div style="font-size:17px;font-weight:500">'+c.who+'</div><div class="os-muted" style="font-size:13px">'+c.co+' · '+c.niche+'</div></div><span class="os-pill">'+c.stage+'</span></div>';
+    return head+'<div style="display:grid;grid-template-columns:170px 1fr;gap:18px"><div class="os-nav">'+nav+'</div><div>'+csecContent(c)+'</div></div>';
+  }
+
+  function csecContent(c){
+    if(csec==='overview'){
+      if(sw)return scriptWiz(c);
+      var fus=followupsOf(c);var info=nd[c.niche];
+      return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div class="os-sec" style="margin:0">Scripts</div><button onclick="swStart()"><i class="ti ti-plus"></i> Create new script</button></div><div class="os-muted" style="font-size:12px;margin-bottom:8px"><i class="ti ti-arrows-move"></i> Drag between columns · hover to preview</div>'+boardI(c)+
+        '<div class="os-card" style="margin-top:14px"><div style="display:flex;justify-content:space-between"><div class="os-sec">Niche they are targeting</div><span class="os-tag">'+bucketOf[c.niche]+'</span></div><div style="font-weight:500">'+c.niche+'</div><div class="os-muted" style="font-size:13px;margin-top:2px">'+info.persona+' · angles: '+info.angles.join(', ')+'</div></div>'+
+        '<div class="os-card" style="margin-top:12px"><div class="os-sec">Follow-ups</div>'+(fus.length?fus.map(function(s){return '<div class="os-row"><span style="font-size:14px"><i class="ti ti-arrow-forward-up"></i> '+s.name+'</span><span class="os-pill">'+s.followups.length+' steps</span></div>'}).join(''):'<div class="os-muted" style="font-size:13px">No follow-ups yet.</div>')+'</div>'+
+        '<div class="os-card" style="margin-top:12px"><div class="os-sec">Client</div><div class="os-muted" style="font-size:13px">'+c.who+' · '+c.co+' · '+c.site+' · CSM '+c.csm+' · '+c.stage+'</div></div>';
+    }
+    if(csec==='niche'){
+      if(nw)return nicheAdd(c);
+      if(openNiche)return nicheProfile(openNiche);
+      return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div class="os-sec" style="margin:0">Niches</div><button onclick="nwStart()"><i class="ti ti-plus"></i> Add niche</button></div><div class="os-muted" style="font-size:13px;margin-bottom:10px">Click a niche for its profile (transcripts, notes, triggers)</div>'+c.niches.map(function(n){return '<button class="os-card os-cardbtn" onclick="osNiche(\''+n+'\')" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><div><div style="font-weight:500">'+n+'</div><div class="os-muted" style="font-size:13px">'+bucketOf[n]+' · '+nd[n].pains.length+' pains · '+nd[n].triggers.length+' triggers</div></div><i class="ti ti-chevron-right os-muted"></i></button>'}).join('');
+    }
+    if(csec==='growth')return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div class="os-sec" style="margin:0">Growth plans</div><button class="os-chip">+ Add a growth plan</button></div><div class="os-muted" style="font-size:13px;margin-bottom:10px">Scaling plan or proof of concept</div><div class="os-card">'+['The winning script','The niche','Targets (booking · sending)','Phases','Cost to scale','Reverse funnel','Scaling options','Next steps'].map(function(t){return '<div class="os-row"><span style="font-size:14px">'+t+'</span></div>'}).join('')+'</div>';
+    if(csec==='client')return '<div class="os-card" style="margin-bottom:10px"><div style="font-size:17px;font-weight:500">'+c.who+'</div><div class="os-muted" style="font-size:14px">'+c.co+'</div><div style="font-size:14px;margin-top:6px"><i class="ti ti-world"></i> '+c.site+'</div></div><div class="os-card" style="margin-bottom:10px"><div class="os-sec">Team & tags</div><div class="os-muted" style="font-size:13px">Stage '+c.stage+' · CSM '+c.csm+' · tags '+c.tags.join(', ')+'</div></div><div class="os-card"><div class="os-sec">Knowledge (filters generation)</div>'+['Case study','Pains','Objections','Desires','Competitors','Notes the AI should learn','Files & PDFs','What the client does not want','Client research brief (AI)'].map(function(t){return '<div class="os-row"><span style="font-size:14px">'+t+'</span></div>'}).join('')+'</div>';
+    return '<div class="os-sec">History</div>'+['Growth plan generated|Growth','Scripts exported|Scripts','Niche pains updated|Niche','Client overview reviewed|Client overview'].map(function(t){var p=t.split('|');return '<div class="os-row"><span style="font-size:14px">'+p[0]+'</span><span class="os-pill">'+p[1]+'</span></div>'}).join('');
+  }
+
+  function nicheAdd(c){
+    if(nw.view==='menu')return '<button onclick="nwCancel()" style="border:none;background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:14px;padding:0;margin-bottom:14px"><i class="ti ti-x"></i> Cancel</button><div class="os-h">Add a niche</div><div class="os-sub">Two ways in</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="os-card os-pick" onclick="nwView(\'people\')"><div style="font-weight:500"><i class="ti ti-users-group"></i> Use ICP builder</div><div class="os-muted" style="font-size:13px;margin-top:2px">Find more people / companies for this niche</div></div><div class="os-card os-pick" onclick="nwView(\'research\')"><div style="font-weight:500"><i class="ti ti-robot"></i> Write a niche down</div><div class="os-muted" style="font-size:13px;margin-top:2px">The research agent builds the profile</div></div></div>';
+    if(nw.view==='people')return '<button onclick="nwView(\'menu\')" style="border:none;background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:14px;padding:0;margin-bottom:14px"><i class="ti ti-arrow-left"></i> Back</button><div class="os-h">ICP builder — find more people</div><div class="os-sub">Describe who to find for this niche</div><div class="os-card" style="margin-bottom:10px"><div style="display:flex;flex-direction:column;gap:8px"><input placeholder="e.g. medspa owners in Texas"><input placeholder="size / revenue band"><input placeholder="trigger (e.g. just raised Series B)"><div style="display:flex;justify-content:flex-end"><button onclick="nwFind()"><i class="ti ti-search"></i> Find people</button></div></div></div>'+(nw.found?'<div class="os-card"><div class="os-sec">Found — add to Sales pipeline</div>'+['Apex Orthodontics','BrightSmile Co','Coastal Dental'].map(function(p){return '<div class="os-row"><span style="font-size:14px"><i class="ti ti-building"></i> '+p+'</span><button class="os-chip">Add prospect</button></div>'}).join('')+'</div>':'');
+    return '<button onclick="nwView(\'menu\')" style="border:none;background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:14px;padding:0;margin-bottom:14px"><i class="ti ti-arrow-left"></i> Back</button><div class="os-h">Write a niche down</div><div class="os-sub">The research agent builds the persona, angles, pains, desires and triggers</div><div class="os-card" style="margin-bottom:10px"><div style="display:flex;gap:8px"><input id="nw-name" placeholder="e.g. Med spas, HVAC contractors…" style="flex:1" value="'+(nw.name||'')+'"><button onclick="nwResearch()"><i class="ti ti-robot"></i> Research</button></div></div>'+(nw.researched?'<div class="os-card"><div class="os-card" style="background:var(--color-background-info);border:none;color:var(--color-text-info);font-size:13px;margin-bottom:10px"><i class="ti ti-wand"></i> Research agent done — review</div><div class="os-row"><span class="os-muted">Persona</span><span>'+nw.name+' decision-maker</span></div><div class="os-row"><span class="os-muted">Angles</span><span>3 found</span></div><div class="os-row"><span class="os-muted">Pains / desires</span><span>3 + 3</span></div><div style="display:flex;justify-content:flex-end;margin-top:10px"><button onclick="nwAdd()"><i class="ti ti-check"></i> Add niche</button></div></div>':'');
+  }
+  function nicheProfile(n){var i=nd[n];
+    function tagrow(arr){return arr.map(function(x){return '<span class="os-tag" style="margin:3px 6px 3px 0;display:inline-block">'+x+'</span>'}).join('')}
+    function rows(arr){return arr.length?arr.map(function(x){return '<div class="os-row"><span style="font-size:14px"><i class="ti ti-point"></i> '+x+'</span></div>'}).join(''):'<div class="os-muted" style="font-size:13px">None yet.</div>'}
+    return '<button onclick="osNicheBack()" style="border:none;background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:14px;padding:0;margin-bottom:12px"><i class="ti ti-arrow-left"></i> Niches</button><div class="os-h">'+n+'</div><div class="os-sub">'+bucketOf[n]+' bucket · '+i.persona+'</div>'+
+      '<div class="os-card" style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div class="os-sec" style="margin:0">Trigger words</div><button class="os-chip" onclick="niTrig()"><i class="ti ti-plus"></i> Add</button></div>'+tagrow(i.triggers)+'</div>'+
+      '<div class="os-card" style="margin-bottom:10px"><div class="os-sec">Angles</div>'+rows(i.angles)+'</div>'+
+      '<div class="os-card" style="margin-bottom:10px"><div class="os-sec">Pain points</div>'+rows(i.pains)+'</div>'+
+      '<div class="os-card" style="margin-bottom:10px"><div class="os-sec">Desires / offers</div>'+rows(i.offers)+'</div>'+
+      '<div class="os-card" style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div class="os-sec" style="margin:0">Transcripts</div><button class="os-chip" onclick="niTrans()"><i class="ti ti-file-upload"></i> Add transcript</button></div>'+rows(i.transcripts)+'</div>'+
+      '<div class="os-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div class="os-sec" style="margin:0">Notes</div><button class="os-chip" onclick="niNote()"><i class="ti ti-plus"></i> Add note</button></div>'+rows(i.notes)+'</div>';
+  }
+
+  function scriptWiz(c){
+    var i=nd[c.niche];
+    if(sw.menu){var opts=[['new','ti-file-plus','Create new scripts'],['followup','ti-arrow-forward-up','Follow-up sequence'],['angles','ti-search','Find angles'],['winning','ti-trophy','From a winning script']];
+      return '<button onclick="swCancel()" style="border:none;background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:14px;padding:0;margin-bottom:14px"><i class="ti ti-x"></i> Cancel</button><div class="os-h">What do you want to create?</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">'+opts.map(function(o){return '<div class="os-card os-pick" onclick="swFlow(\''+o[0]+'\')"><div style="font-weight:500"><i class="ti '+o[1]+'"></i> '+o[2]+'</div></div>'}).join('')+'</div>';
+    }
+    if(sw.flow!=='new')return '<button onclick="swMenu()" style="border:none;background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:14px;padding:0;margin-bottom:14px"><i class="ti ti-arrow-left"></i> Menu</button><div class="os-card"><div class="os-muted" style="font-size:14px">Runs through the same step-by-step UI (pick source → generate → swipe to keep → name & save).</div></div>';
+    if(sw.phase==='swipe'){if(sw.idx>=sw.deck.length)return swReview(c);var d=sw.deck[sw.idx];var kept=sw.deck.filter(function(x){return x.keep}).length;
+      return '<button onclick="swCancel()" style="border:none;background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:14px;padding:0;margin-bottom:14px"><i class="ti ti-x"></i> Cancel</button><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div class="os-h" style="margin:0">Review scripts</div><div class="os-muted" style="font-size:13px">'+(sw.idx+1)+' of '+sw.deck.length+' · '+kept+' kept</div></div><div class="os-card" style="min-height:120px;padding:1.1rem"><div class="os-mono">'+d.f+' · v'+d.v+'</div><div style="font-size:15px;line-height:1.7;margin-top:6px">'+d.text+'</div></div><div style="display:flex;justify-content:center;gap:18px;margin-top:18px"><button class="os-swipe no" onclick="swSwipe(false)"><i class="ti ti-x"></i></button><button class="os-chip" onclick="swSwipe(true)" style="padding:8px 14px"><i class="ti ti-edit"></i> Edit</button><button class="os-swipe yes" onclick="swSwipe(true)"><i class="ti ti-heart"></i></button></div>';
+    }
+    var steps=['Niche','Angle','Offer','Framework'];
+    var bar='<div style="display:flex;gap:14px;margin-bottom:1rem;flex-wrap:wrap">'+steps.map(function(s,k){var st=k+1;return '<div class="os-step '+(sw.step>=st?'on':'')+'"><span class="n">'+(sw.step>st?'<i class="ti ti-check"></i>':st)+'</span>'+s+'</div>'}).join('')+'</div>';
+    var bd='';
+    if(sw.step===1)bd='<div class="os-muted" style="font-size:13px;margin-bottom:8px">Niche</div><span class="os-chip on">'+c.niche+'</span>';
+    else if(sw.step===2)bd='<div class="os-muted" style="font-size:13px;margin-bottom:8px">Pick a pain</div>'+i.pains.map(function(p){return '<div class="os-card os-pick '+(sw.pain===p?'sel':'')+'" style="padding:.55rem .7rem;margin-bottom:6px;font-size:14px" onclick="swPain(\''+p.replace(/'/g,'')+'\')">'+p+'</div>'}).join('');
+    else if(sw.step===3)bd='<div class="os-muted" style="font-size:13px;margin-bottom:8px">Pick the offer / mechanism</div>'+i.offers.map(function(o){return '<div class="os-card os-pick '+(sw.offer===o?'sel':'')+'" style="padding:.55rem .7rem;margin-bottom:6px;font-size:14px" onclick="swOffer(\''+o.replace(/'/g,'')+'\')">'+o+'</div>'}).join('');
+    else bd='<div class="os-muted" style="font-size:13px;margin-bottom:8px">Frameworks · variants</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">'+i.fw.map(function(f){return '<span class="os-chip '+(sw.fw[f]?'on':'')+'" onclick="swFw(\''+f+'\')">'+f+'</span>'}).join('')+'</div><div style="display:flex;align-items:center;gap:8px"><span class="os-muted" style="font-size:13px">Variants</span>'+[1,2,3].map(function(v){return '<span class="os-chip '+(sw.variants===v?'on':'')+'" onclick="swVar('+v+')">'+v+'</span>'}).join('')+'</div>';
+    var foot;
+    if(sw.step===1)foot='<button onclick="swMenu()" style="margin-right:8px">Back</button><button onclick="swNext()">Next <i class="ti ti-arrow-right"></i></button>';
+    else if(sw.step<4)foot='<button onclick="swBack()" style="margin-right:8px">Back</button><button onclick="swNext()">Next <i class="ti ti-arrow-right"></i></button>';
+    else {var cnt=Object.keys(sw.fw).filter(function(k){return sw.fw[k]}).length*sw.variants;foot='<button onclick="swBack()" style="margin-right:8px">Back</button><button onclick="swGen()">Generate '+(cnt||0)+'</button>';}
+    return '<button onclick="swCancel()" style="border:none;background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:14px;padding:0;margin-bottom:14px"><i class="ti ti-x"></i> Cancel</button><div class="os-h">Create new scripts</div><div class="os-sub">Niche → angle → offer → framework</div>'+bar+bd+'<div style="display:flex;justify-content:flex-end;margin-top:14px">'+foot+'</div>';
+  }
+  function swReview(c){var kept=sw.deck.filter(function(x){return x.keep});
+    if(!kept.length)return '<div class="os-h">Nothing kept</div><div class="os-sub">You passed on all of them.</div><button onclick="swCancel()">Back to overview</button>';
+    return '<div class="os-h">Confirm '+kept.length+' script'+(kept.length>1?'s':'')+'</div><div class="os-sub">Each gets a name + ID, saved to the board</div>'+kept.map(function(d){return '<div class="os-card" style="margin-bottom:8px"><input value="'+d.f+' · '+sw.pain+'" style="width:100%;font-weight:500;margin-bottom:6px"><div class="os-muted" style="font-size:13px">'+d.text+'</div></div>'}).join('')+'<div style="display:flex;justify-content:flex-end"><button onclick="swConfirm()"><i class="ti ti-check"></i> Save to board</button></div>';
+  }
+
+  function render(){
+    document.getElementById('g-clients').classList.toggle('on',area==='clients');
+    document.getElementById('g-sales').classList.toggle('on',area==='sales');
+    document.getElementById('g-admin').classList.toggle('on',area==='admin');
+    if(area==='clients')body.innerHTML=client===null?clientList():clientDetail(clients[client]);
+    else if(area==='sales')body.innerHTML='<div class="os-h">Sales</div><div class="os-sub">One view · a plan per client or prospect (ICP · brief from site · scripts · Notion)</div><div class="os-card os-muted" style="font-size:14px">Sales plan cards render here in the full app.</div>';
+    else body.innerHTML='<div class="os-h">Admin</div><div class="os-sub">Frameworks · Niches · Reservoir · Tools · Team · Settings</div><div class="os-card os-muted" style="font-size:14px">Admin panels render here in the full app.</div>';
+  }
+  window.osArea=function(a){area=a;render();};
+  window.osOpen=function(id){client=id;csec='overview';sw=null;openNiche=null;nw=null;render();};
+  window.osBackClients=function(){client=null;render();};
+  window.osSec=function(k){csec=k;sw=null;openNiche=null;nw=null;render();};
+  window.osAllow=function(e){e.preventDefault();};
+  window.osDragS=function(e,code){drag=code;e.dataTransfer.effectAllowed='move';};
+  window.osDrop=function(e,status){e.preventDefault();var c=clients[client];c.scripts.forEach(function(s){if(s.code===drag)s.status=status});drag=null;render();};
+  window.osNiche=function(n){openNiche=n;render();};
+  window.osNicheBack=function(){openNiche=null;render();};
+  window.osNewClient=function(){cc={step:1,co:'',who:'',site:'',niche:'',stage:'Testing',csm:'',tags:''};render();};
+  window.ccCancel=function(){cc=null;render();};
+  window.ccBack=function(){ccSave();cc.step--;render();};
+  window.ccNext=function(){ccSave();cc.step++;render();};
+  function ccSave(){var g=function(id){var e=document.getElementById(id);return e?e.value:undefined;};var co=g('cc-co');if(co!==undefined)cc.co=co;var w=g('cc-who');if(w!==undefined)cc.who=w;var s=g('cc-site');if(s!==undefined)cc.site=s;var cs=g('cc-csm');if(cs!==undefined)cc.csm=cs;var tg=g('cc-tag');if(tg!==undefined)cc.tags=tg;}
+  window.ccNiche=function(n){ccSave();cc.niche=n;render();};
+  window.ccStage=function(s){ccSave();cc.stage=s;render();};
+  window.ccCreate=function(){ccSave();var id=clients.length;var nn=cc.niche||'E-commerce';clients.push({id:id,co:cc.co||'New client',who:cc.who||'Contact',site:cc.site||'site.com',niche:nn,niches:[nn],stage:cc.stage,csm:cc.csm||'Unassigned',tags:cc.tags?cc.tags.split(',').map(function(t){return t.trim()}):[],scripts:[]});cc=null;client=id;csec='overview';render();};
+  window.nwStart=function(){nw={view:'menu',name:'',found:false,researched:false};render();};
+  window.nwCancel=function(){nw=null;render();};
+  window.nwView=function(v){nw.view=v;render();};
+  window.nwFind=function(){nw.found=true;render();};
+  window.nwResearch=function(){var el=document.getElementById('nw-name');nw.name=el?el.value.trim():'';if(!nw.name)return;nw.researched=true;render();};
+  window.nwAdd=function(){var n=nw.name;if(!nd[n]){nd[n]={persona:n+' decision-maker',triggers:['hiring','funding','expansion'],angles:['Lead quality','Manual workload','Conversion rate'],pains:['Inconsistent lead flow','Manual admin','Slow follow-up'],offers:['Predictable pipeline','Lower cost per lead','More meetings'],fw:['Proof-led','Pain-led','Curiosity-led'],notes:[],transcripts:[]};bucketOf[n]=bucketOf[n]||'B2B';}var c=clients[client];if(c.niches.indexOf(n)<0)c.niches.push(n);nw=null;openNiche=n;render();};
+  window.niTrig=function(){nd[openNiche].triggers.push('new trigger '+(nd[openNiche].triggers.length+1));render();};
+  window.niTrans=function(){nd[openNiche].transcripts.push('Call transcript '+(nd[openNiche].transcripts.length+1)+' — extracted 1 pain, 1 desire');render();};
+  window.niNote=function(){nd[openNiche].notes.push('Note '+(nd[openNiche].notes.length+1));render();};
+  window.swStart=function(){sw={menu:true,flow:null,step:1,pain:null,offer:null,fw:{},variants:2,deck:[],idx:0,phase:'steps'};render();};
+  window.swCancel=function(){sw=null;render();};
+  window.swMenu=function(){sw.menu=true;sw.flow=null;render();};
+  window.swFlow=function(f){sw.menu=false;sw.flow=f;sw.step=1;sw.fw={};render();};
+  window.swPain=function(p){sw.pain=p;render();};
+  window.swOffer=function(o){sw.offer=o;render();};
+  window.swFw=function(f){sw.fw[f]=!sw.fw[f];render();};
+  window.swVar=function(v){sw.variants=v;render();};
+  window.swNext=function(){if(sw.step===2&&!sw.pain)return;if(sw.step===3&&!sw.offer)return;sw.step++;render();};
+  window.swBack=function(){sw.step--;render();};
+  window.swGen=function(){var c=clients[client];var fws=Object.keys(sw.fw).filter(function(k){return sw.fw[k]});if(!fws.length)return;var suff=['',' — softer CTA.',' — question-led.'];sw.deck=[];fws.forEach(function(f){for(var v=1;v<=sw.variants;v++){sw.deck.push({f:f,v:v,keep:false,text:'Solves “'+sw.pain+'” → “'+sw.offer+'” for '+c.niche.toLowerCase()+suff[v-1]});}});sw.idx=0;sw.phase='swipe';render();};
+  window.swSwipe=function(keep){sw.deck[sw.idx].keep=keep;sw.idx++;render();};
+  window.swConfirm=function(){var c=clients[client];sw.deck.filter(function(x){return x.keep}).forEach(function(d){c.scripts.push({name:d.f+' · '+sw.pain,code:nextCode(c),status:'Draft',followups:[],text:d.text})});sw=null;render();};
+
+  body.parentNode.insertAdjacentHTML('afterbegin','');
+  document.getElementById('mount').innerHTML='<div class="os-wrap"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem"><div style="display:flex;align-items:center;gap:10px"><i class="ti ti-messages" style="font-size:20px"></i><span style="font-size:18px;font-weight:500">Outreach Studio</span></div><div class="os-seg"><button id="g-clients" class="on" onclick="osArea(\'clients\')"><i class="ti ti-users"></i> Clients</button><button id="g-sales" onclick="osArea(\'sales\')"><i class="ti ti-target-arrow"></i> Sales</button><button id="g-admin" onclick="osArea(\'admin\')"><i class="ti ti-settings"></i> Admin</button></div></div><div id="v9root"></div></div>';
+  body=document.getElementById('v9root');
+  render();
+})();
+</script>
+</body>
+</html>
