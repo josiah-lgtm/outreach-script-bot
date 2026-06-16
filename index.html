@@ -5956,6 +5956,16 @@ loadConfigAndRender();
   .v9-bubbles{display:flex;flex-wrap:wrap;gap:8px}
   .v9-bubble{font-size:13px;padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;color:var(--text)}
   .v9-bubble:hover{border-color:var(--accent);color:var(--accent2)}
+  .v9-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .v9-newbtn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:7px 14px;font:600 13px 'Inter',sans-serif;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .v9-newbtn:hover{background:var(--accent2)}
+  .v9-quickbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:18px}
+  .v9-qchip{font-size:13px;padding:6px 14px;border-radius:999px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;color:var(--muted);transition:.12s}
+  .v9-qchip:hover{border-color:var(--accent)}
+  .v9-qchip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .v9-qsep{width:1px;height:22px;background:var(--border);margin:0 4px}
+  .v9-nichetag{font-size:11px;padding:2px 9px;border-radius:999px;background:rgba(37,99,235,.12);color:var(--accent2)}
+  .v9-fpanel input{height:34px}
   .v9-grouplabel{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 8px}
   .v9-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
   .v9-card{text-align:left;cursor:pointer;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:13px;display:flex;flex-direction:column;gap:10px;font:inherit;color:inherit}
@@ -6000,8 +6010,11 @@ loadConfigAndRender();
     var cb=V9.selectMode?'<div class="v9-cbox '+(sel?'on':'')+'">'+(sel?'<i class="ti ti-check"></i>':'')+'</div>':'';
     var primary=c.contact||c.name, secondary=c.contact?c.name:(c.meta||'');
     var stage=c.stage?'<span class="v9-stage">'+esc(c.stage)+'</span>':'';
+    var nicheName=((typeof v9niche==='function'?v9niche(c):null)||{}).name||'';
+    var nicheTag=nicheName?'<span class="v9-nichetag">'+esc(nicheName)+'</span>':'';
     var tags=(c.tags||[]).map(function(t){return '<span class="v9-tagpill">'+esc(t)+'</span>';}).join('');
-    return '<div class="v9-card'+(sel?' sel':'')+'" onclick="osCardClick(\''+c.id+'\')"><div class="v9-cardtop">'+cb+'<div class="v9-av">'+v9ini(primary)+'</div><div style="flex:1;min-width:0"><div class="v9-name">'+esc(primary)+'</div><div class="v9-meta">'+esc(secondary)+'</div></div>'+stage+'</div>'+(tags?'<div class="v9-cardtags">'+tags+'</div>':'')+'<div class="v9-counts"><span><i class="ti ti-bulb"></i> '+b.idea.length+'</span><span><i class="ti ti-flask"></i> '+b.testing.length+'</span><span><i class="ti ti-trophy"></i> '+b.winning.length+'</span>'+(c.csm?'<span style="margin-left:auto">'+esc(c.csm)+'</span>':'')+'</div></div>';}
+    var tagrow=(nicheTag||tags)?'<div class="v9-cardtags">'+nicheTag+tags+'</div>':'';
+    return '<div class="v9-card'+(sel?' sel':'')+'" onclick="osCardClick(\''+c.id+'\')"><div class="v9-cardtop">'+cb+'<div class="v9-av">'+v9ini(primary)+'</div><div style="flex:1;min-width:0"><div class="v9-name">'+esc(primary)+'</div><div class="v9-meta">'+esc(secondary)+'</div></div>'+stage+'</div>'+tagrow+'<div class="v9-counts"><span><i class="ti ti-bulb"></i> '+b.idea.length+'</span><span><i class="ti ti-flask"></i> '+b.testing.length+'</span><span><i class="ti ti-trophy"></i> '+b.winning.length+'</span>'+(c.csm?'<span style="margin-left:auto">'+esc(c.csm)+'</span>':'')+'</div></div>';}
 
   var STAGES=['Testing','Proof of concept','Scaling'];
   function v9Match(c){
@@ -6018,20 +6031,21 @@ loadConfigAndRender();
   function v9List(){
     var fcount=['Niche','Csm','Tag','Stage'].filter(function(d){return (V9['filter'+d]||'All')!=='All';}).length;
     var n=Object.keys(V9.selected).length;
-    var top='<div class="v9-top"><div><div class="v9-h">Clients</div><div class="v9-sub">Open a client — overview, scripts, growth, history</div></div><div style="display:flex;gap:8px"><button class="mini-btn" onclick="osToggleFilter()"><i class="ti ti-filter"></i> Filter'+(fcount?(' ('+fcount+')'):'')+'</button><button class="mini-btn" onclick="osToggleSelectMode()"><i class="ti ti-checkbox"></i> '+(V9.selectMode?'Done':'Select')+'</button><button class="mini-btn" onclick="adminEdit(\'clients\',\'__new__\')">+ New client</button></div></div>';
-    // filter panel
+    var top='<div class="v9-top"><div><div class="v9-h">Clients</div><div class="v9-sub">All clients · filter by stage or tag below</div></div><div class="v9-actions"><button class="mini-btn" onclick="osToggleFilter()"><i class="ti ti-adjustments-horizontal"></i> Filter'+(fcount?(' ('+fcount+')'):'')+'</button><button class="mini-btn" onclick="osToggleSelectMode()"><i class="ti ti-checkbox"></i> '+(V9.selectMode?'Done':'Select')+'</button><button class="v9-newbtn" onclick="adminEdit(\'clients\',\'__new__\')"><i class="ti ti-plus"></i> New client</button></div></div>';
+    // horizontal one-click quick filter (stage + tags)
+    var allClear=(V9.filterStage==='All'&&V9.filterTag==='All'&&V9.filterNiche==='All'&&V9.filterCsm==='All');
+    var tags=uniqVals(function(c){return c.tags;});
+    var quick='<div class="v9-quickbar"><button class="v9-qchip '+(allClear?'on':'')+'" onclick="osQuickAll()">All</button>'+
+      STAGES.map(function(s){return '<button class="v9-qchip '+(V9.filterStage===s?'on':'')+'" onclick="osSetF(\'Stage\',\''+s+'\')">'+esc(s)+'</button>';}).join('')+
+      (tags.length?'<span class="v9-qsep"></span>'+tags.map(function(t){return '<button class="v9-qchip '+(V9.filterTag===t?'on':'')+'" onclick="osSetF(\'Tag\','+JSON.stringify(t).replace(/"/g,'&quot;')+')">'+esc(t)+'</button>';}).join(''):'')+'</div>';
+    // fuller filter panel (clean)
     var nicheRow='<div class="v9-frow"><span class="v9-flabel">Niche</span><button class="v9-fchip '+((!V9.filterNiche||V9.filterNiche==='All')?'on':'')+'" onclick="osFilterNiche(\'All\')">All</button>'+config.niches.map(function(nn){return '<button class="v9-fchip '+(V9.filterNiche===nn.id?'on':'')+'" onclick="osFilterNiche(\''+nn.id+'\')">'+esc(nn.name)+'</button>';}).join('')+'</div>';
-    var panel=V9.filterOpen?('<div class="v9-fpanel">'+nicheRow+frow('CSM','Csm',uniqVals(function(c){return c.csm;}))+frow('Tag','Tag',uniqVals(function(c){return c.tags;}))+frow('Stage','Stage',STAGES.concat(uniqVals(function(c){return c.stage;}).filter(function(s){return STAGES.indexOf(s)<0;})))+'<div style="margin-top:8px"><input id="v9-search" placeholder="Search clients…" value="'+esc(V9.search||'')+'" oninput="osSearch(this.value)" style="width:240px"></div></div>'):'';
+    var panel=V9.filterOpen?('<div class="v9-fpanel"><div class="v9-rowbtn" style="margin-bottom:10px"><div class="v9-sec" style="margin:0">Filters</div><button class="mini-btn" onclick="osQuickAll()">Clear all</button></div>'+nicheRow+frow('CSM','Csm',uniqVals(function(c){return c.csm;}))+frow('Tag','Tag',tags)+frow('Stage','Stage',STAGES.concat(uniqVals(function(c){return c.stage;}).filter(function(s){return STAGES.indexOf(s)<0;})))+'<div class="v9-frow"><span class="v9-flabel">Search</span><input id="v9-search" placeholder="Search clients…" value="'+esc(V9.search||'')+'" oninput="osSearch(this.value)" style="flex:1"></div></div>'):'';
     // bulk bar
     var bulk=V9.selectMode?('<div class="v9-bulk"><div class="v9-bulkhead"><b>'+n+' selected</b><span><button class="mini-btn" onclick="osSelectAllShown()">Select all</button> <button class="mini-btn" onclick="osClearSel()">Clear</button></span></div><div class="v9-bulkrow"><span class="v9-flabel">Stage</span>'+STAGES.map(function(s){return '<button class="v9-fchip" onclick="osBulkStage(\''+s+'\')">'+s+'</button>';}).join('')+'</div><div class="v9-bulkrow"><span class="v9-flabel">CSM</span><input id="v9-bulkcsm" placeholder="Name" style="width:120px"><button class="mini-btn" onclick="osBulkCsm()">Assign</button> &nbsp; <span class="v9-flabel">Tag</span><input id="v9-bulktag" placeholder="Tag" style="width:110px"><button class="mini-btn" onclick="osBulkTag()">Add</button></div></div>'):'';
-    var byN={};config.clients.filter(v9Match).forEach(function(c){var k=primaryNicheId(c);(byN[k]=byN[k]||[]).push(c);});
-    var body='';
-    config.niches.forEach(function(nn){var cs=byN[nn.id];if(!cs||!cs.length)return;body+='<div class="v9-grouplabel">'+esc(nn.name)+'</div><div class="v9-grid">'+cs.map(v9Card).join('')+'</div>';});
-    var orphans=config.clients.filter(function(c){return v9Match(c)&&!niche(primaryNicheId(c))});
-    if(orphans.length)body+='<div class="v9-grouplabel">No niche yet</div><div class="v9-grid">'+orphans.map(v9Card).join('')+'</div>';
-    if(!config.clients.length)body='<div class="v9-sub" style="margin-top:14px">No clients yet — add one.</div>';
-    else if(!body)body='<div class="v9-sub" style="margin-top:14px">No clients match these filters.</div>';
-    return top+panel+bulk+body;
+    var shown=config.clients.filter(v9Match);
+    var body=shown.length?('<div class="v9-grid">'+shown.map(v9Card).join('')+'</div>'):(config.clients.length?'<div class="v9-sub" style="margin-top:14px">No clients match these filters.</div>':'<div class="v9-sub" style="margin-top:14px">No clients yet — add one.</div>');
+    return top+quick+panel+bulk+body;
   }
 
   function v9BoardHtml(c){var g=v9board(c);var cols=[['idea','Ideas','ti-bulb'],['testing','Testing','ti-flask'],['winning','Winning','ti-trophy']];
@@ -6189,6 +6203,7 @@ loadConfigAndRender();
   window.renderV9=function(){var el=document.getElementById('panelV9');if(!el||typeof config==='undefined'||!config)return;el.innerHTML=(V9.client===null||!client(V9.client))?v9List():v9Detail(client(V9.client));if(V9._refocus){var si=document.getElementById('v9-search');if(si){si.focus();try{si.setSelectionRange(si.value.length,si.value.length);}catch(e){}}V9._refocus=false;}};
   window.osFilterNiche=function(id){V9.filterNiche=id;renderV9();};
   window.osSetF=function(dim,val){V9['filter'+dim]=val;renderV9();};
+  window.osQuickAll=function(){V9.filterStage='All';V9.filterTag='All';V9.filterNiche='All';V9.filterCsm='All';V9.search='';renderV9();};
   window.osToggleFilter=function(){V9.filterOpen=!V9.filterOpen;renderV9();};
   window.osSearch=function(v){V9.search=v;V9._refocus=true;renderV9();};
   window.osToggleSelectMode=function(){V9.selectMode=!V9.selectMode;if(!V9.selectMode)V9.selected={};renderV9();};
