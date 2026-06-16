@@ -50,13 +50,14 @@
   .header-left { display: flex; align-items: center; gap: 14px; }
   .logo { font-family: 'Courier Prime', monospace; font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
   .logo span { color: var(--accent2); }
+  .topnav { display: inline-flex; gap: 4px; background: var(--bg3); padding: 4px; border-radius: 9px; }
   .nav-btn {
-    padding: 6px 14px; border-radius: 6px; border: 1px solid transparent;
+    padding: 6px 16px; border-radius: 6px; border: 1px solid transparent;
     background: transparent; color: var(--muted);
-    font: 600 12px 'Inter', sans-serif; cursor: pointer; transition: .15s;
+    font: 500 13px 'Inter', sans-serif; cursor: pointer; transition: .15s;
   }
-  .nav-btn.active { background: var(--accent); color: #fff; }
-  .nav-btn:hover:not(.active) { color: var(--text); background: var(--bg3); }
+  .nav-btn.active { background: var(--bg2); color: var(--text); border-color: var(--border); }
+  .nav-btn:hover:not(.active) { color: var(--text); }
   .header-right { display: flex; align-items: center; gap: 8px; }
   .pill {
     display: flex; align-items: center; gap: 6px;
@@ -734,10 +735,12 @@
 <header class="header">
   <div class="header-left">
     <div class="logo">script<span>.</span>bot</div>
-    <button class="nav-btn active" id="nav-builder" onclick="showScreen('builder')">Builder</button>
-    <button class="nav-btn" id="nav-growth" onclick="showScreen('growth')">📈 Growth</button>
-    <button class="nav-btn" id="nav-sales" onclick="showScreen('sales')">🤝 Sales</button>
-    <button class="nav-btn" id="nav-admin" onclick="showScreen('admin')">⚙ Admin</button>
+  </div>
+  <div class="topnav">
+    <button class="nav-btn active" id="nav-builder" onclick="showScreen('builder')">Clients</button>
+    <button class="nav-btn" id="nav-growth" onclick="showScreen('growth')">Growth</button>
+    <button class="nav-btn" id="nav-sales" onclick="showScreen('sales')">Sales</button>
+    <button class="nav-btn" id="nav-admin" onclick="showScreen('admin')">Admin</button>
   </div>
   <div class="header-right">
     <div class="pill" id="configPill"><div class="dot warn" id="configDot"></div><span id="configLabel">Loading…</span></div>
