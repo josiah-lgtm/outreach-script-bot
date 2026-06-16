@@ -5932,6 +5932,22 @@ loadConfigAndRender();
   .v9-stage{font-size:11px;padding:2px 9px;border-radius:999px;background:var(--bg3);color:var(--subtle);white-space:nowrap}
   .v9-cardtags{display:flex;flex-wrap:wrap;gap:4px}
   .v9-tagpill{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--bg3);color:var(--subtle)}
+  .v9-wizmenu{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+  .v9-wopt{text-align:left;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;color:inherit;font:inherit}
+  .v9-wopt:hover{border-color:var(--accent)}
+  .v9-wsteps{display:flex;gap:14px;margin:6px 0 14px;flex-wrap:wrap}
+  .v9-wstep{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
+  .v9-wstep.on{color:var(--text)}
+  .v9-wstep .n{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;background:var(--bg3)}
+  .v9-wstep.on .n{background:var(--accent);color:#fff}
+  .v9-pickrow{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:6px;cursor:pointer;font-size:14px}
+  .v9-pickrow.on{border-color:var(--accent)}
+  .v9-swcard{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;min-height:130px}
+  .v9-swtext{font-size:15px;line-height:1.7;margin-top:8px;white-space:pre-wrap}
+  .v9-swbtns{display:flex;justify-content:center;align-items:center;gap:18px;margin-top:16px}
+  .v9-swipe{width:48px;height:48px;border-radius:50%;border:1px solid var(--border);background:transparent;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center}
+  .v9-swipe.no{color:var(--red);border-color:var(--red)}
+  .v9-swipe.yes{color:var(--green);border-color:var(--green)}
   .v9-grouplabel{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 8px}
   .v9-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
   .v9-card{text-align:left;cursor:pointer;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:13px;display:flex;flex-direction:column;gap:10px;font:inherit;color:inherit}
@@ -6027,8 +6043,9 @@ loadConfigAndRender();
   function v9Section(c){
     var nn=v9niche(c), cs=c.caseStudy||{};
     if(V9.sec==='overview'){
+      if(V9.wiz) return v9Wizard(c);
       var fu=c.followups||[];
-      return '<div class="v9-rowbtn"><div class="v9-sec" style="margin:0">Scripts board</div><button class="mini-btn" onclick="osBuild(\''+c.id+'\')">+ Create new script</button></div><div class="v9-muted2"><i class="ti ti-arrows-move"></i> Drag between columns · hover to preview</div>'+v9BoardHtml(c)+
+      return '<div class="v9-rowbtn"><div class="v9-sec" style="margin:0">Scripts board</div><button class="mini-btn" onclick="osWizStart()">+ Create new script</button></div><div class="v9-muted2"><i class="ti ti-arrows-move"></i> Drag between columns · hover to preview</div>'+v9BoardHtml(c)+
         '<div class="v9-card2"><div class="v9-sec">Niche they are targeting</div>'+(nn?('<div class="v9-name">'+esc(nn.name)+'</div><div class="v9-meta" style="margin-top:2px">'+((nn.angles||[]).slice(0,4).map(esc).join(' · ')||'—')+'</div>'):'<div class="v9-muted2">No niche set.</div>')+'</div>'+
         '<div class="v9-card2"><div class="v9-sec">Follow-ups</div>'+(fu.length?fu.map(function(s){return '<div class="v9-rowi"><span><i class="ti ti-arrow-forward-up"></i> '+esc(s.parentLabel||'sequence')+'</span><span class="v9-meta">'+(s.items?s.items.length:0)+' steps</span></div>';}).join(''):'<div class="v9-muted2">No follow-ups yet.</div>')+'</div>'+
         '<div class="v9-card2"><div class="v9-sec">Client</div><div class="v9-meta">'+esc(c.meta||'')+(cs.result?(' · '+esc(cs.result)):'')+(c.website?(' · '+esc(c.website)):'')+'</div></div>';
@@ -6056,6 +6073,53 @@ loadConfigAndRender();
     return '<div class="v9-sec">History</div>'+(hist.length?hist.map(function(h){return '<div class="v9-rowi"><span>'+esc(h.t)+'</span><span class="v9-meta">'+esc(h.d)+'</span></div>';}).join(''):'<div class="v9-muted2">No history yet.</div>');
   }
 
+  function v9Wizard(c){
+    var w=V9.wiz; var cancel='<button class="v9-back" onclick="osWizCancel()"><i class="ti ti-x"></i> Cancel</button>';
+    if(w.menu){
+      var opts=[['new','ti-file-plus','Create new scripts','Niche → angle → offer → framework → swipe'],['followup','ti-arrow-forward-up','Follow-up sequence','Build follow-ups to a script'],['angles','ti-search','Find angles','AI suggests fresh angles'],['winning','ti-trophy','From a winning script','Spin variants off a winner']];
+      return cancel+'<div class="v9-h">What do you want to create?</div><div class="v9-wizmenu">'+opts.map(function(o){return '<button class="v9-wopt" onclick="osWizFlow(\''+o[0]+'\')"><div style="font-weight:600"><i class="ti '+o[1]+'"></i> '+o[2]+'</div><div class="v9-meta" style="margin-top:2px">'+o[3]+'</div></button>';}).join('')+'</div>';
+    }
+    if(w.flow!=='new') return cancel+'<div class="v9-card2"><div class="v9-meta">This option runs through the same step-by-step + swipe UI. Wiring next — for now use “Create new scripts”.</div><div style="margin-top:10px"><button class="mini-btn" onclick="osWizFlow(\'new\')">Use Create new scripts</button></div></div>';
+    if(w.generating) return cancel+'<div class="v9-h">Generating scripts…</div><div class="v9-sub">Writing with the AI across your frameworks × angles.</div><div class="v9-card2"><i class="ti ti-loader-2"></i> Working… this calls the real generator.</div>';
+    if(w.phase==='swipe'){
+      if(w.i>=w.deck.length) return '<div class="v9-h">Done</div><div class="v9-sub">'+(w.kept||0)+' script'+((w.kept||0)===1?'':'s')+' saved to this client’s board (Ideas column).</div><button class="mini-btn" onclick="osWizCancel()">Back to overview</button>';
+      var d=w.deck[w.i], sc=scriptIndex[d.idx]?scriptIndex[d.idx].script:'';
+      var body;
+      if(w.editing) body='<div class="v9-card2"><div class="v9-meta">'+esc(d.fw||'')+' · '+esc(d.angle||'')+'</div><textarea id="v9-edit" style="width:100%;min-height:150px;margin-top:6px">'+esc(sc)+'</textarea><div style="display:flex;justify-content:space-between;margin-top:8px"><button class="mini-btn" onclick="osWizAI()"><i class="ti ti-sparkles"></i> AI rewrite</button><button class="mini-btn" onclick="osWizEditDone()">Done</button></div></div>';
+      else body='<div class="v9-swcard"><div class="v9-meta">'+esc(d.fw||'')+' · '+esc(d.angle||'')+'</div><div class="v9-swtext">'+esc(sc)+'</div></div><div class="v9-swbtns"><button class="v9-swipe no" onclick="osWizSwipe(false)" title="Pass"><i class="ti ti-x"></i></button><button class="mini-btn" onclick="osWizEdit()"><i class="ti ti-edit"></i> Edit</button><button class="v9-swipe yes" onclick="osWizSwipe(true)" title="Keep"><i class="ti ti-heart"></i></button></div>';
+      return cancel+'<div class="v9-rowbtn"><div class="v9-h" style="margin:0">Review scripts</div><div class="v9-meta">'+(w.i+1)+' of '+w.deck.length+' · '+(w.kept||0)+' kept</div></div>'+body;
+    }
+    var steps=['Niche','Angle','Offer','Framework'];
+    var bar='<div class="v9-wsteps">'+steps.map(function(s,k){var st=k+1;return '<div class="v9-wstep '+(w.step>=st?'on':'')+'"><span class="n">'+(w.step>st?'<i class="ti ti-check"></i>':st)+'</span>'+s+'</div>';}).join('')+'</div>';
+    var bd='';
+    if(w.step===1) bd='<div class="v9-meta" style="margin-bottom:8px">Niche</div>'+((c.nicheIds&&c.nicheIds.length?c.nicheIds:config.niches.map(function(n){return n.id;}))).map(function(id){var nm=(niche(id)||{}).name||id;return '<button class="v9-fchip '+(w.niche===id?'on':'')+'" onclick="osWizNiche(\''+id+'\')">'+esc(nm)+'</button>';}).join('');
+    else if(w.step===2){var angs=(niche(w.niche)||{}).angles||[];bd='<div class="v9-meta" style="margin-bottom:8px">Pick angle(s)</div>'+(angs.length?angs.map(function(a){var on=w.angles.indexOf(a)>-1;return '<div class="v9-pickrow '+(on?'on':'')+'" onclick="osWizAngle('+JSON.stringify(a).replace(/"/g,'&quot;')+')">'+(on?'<i class="ti ti-check"></i> ':'')+esc(a)+'</div>';}).join(''):'<div class="v9-meta">No angles on this niche.</div>');}
+    else if(w.step===3){var des=clientDesires(c);bd='<div class="v9-meta" style="margin-bottom:8px">Offer / emphasis — optional, what the scripts should push</div>'+(des.length?des.map(function(o){var on=w.offers.indexOf(o)>-1;return '<div class="v9-pickrow '+(on?'on':'')+'" onclick="osWizOffer('+JSON.stringify(o).replace(/"/g,'&quot;')+')">'+(on?'<i class="ti ti-check"></i> ':'')+esc(o)+'</div>';}).join(''):'<div class="v9-meta">No desires on file — skip this step.</div>');}
+    else bd='<div class="v9-meta" style="margin-bottom:8px">Frameworks</div><div>'+config.frameworks.map(function(f){var on=!!w.fws[f.id];return '<button class="v9-fchip '+(on?'on':'')+'" onclick="osWizFw(\''+f.id+'\')">'+esc(f.name)+' <span style="opacity:.6">'+esc(f.category||'')+'</span></button>';}).join('')+'</div><div class="v9-meta" style="margin:12px 0 6px">Variants per combo</div>'+[1,2,3].map(function(v){return '<button class="v9-fchip '+(w.variants===v?'on':'')+'" onclick="osWizVar('+v+')">'+v+'</button>';}).join('');
+    var fwCount=Object.keys(w.fws).filter(function(k){return w.fws[k];}).length;
+    var foot;
+    if(w.step===1) foot='<button class="mini-btn" onclick="osWizMenu()">Back</button> <button class="mini-btn" onclick="osWizNext()"'+(w.niche?'':' disabled')+'>Next →</button>';
+    else if(w.step===2) foot='<button class="mini-btn" onclick="osWizBack()">Back</button> <button class="mini-btn" onclick="osWizNext()"'+(w.angles.length?'':' disabled')+'>Next →</button>';
+    else if(w.step===3) foot='<button class="mini-btn" onclick="osWizBack()">Back</button> <button class="mini-btn" onclick="osWizNext()">Next →</button>';
+    else foot='<button class="mini-btn" onclick="osWizBack()">Back</button> <button class="mini-btn" onclick="osWizGen()"'+(fwCount?'':' disabled')+'><i class="ti ti-sparkles"></i> Generate '+(fwCount*w.angles.length*w.variants||0)+'</button>';
+    return cancel+'<div class="v9-h">Create new scripts</div>'+bar+'<div class="v9-card2">'+bd+'</div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">'+foot+'</div>';
+  }
+  window.osWizStart=function(){var c=client(V9.client);if(!c)return;V9.wiz={menu:true,flow:null,step:1,niche:primaryNicheId(c)||(c.nicheIds||[])[0]||(config.niches[0]||{}).id,angles:[],offers:[],fws:{},variants:1,deck:[],i:0,kept:0,editing:false,phase:'steps',generating:false};renderV9();};
+  window.osWizCancel=function(){V9.wiz=null;renderV9();};
+  window.osWizMenu=function(){V9.wiz.menu=true;V9.wiz.flow=null;renderV9();};
+  window.osWizFlow=function(f){V9.wiz.menu=false;V9.wiz.flow=f;V9.wiz.step=1;renderV9();};
+  window.osWizNiche=function(id){V9.wiz.niche=id;V9.wiz.angles=[];renderV9();};
+  window.osWizAngle=function(a){var A=V9.wiz.angles,i=A.indexOf(a);if(i>-1)A.splice(i,1);else A.push(a);renderV9();};
+  window.osWizOffer=function(o){var A=V9.wiz.offers,i=A.indexOf(o);if(i>-1)A.splice(i,1);else A.push(o);renderV9();};
+  window.osWizFw=function(id){V9.wiz.fws[id]=!V9.wiz.fws[id];renderV9();};
+  window.osWizVar=function(v){V9.wiz.variants=v;renderV9();};
+  window.osWizNext=function(){var w=V9.wiz;if(w.step===1&&!w.niche)return;if(w.step===2&&!w.angles.length)return;w.step++;renderV9();};
+  window.osWizBack=function(){V9.wiz.step--;renderV9();};
+  window.osWizGen=async function(){var c=client(V9.client),w=V9.wiz;state.clientId=c.id;state.nicheId=w.niche;state.angles=new Set(w.angles);state.frameworks=new Set(Object.keys(w.fws).filter(function(k){return w.fws[k];}));state.variantsPer=w.variants;if(w.offers.length){c.favorites=c.favorites||{pains:[],desires:[],caseStudies:[],offers:[]};c.favorites.desires=w.offers.slice();}w.generating=true;renderV9();try{await generate();}catch(e){}w.deck=(scriptIndex||[]).map(function(s,idx){return {idx:idx,fw:s.framework,angle:s.angle};});w.i=0;w.kept=0;w.generating=false;w.phase='swipe';renderV9();};
+  window.osWizSwipe=function(keep){var w=V9.wiz;if(keep){saveToReservoir(w.deck[w.i].idx,'idea');w.kept=(w.kept||0)+1;}w.i++;w.editing=false;renderV9();};
+  window.osWizEdit=function(){V9.wiz.editing=true;renderV9();};
+  window.osWizEditDone=function(){var w=V9.wiz,el=document.getElementById('v9-edit');if(el&&scriptIndex[w.deck[w.i].idx])scriptIndex[w.deck[w.i].idx].script=el.value;w.editing=false;renderV9();};
+  window.osWizAI=async function(){var w=V9.wiz,el=document.getElementById('v9-edit');var cur=el?el.value:(scriptIndex[w.deck[w.i].idx]||{}).script;try{var r=await api({action:'refine_script',script:cur,prompt:'Make it tighter and punchier with one clear ask. Keep merge tags.'});var out=(r&&(r.script||r.text||r.result))||cur;if(scriptIndex[w.deck[w.i].idx])scriptIndex[w.deck[w.i].idx].script=out;}catch(e){}renderV9();};
   window.renderV9=function(){var el=document.getElementById('panelV9');if(!el||typeof config==='undefined'||!config)return;el.innerHTML=(V9.client===null||!client(V9.client))?v9List():v9Detail(client(V9.client));if(V9._refocus){var si=document.getElementById('v9-search');if(si){si.focus();try{si.setSelectionRange(si.value.length,si.value.length);}catch(e){}}V9._refocus=false;}};
   window.osFilterNiche=function(id){V9.filterNiche=id;renderV9();};
   window.osSetF=function(dim,val){V9['filter'+dim]=val;renderV9();};
