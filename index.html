@@ -5915,6 +5915,10 @@ loadConfigAndRender();
   .v9-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
   .v9-h{font-size:18px;font-weight:600}
   .v9-sub{font-size:13px;color:var(--muted)}
+  .v9-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .v9-fchip{font-size:12px;padding:5px 11px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--muted)}
+  .v9-fchip.on{border-color:var(--accent);color:var(--text)}
+  #v9-search{margin-left:auto;width:200px}
   .v9-grouplabel{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 8px}
   .v9-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
   .v9-card{text-align:left;cursor:pointer;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:13px;display:flex;flex-direction:column;gap:10px;font:inherit;color:inherit}
@@ -5949,21 +5953,31 @@ loadConfigAndRender();
 </style>
 <script>
 (function(){
-  window.V9 = window.V9 || { client:null, sec:'overview' };
+  window.V9 = window.V9 || { client:null, sec:'overview', filterNiche:'All', search:'' };
   function v9ini(s){return (s||'?').split(/\s+/).map(function(w){return w[0]}).slice(0,2).join('').toUpperCase();}
   function v9board(c){var g={idea:[],testing:[],winning:[]};(c.scriptReservoir||[]).forEach(function(s){(g[s.status]||(g[s.status]=[])).push(s);});return g;}
   function v9niche(c){return config.niches.find(function(n){return n.id===primaryNicheId(c)})||null;}
 
   function v9Card(c){var b=v9board(c);return '<button class="v9-card" onclick="osOpenClient(\''+c.id+'\')"><div class="v9-cardtop"><div class="v9-av">'+v9ini(c.name)+'</div><div style="flex:1;min-width:0"><div class="v9-name">'+esc(c.name)+'</div><div class="v9-meta">'+esc(c.meta||'')+'</div></div></div><div class="v9-counts"><span><i class="ti ti-bulb"></i> '+b.idea.length+'</span><span><i class="ti ti-flask"></i> '+b.testing.length+'</span><span><i class="ti ti-trophy"></i> '+b.winning.length+'</span></div></button>';}
 
+  function v9Match(c){
+    if(V9.filterNiche && V9.filterNiche!=='All' && primaryNicheId(c)!==V9.filterNiche) return false;
+    var q=(V9.search||'').trim().toLowerCase();
+    if(q && (((c.name||'')+' '+(c.meta||'')).toLowerCase().indexOf(q)<0)) return false;
+    return true;
+  }
   function v9List(){
-    var byN={};config.clients.forEach(function(c){var k=primaryNicheId(c);(byN[k]=byN[k]||[]).push(c);});
-    var html='<div class="v9-top"><div><div class="v9-h">Clients</div><div class="v9-sub">Open a client — overview, scripts, growth, history</div></div><button class="mini-btn" onclick="adminEdit(\'clients\',\'__new__\')">+ New client</button></div>';
-    config.niches.forEach(function(n){var cs=byN[n.id];if(!cs||!cs.length)return;html+='<div class="v9-grouplabel">'+esc(n.name)+'</div><div class="v9-grid">'+cs.map(v9Card).join('')+'</div>';});
-    var orphans=config.clients.filter(function(c){return !niche(primaryNicheId(c))});
-    if(orphans.length)html+='<div class="v9-grouplabel">No niche yet</div><div class="v9-grid">'+orphans.map(v9Card).join('')+'</div>';
-    if(!config.clients.length)html+='<div class="v9-sub">No clients yet — add one.</div>';
-    return html;
+    var top='<div class="v9-top"><div><div class="v9-h">Clients</div><div class="v9-sub">Open a client — overview, scripts, growth, history</div></div><button class="mini-btn" onclick="adminEdit(\'clients\',\'__new__\')">+ New client</button></div>';
+    var fchips='<button class="v9-fchip '+((!V9.filterNiche||V9.filterNiche==='All')?'on':'')+'" onclick="osFilterNiche(\'All\')">All</button>'+config.niches.map(function(n){return '<button class="v9-fchip '+(V9.filterNiche===n.id?'on':'')+'" onclick="osFilterNiche(\''+n.id+'\')">'+esc(n.name)+'</button>';}).join('');
+    var filters='<div class="v9-filters"><span class="v9-meta"><i class="ti ti-filter"></i> Niche</span>'+fchips+'<input id="v9-search" placeholder="Search clients…" value="'+esc(V9.search||'')+'" oninput="osSearch(this.value)"></div>';
+    var byN={};config.clients.filter(v9Match).forEach(function(c){var k=primaryNicheId(c);(byN[k]=byN[k]||[]).push(c);});
+    var body='';
+    config.niches.forEach(function(n){var cs=byN[n.id];if(!cs||!cs.length)return;body+='<div class="v9-grouplabel">'+esc(n.name)+'</div><div class="v9-grid">'+cs.map(v9Card).join('')+'</div>';});
+    var orphans=config.clients.filter(function(c){return v9Match(c)&&!niche(primaryNicheId(c))});
+    if(orphans.length)body+='<div class="v9-grouplabel">No niche yet</div><div class="v9-grid">'+orphans.map(v9Card).join('')+'</div>';
+    if(!config.clients.length)body='<div class="v9-sub" style="margin-top:14px">No clients yet — add one.</div>';
+    else if(!body)body='<div class="v9-sub" style="margin-top:14px">No clients match these filters.</div>';
+    return top+filters+body;
   }
 
   function v9BoardHtml(c){var g=v9board(c);var cols=[['idea','Ideas','ti-bulb'],['testing','Testing','ti-flask'],['winning','Winning','ti-trophy']];
@@ -6012,7 +6026,9 @@ loadConfigAndRender();
     return '<div class="v9-sec">History</div>'+(hist.length?hist.map(function(h){return '<div class="v9-rowi"><span>'+esc(h.t)+'</span><span class="v9-meta">'+esc(h.d)+'</span></div>';}).join(''):'<div class="v9-muted2">No history yet.</div>');
   }
 
-  window.renderV9=function(){var el=document.getElementById('panelV9');if(!el||typeof config==='undefined'||!config)return;el.innerHTML=(V9.client===null||!client(V9.client))?v9List():v9Detail(client(V9.client));};
+  window.renderV9=function(){var el=document.getElementById('panelV9');if(!el||typeof config==='undefined'||!config)return;el.innerHTML=(V9.client===null||!client(V9.client))?v9List():v9Detail(client(V9.client));if(V9._refocus){var si=document.getElementById('v9-search');if(si){si.focus();try{si.setSelectionRange(si.value.length,si.value.length);}catch(e){}}V9._refocus=false;}};
+  window.osFilterNiche=function(id){V9.filterNiche=id;renderV9();};
+  window.osSearch=function(v){V9.search=v;V9._refocus=true;renderV9();};
   window.osOpenClient=function(id){V9.client=id;V9.sec='overview';state.clientId=id;renderV9();};
   window.osBackClients=function(){V9.client=null;renderV9();};
   window.osSec=function(k){V9.sec=k;renderV9();};
