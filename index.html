@@ -870,6 +870,7 @@
           <button class="tab-btn" id="atab-followups" onclick="switchAdminTab('followups')">↪ Follow-ups</button>
           <button class="tab-btn" id="atab-agency" onclick="switchAdminTab('agency')">🤝 Our Agency</button>
           <button class="tab-btn" id="atab-tools" onclick="switchAdminTab('tools')">🧰 Tools KB</button>
+          <button class="tab-btn" id="atab-systemfilter" onclick="switchAdminTab('systemfilter')">🧠 System Filter</button>
           <button class="tab-btn" id="atab-settings" onclick="switchAdminTab('settings')">Settings</button>
         </div>
         <div id="adminBody"></div>
@@ -1026,7 +1027,46 @@ let keyFromLink = false;
   if (!adminKey) adminKey = cleanKey(safeStorageGet('offer_admin_key'));
 })();
 
+// ─── SYSTEM FILTER (house lens) ─────────────────────────────────────────────────
+// One configurable knowledge + filter layer (Admin → System Filter) that gets fed
+// into every AI action so the bot picks, judges and phrases things through our lens.
+const LENS_ACTIONS = { generate:1, suggest_angles:1, suggest_offers:1, build_icp:1, research_niche:1, research:1, research_client_site:1, refine_script:1, extract_transcript:1, compose_growth_plan:1, compose_client_brief:1 };
+function composeLens() {
+  const sf = (typeof config !== 'undefined' && config && config.settings) ? config.settings.systemFilter : null;
+  if (!sf || sf.enabled === false) return '';
+  const parts = [];
+  if (sf.lens)         parts.push('OUR LENS (the overall filter — read everything below through this):\n' + sf.lens);
+  if (sf.angleLogic)   parts.push('ANGLE LOGIC (how to find, create and judge angles):\n' + sf.angleLogic);
+  if (sf.scriptFilter) parts.push('SCRIPT FILTER (how to write and choose scripts):\n' + sf.scriptFilter);
+  if (sf.offersKB)     parts.push('WHAT WE KNOW ABOUT OFFERS:\n' + sf.offersKB);
+  if (sf.guaranteesKB) parts.push('WHAT WE KNOW ABOUT GUARANTEES:\n' + sf.guaranteesKB);
+  if (sf.offerSheet)   parts.push('OFFER CREATION SHEET (the framework our clients fill in — use it as the template for thinking about offers):\n' + sf.offerSheet);
+  if (!parts.length) return '';
+  return 'HOUSE KNOWLEDGE & FILTER — apply this as the lens for what to pick, what to ignore, and how to phrase it back to us:\n\n' + parts.join('\n\n');
+}
+function withSystemFilter(body) {
+  try {
+    if (!body || !body.action || !LENS_ACTIONS[body.action]) return body;
+    const lens = composeLens();
+    if (!lens) return body;
+    const sf = config.settings.systemFilter || {};
+    body = Object.assign({}, body);
+    body.systemFilter = lens;        // structured field for the backend when supported
+    body.lens = lens;                // alias
+    if (sf.model) { body.filterModel = sf.model; body.model = body.model || sf.model; }
+    // Immediate effect on the shared backend: fold the lens into the first free-text
+    // field it already reads, so it works even before any server-side change.
+    const block = '\n\n' + lens;
+    const fields = ['prompt', 'context', 'clientContext', 'rules', 'globalRules'];
+    let placed = false;
+    for (const f of fields) { if (typeof body[f] === 'string') { body[f] += block; placed = true; break; } }
+    if (!placed) body.globalRules = lens;
+    return body;
+  } catch (e) { return body; }
+}
+
 async function api(body) {
+  body = withSystemFilter(body);
   const headers = { 'Content-Type': 'application/json' };
   if (adminKey) headers['x-admin-key'] = adminKey;
   const res = await fetch(OUTREACH_BOT_URL, { method: 'POST', headers, body: JSON.stringify(body) });
@@ -1224,6 +1264,7 @@ function migrateConfig(cfg) {
     cfg.settings.notionParentId = '3744fd2a4cfe8015830fc724e06dcdb3';
   }
   cfg.settings.growthRules = cfg.settings.growthRules || '';
+  cfg.settings.systemFilter = Object.assign({ enabled: true, model: 'sonnet', lens: '', angleLogic: '', scriptFilter: '', offersKB: '', guaranteesKB: '', offerSheet: '' }, cfg.settings.systemFilter || {});
   // Backfill any planDefaults fields added in later versions (inbox/profile math).
   cfg.settings.planDefaults = cfg.settings.planDefaults || structuredClone(DEFAULT_CONFIG.settings.planDefaults);
   ['email', 'linkedin', 'personalization'].forEach(k => {
@@ -2476,7 +2517,7 @@ function adminEdit(type, id) {
 }
 
 function renderAdmin() {
-  ['frameworks', 'winning', 'niches', 'clients', 'followups', 'agency', 'tools', 'settings'].forEach(t =>
+  ['frameworks', 'winning', 'niches', 'clients', 'followups', 'agency', 'tools', 'systemfilter', 'settings'].forEach(t =>
     document.getElementById('atab-' + t).classList.toggle('active', t === state.adminTab));
   const body = document.getElementById('adminBody');
 
@@ -2513,7 +2554,50 @@ function adminTabHtml() {
   if (t === 'tools') return adminToolsKB();
   if (t === 'followups') return adminFollowups();
   if (t === 'agency') return adminAgency();
+  if (t === 'systemfilter') return adminSystemFilter();
   return adminSettings();
+}
+
+// — System Filter (house lens fed into every AI action) —
+function adminSystemFilter() {
+  const sf = (config.settings && config.settings.systemFilter) || {};
+  const area = (id, label, val, h, ph) => `<div class="form-group"><label class="form-label">${label}</label><textarea class="form-textarea" id="${id}" placeholder="${esc(ph || '')}" style="min-height:${h || 90}px">${esc(val || '')}</textarea></div>`;
+  const models = [['sonnet', 'Claude Sonnet (recommended)'], ['opus', 'Claude Opus'], ['haiku', 'Claude Haiku'], ['gemini', 'Gemini 2.5 Flash']];
+  return `
+    <div class="info-block"><div class="info-title">🧠 System filter — your lens on everything the AI does</div>
+      <div class="hint">A house knowledge + filter layer fed into <b>every</b> AI action — finding and creating angles, building ICPs, suggesting offers, writing and refining scripts, research. The bot picks, judges and phrases things through this lens. The more you put here (offers, guarantees, your offer-creation sheet), the smarter and more on-brand it gets. It applies on top of any research or info the bot pulls in.</div>
+    </div>
+    <div class="editor">
+      <div class="grid2">
+        <div class="form-group"><label class="form-label">Filter</label>
+          <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="sf-enabled" ${sf.enabled !== false ? 'checked' : ''}> Apply to every AI request</label></div>
+        <div class="form-group"><label class="form-label">Model used for the filter</label>
+          <select class="form-input" id="sf-model">${models.map(m => `<option value="${m[0]}" ${(sf.model || 'sonnet') === m[0] ? 'selected' : ''}>${m[1]}</option>`).join('')}</select></div>
+      </div>
+      <div class="hint" style="margin:-4px 0 12px">The knowledge below applies immediately (it's folded into the prompt). The model choice takes effect on the server when supported.</div>
+      ${area('sf-lens', 'Our lens — the overall system prompt', sf.lens, 100, 'How we see outreach. What good looks like. What to always avoid. The bot reads everything else through this.')}
+      ${area('sf-anglelogic', 'Angle logic — how to find & judge angles', sf.angleLogic, 90, 'How a strong angle is built, what makes one weak, what to prioritise when creating new angles…')}
+      ${area('sf-scriptfilter', 'Script filter — how to write & choose scripts', sf.scriptFilter, 90, 'What makes a script worth keeping — structure, tone, what to cut…')}
+      ${area('sf-offers', 'What we know about offers', sf.offersKB, 90, 'Everything you know about offers — what works, by niche, by stage…')}
+      ${area('sf-guarantees', 'What we know about guarantees', sf.guaranteesKB, 90, 'Guarantee structures, when to use which, risk-reversal that lands…')}
+      ${area('sf-offersheet', 'Offer creation sheet', sf.offerSheet, 150, 'Paste your offer-creation sheet / framework here — the one clients have filled in. The bot uses it as the template for thinking about offers.')}
+      <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="mini-btn" onclick="saveSystemFilter()">💾 Save system filter</button></div>
+    </div>`;
+}
+function saveSystemFilter() {
+  config.settings = config.settings || {};
+  config.settings.systemFilter = {
+    enabled: document.getElementById('sf-enabled').checked,
+    model: document.getElementById('sf-model').value,
+    lens: document.getElementById('sf-lens').value,
+    angleLogic: document.getElementById('sf-anglelogic').value,
+    scriptFilter: document.getElementById('sf-scriptfilter').value,
+    offersKB: document.getElementById('sf-offers').value,
+    guaranteesKB: document.getElementById('sf-guarantees').value,
+    offerSheet: document.getElementById('sf-offersheet').value
+  };
+  persistConfig();
+  showNotif('System filter saved — now applied to every AI request');
 }
 
 // — Our Agency (seller profile that powers the Sales growth plan) —
