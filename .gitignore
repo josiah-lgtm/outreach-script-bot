@@ -10,3 +10,6 @@ supabase/functions/outreach-bot/html.ts
 
 # live data backup for migration (never commit)
 live-config.json
+
+# local preview config
+.claude/
