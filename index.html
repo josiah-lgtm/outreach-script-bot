@@ -2612,10 +2612,9 @@ async function runFilterAcrossAll() {
   if (!confirm(`Run the filter through ${jobs.length} item(s) across all clients?\n\nThis rewrites existing text to match your filter. Scripts keep their previous version; angles, desires and offers are replaced in place. Continue?`)) return;
   const btn = document.getElementById('cf-run'); if (btn) btn.disabled = true;
   const status = document.getElementById('cf-status');
-  let done = 0, failed = 0, firstErr = '';
-  for (let i = 0; i < jobs.length; i++) {
-    const job = jobs[i];
-    if (status) status.textContent = `Filtering ${i + 1} / ${jobs.length} (${job.kind})…`;
+  let done = 0, failed = 0, firstErr = '', completed = 0;
+  const CONCURRENCY = 3;   // run 3 at once ≈ 3× faster than one-at-a-time
+  async function runOne(job) {
     const prompt = job.short
       ? 'Rewrite this single short line to match our house lens and messaging. Keep it short. Return only the rewritten line — no quotes, no extra text.'
       : 'Rewrite this script to match our house messaging and lens. Keep every {{merge_tag}} exactly and keep about the same length. Return only the rewritten script.';
@@ -2625,7 +2624,12 @@ async function runFilterAcrossAll() {
       out = String(out).replace(/\n*\(mock refinement applied\)\s*$/, '').trim();
       if (out) { job.apply(out); done++; } else { failed++; if (!firstErr) firstErr = 'empty response (' + JSON.stringify(Object.keys(r || {})) + ')'; }
     } catch (e) { failed++; if (!firstErr) firstErr = e.message || ('' + e); }
+    completed++;
+    if (status) status.textContent = `Filtering ${completed} / ${jobs.length}…`;
   }
+  let next = 0;
+  async function worker() { while (next < jobs.length) { await runOne(jobs[next++]); } }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, worker));
   persistConfig();
   const tail = `${done} updated${failed ? `, ${failed} skipped` : ''}` + (failed && firstErr ? ` — first issue: ${firstErr}` : '');
   if (status) status.textContent = `Done — ${tail}`;
