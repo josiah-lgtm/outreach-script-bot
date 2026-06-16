@@ -9,18 +9,20 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg:        #0A0A0F;
-    --bg2:       #111118;
-    --bg3:       #1A1A24;
-    --border:    #2A2A38;
+    /* v9 light theme — same variable names, light values, so every existing
+       rule re-themes automatically. No markup/logic changed. */
+    --bg:        #FBFBF9;  /* page */
+    --bg2:       #FFFFFF;  /* cards / surfaces */
+    --bg3:       #F3F2ED;  /* secondary surface / hover */
+    --border:    #E5E3DB;
     --accent:    #2563EB;
-    --accent2:   #3B82F6;
-    --green:     #10B981;
-    --amber:     #F59E0B;
-    --red:       #EF4444;
-    --text:      #F0F0F8;
-    --muted:     #6B7280;
-    --subtle:    #9CA3AF;
+    --accent2:   #1D4ED8;
+    --green:     #0F9D6B;
+    --amber:     #B45309;
+    --red:       #DC2626;
+    --text:      #1F1E1C;  /* primary */
+    --muted:     #79776F;  /* tertiary */
+    --subtle:    #45443F;  /* secondary */
   }
 
   body {
@@ -31,6 +33,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
   }
 
   /* HEADER */
