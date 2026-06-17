@@ -6420,6 +6420,10 @@ loadConfigAndRender();
   .v9-mhelp{margin-top:10px;border-top:1px solid var(--border);padding-top:8px}
   .v9-mlink{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--subtle);margin-top:4px;line-height:1.4}
   .v9-mlink i{color:var(--accent2);margin-top:2px}
+  .v9-mcard{cursor:pointer;transition:border-color .12s}
+  .v9-mcard:hover{border-color:var(--accent)}
+  .v9-mcard.sel{border-color:var(--green);box-shadow:0 0 0 1px var(--green)}
+  .v9-usedbadge{font-size:11px;color:var(--green);font-weight:600;display:flex;align-items:center;gap:4px;flex:none}
   .v9-empty{font-size:11px;color:var(--muted);text-align:center;padding:10px 0}
   .v9-tip{display:none;position:absolute;left:0;top:100%;z-index:5;width:260px;max-height:320px;overflow:auto;white-space:pre-wrap;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:11px;color:var(--subtle);margin-top:4px;line-height:1.5;box-shadow:0 6px 20px rgba(0,0,0,.12)}
   .v9-scard:hover .v9-tip{display:block}
@@ -6617,15 +6621,20 @@ loadConfigAndRender();
   // Ask the AI to group a flat list into themed buckets (returns [{id,topic,items}] or null).
   function aiCategorize(items,label){ return categorizeList(items,label); }
   // Render built mechanisms as the outcome-focused step flow (shared: wizard + client view).
+  // One mechanism → plain text fed to the generator when it's the active one.
+  function mechToText(m){var steps=(m.steps||[]).map(function(s,i){return (i+1)+') '+s;}).join(' ');return ((m.name?m.name+' — ':'')+(m.fixes||'')+(steps?(' How it works: '+steps):'')+(m.reframe?(' '+m.reframe):'')+(m.outcome?(' Outcome: '+m.outcome):'')).slice(0,1400);}
   function mechCardsHtml(mechs, helpLabel){
+    var activeId=(client(V9.client)||{}).activeMechId;
     return (mechs||[]).map(function(m){
+      var sel=(m.id&&m.id===activeId);
       var steps=(m.steps||[]);
       var stepHtml=steps.map(function(s,i){var last=i===steps.length-1;return '<div class="v9-mstep'+(last?' last':'')+'"><span class="num">'+(last?'<i class="ti ti-flag"></i>':(i+1))+'</span><span class="v9-mtext">'+esc(s)+'</span></div>';}).join('');
       var help=[];
       if(m.reducesPain)help.push('<div class="v9-mlink"><i class="ti ti-bandage"></i><span><b>Reduces pain:</b> '+esc(m.reducesPain)+'</span></div>');
       if(m.removesObjection)help.push('<div class="v9-mlink"><i class="ti ti-shield-check"></i><span><b>Removes objection:</b> '+esc(m.removesObjection)+'</span></div>');
       if(m.increasesDesire)help.push('<div class="v9-mlink"><i class="ti ti-trending-up"></i><span><b>Increases desire:</b> '+esc(m.increasesDesire)+'</span></div>');
-      return '<div class="v9-card2"><div class="v9-sec">'+esc(m.name||'Mechanism')+(m.confidence?' <span class="v9-meta" style="font-weight:400">('+esc(m.confidence)+(m.source?' · '+esc(m.source):'')+')</span>':'')+'</div>'
+      return '<div class="v9-card2 v9-mcard'+(sel?' sel':'')+'" onclick="osMechPick(\''+(m.id||'')+'\')" title="Use this mechanism in your scripts">'
+        +'<div class="v9-rowbtn"><div class="v9-sec" style="margin:0">'+esc(m.name||'Mechanism')+(m.confidence?' <span class="v9-meta" style="font-weight:400">('+esc(m.confidence)+(m.source?' · '+esc(m.source):'')+')</span>':'')+'</div>'+(sel?'<span class="v9-usedbadge"><i class="ti ti-check"></i> Used in scripts</span>':'<span class="v9-meta">tap to use</span>')+'</div>'
         +(m.fixes?'<div class="v9-meta" style="margin-bottom:2px"><b>Fixes:</b> '+esc(m.fixes)+'</div>':'')
         +(m.reframe?'<div class="v9-meta" style="margin-bottom:8px;font-style:italic">'+esc(m.reframe)+'</div>':'')
         +(steps.length?'<div class="v9-msteps">'+stepHtml+'</div>':'')
@@ -6634,6 +6643,7 @@ loadConfigAndRender();
         +'</div>';
     }).join('');
   }
+  window.osMechPick=function(id){var c=client(V9.client);if(!c)return;var m=(c.mechanisms||[]).find(function(x){return x.id===id;});if(!m)return;c.activeMechId=id;c.caseStudy=c.caseStudy||{};c.caseStudy.mechanism=mechToText(m);persistConfig();showNotif('✓ Using “'+(m.name||'mechanism')+'” in your scripts');renderV9();};
   // Build mechanisms for a client (works in the wizard with chosen pains/desires, or standalone).
   async function buildMechanismCore(c, chosenP, chosenD){
     var n=v9niche(c);
@@ -6648,7 +6658,8 @@ loadConfigAndRender();
     var mechs=parseMechanisms(r);
     if(mechs&&mechs.length){
       c.mechanisms=mechs; c.caseStudy=c.caseStudy||{};
-      c.caseStudy.mechanism=mechs.map(function(m){return (m.name?m.name+': ':'')+(m.fixes||'')+(((m.steps||[]).length)?(' '+m.steps.join(' ')):'')+(m.outcome?(' → '+m.outcome):'');}).join('\n\n').slice(0,1400);
+      c.activeMechId=mechs[0].id;                       // auto-select the first as the one used in scripts
+      c.caseStudy.mechanism=mechToText(mechs[0]);       // generator uses the active mechanism
       persistConfig();
     }
     return { mechs: mechs || [], raw: String(raw) };
