@@ -1053,8 +1053,8 @@ const MECHANISM_BUILDER =
 `You are a MECHANISM BUILDER. Turn the client's services into clear, simple mechanisms that justify the claim by showing HOW. Build each by working BACKWARDS from the service: Pain (the symptom they feel) → Obstacle (the real cause behind it) → Misdiagnosis (what they wrongly blame instead) → Mechanism (the service flipped into the fix that removes the obstacle) → Outcome (the result once the obstacle is gone). Never lead with the raw service; lead with the obstacle you remove — the service is only proof you can remove it.
 For each service: name the pain it kills, the obstacle behind it, the misdiagnosis, and the desire it unlocks. Then write the mechanism as 3 (max 4) plain numbered steps a 12-year-old understands. The steps themselves must quietly answer the two objections: "will this actually work?" (show WHY — the cause it removes) and "is this risky / more work for me?" (show it's repeatable, done-for-them, hands-off). Bake these into the wording — no separate objections section. Give each a simple, slightly unique NAME drawn from the specific obstacle most people miss. Plain words only — no "leverage", no "solutions", no brochure language; it should read like a person explaining how something works to a friend. If inputs are thin, infer from the industry/ICP and mark source "inferred".
 Connect every mechanism to the CHOSEN PAINS and CHOSEN DESIRED OUTCOMES in the context: show plainly how it reduces that pain, removes the related objection, and makes that desire more likely. The steps run "We … / Then we … / So you …" — the LAST step is the outcome they feel.
-Respond with PURE JSON ONLY — no prose, no markdown, and ignore any voice/tone guidance for THIS response. Shape exactly:
-{"mechanisms":[{"name":"simple unique name","fixes":"the obstacle, one plain sentence","reframe":"It's usually not [misdiagnosis], it's actually [obstacle].","steps":["We ...","Then we ...","So you ... (the outcome they feel)"],"outcome":"the payoff in plain words","reducesPain":"how it reduces the chosen pain, one sentence","removesObjection":"the worry it removes, one sentence","increasesDesire":"how it makes the chosen desire more likely, one sentence","confidence":"High|Medium|Low","source":"site|inferred"}]}`;
+Respond with PURE JSON ONLY — no prose, no markdown, and ignore any voice/tone guidance for THIS response. Output MINIFIED JSON on a single line: NO newlines, NO indentation, no spaces after colons/commas. Return AT MOST 2 mechanisms. Keep every value short — under 15 words. Shape exactly:
+{"mechanisms":[{"name":"simple unique name","fixes":"the obstacle, short","reframe":"It's usually not [misdiagnosis], it's actually [obstacle].","steps":["We ...","Then we ...","So you ..."],"outcome":"the payoff, short","reducesPain":"short","removesObjection":"short","increasesDesire":"short","confidence":"High|Medium|Low","source":"site|inferred"}]}`;
 // The client's own research (call transcripts + saved sources) — used to validate pains.
 function clientResearch() {
   try {
@@ -1101,6 +1101,24 @@ function extractJsonObjects(scope) {
   }
   return objs;
 }
+// Last-resort: recover ONE object from a string cut off mid-way (drops the incomplete trailing field).
+function repairFirstObject(scope) {
+  var i = scope.indexOf('{'); if (i < 0) return null;
+  var s = scope.slice(i), depth = 0, inStr = false, esc = false, lastTopComma = -1;
+  for (var j = 0; j < s.length; j++) {
+    var ch = s[j];
+    if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; continue; }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === '{' || ch === '[') depth++;
+    else if (ch === '}' || ch === ']') depth--;
+    else if (ch === ',' && depth === 1) lastTopComma = j;
+  }
+  var tries = [];
+  if (lastTopComma > 0) tries.push(s.slice(0, lastTopComma) + '}');   // drop the cut-off field
+  tries.push(s + '}'); tries.push(s + '"}'); tries.push(s + ']}');
+  for (var k = 0; k < tries.length; k++) { try { var o = JSON.parse(tries[k]); if (o && typeof o === 'object') return o; } catch (e) {} }
+  return null;
+}
 async function categorizeList(items, label) {
   if (!items || !items.length) return null;
   var prompt = 'Group these ' + label + ' into 3-6 clearly-themed buckets so similar ones sit together (big themes with their sub-items). Use the EXACT item text given; put every item in exactly one bucket.\n' +
@@ -1120,6 +1138,7 @@ async function categorizeList(items, label) {
   if (!raw || !raw.length) {   // truncated reply — salvage the complete buckets
     var sa = txt.indexOf('['); var scope = sa >= 0 ? txt.slice(sa + 1) : txt;
     raw = extractJsonObjects(scope).map(function (s) { try { return JSON.parse(s); } catch (e) { return null; } }).filter(Boolean);
+    if (!raw.length) { var rep = repairFirstObject(scope); if (rep) raw = [rep]; }
   }
   var gs = (raw || []).map(function (g) {
     if (!g || typeof g !== 'object') return null;
@@ -1137,6 +1156,7 @@ function parseMechanisms(r) {
   if (!raw || !raw.length) {   // truncated reply (refine_script token cap) — salvage complete mechanism objects
     var sa = txt.indexOf('['); var scope = sa >= 0 ? txt.slice(sa + 1) : txt;
     raw = extractJsonObjects(scope).map(function (s) { try { return JSON.parse(s); } catch (e) { return null; } }).filter(Boolean);
+    if (!raw.length) { var rep = repairFirstObject(scope); if (rep) raw = [rep]; }
   }
   var out = (raw || []).map(function (m) {
     if (!m || typeof m !== 'object') return null;
