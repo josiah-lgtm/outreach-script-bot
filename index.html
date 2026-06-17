@@ -1088,6 +1088,19 @@ async function filterIdea(text) {
 function notifyFiltered() { try { if (composeLens()) showNotif('✨ Run through your system filter'); } catch (e) {} }
 // Group a flat list into themed buckets via AI → [{id,topic,items}] or null. Shared by
 // the create-script wizard and the global Admin "Group everything" run.
+// Pull complete, balanced {...} objects out of a (possibly truncated) string — so a JSON
+// reply that got cut off at the token limit still yields its complete entries.
+function extractJsonObjects(scope) {
+  var objs = [], depth = 0, start = -1, inStr = false, esc = false;
+  for (var i = 0; i < scope.length; i++) {
+    var ch = scope[i];
+    if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; continue; }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === '{') { if (depth === 0) start = i; depth++; }
+    else if (ch === '}') { if (depth > 0) { depth--; if (depth === 0 && start >= 0) { objs.push(scope.slice(start, i + 1)); start = -1; } } }
+  }
+  return objs;
+}
 async function categorizeList(items, label) {
   if (!items || !items.length) return null;
   var prompt = 'Group these ' + label + ' into 3-6 clearly-themed buckets so similar ones sit together (big themes with their sub-items). Use the EXACT item text given; put every item in exactly one bucket.\n' +
@@ -1102,9 +1115,12 @@ async function categorizeList(items, label) {
     var m = txt.match(/[\[{][\s\S]*[\]}]/);
     if (m) { try { obj = JSON.parse(m[0]); } catch (e2) { obj = null; } }
   }
-  if (!obj) return null;
   // Accept many shapes: {groups|buckets|categories|themes|clusters:[...]}, or a bare array.
-  var raw = Array.isArray(obj) ? obj : (obj.groups || obj.buckets || obj.categories || obj.themes || obj.clusters || []);
+  var raw = obj ? (Array.isArray(obj) ? obj : (obj.groups || obj.buckets || obj.categories || obj.themes || obj.clusters || [])) : [];
+  if (!raw || !raw.length) {   // truncated reply — salvage the complete buckets
+    var sa = txt.indexOf('['); var scope = sa >= 0 ? txt.slice(sa + 1) : txt;
+    raw = extractJsonObjects(scope).map(function (s) { try { return JSON.parse(s); } catch (e) { return null; } }).filter(Boolean);
+  }
   var gs = (raw || []).map(function (g) {
     if (!g || typeof g !== 'object') return null;
     var its = g.items || g.members || g.pains || g.desires || g.list || g.points || g.values || [];
@@ -1117,8 +1133,11 @@ function parseMechanisms(r) {
   var txt = String((r && (r.script || r.text || r.result || r.content)) || '').replace(/```json|```/gi, '').trim();
   var obj = null;
   try { obj = JSON.parse(txt); } catch (e) { var m = txt.match(/[\[{][\s\S]*[\]}]/); if (m) { try { obj = JSON.parse(m[0]); } catch (e2) { obj = null; } } }
-  if (!obj) return null;
-  var raw = Array.isArray(obj) ? obj : (obj.mechanisms || obj.results || obj.items || []);
+  var raw = obj ? (Array.isArray(obj) ? obj : (obj.mechanisms || obj.results || obj.items || [])) : [];
+  if (!raw || !raw.length) {   // truncated reply (refine_script token cap) — salvage complete mechanism objects
+    var sa = txt.indexOf('['); var scope = sa >= 0 ? txt.slice(sa + 1) : txt;
+    raw = extractJsonObjects(scope).map(function (s) { try { return JSON.parse(s); } catch (e) { return null; } }).filter(Boolean);
+  }
   var out = (raw || []).map(function (m) {
     if (!m || typeof m !== 'object') return null;
     var steps = m.steps || m.how_it_works || m.how || m.howItWorks || [];

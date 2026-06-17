@@ -606,7 +606,7 @@ Deno.serve(async (req) => {
         if (!script || !prompt) return json({ ok: false, error: "script and prompt required" }, 400);
         const res = await claudeMessages({
           model: CLAUDE_MODEL,
-          max_tokens: 600,
+          max_tokens: 4000,   // was 600 — too small for JSON tasks (mechanism builder / grouping) that ride on refine_script
           system: `You are a cold email editor. The user gives you a script and a revision instruction. Make ONLY the requested changes — preserve what works. Return ONLY the revised script text, no commentary, no quotes, no markdown.`,
           messages: [{ role: "user", content: `SCRIPT:\n${script}\n\nINSTRUCTION: ${prompt}` }],
         });
