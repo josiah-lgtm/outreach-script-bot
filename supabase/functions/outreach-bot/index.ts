@@ -26,7 +26,7 @@ const MAX_FRAMEWORKS = 6;
 const MAX_ANGLES = 8;
 const MAX_VARIANTS_PER_ANGLE = 3;
 const MAX_TOTAL_SCRIPTS = 48;
-const MAX_PROMPT_CHARS = 40_000;
+const MAX_PROMPT_CHARS = 150_000;  // Sonnet handles ~200k context; 40k was rejecting filter-laden prompts
 
 // Anthropic server-side web search tool (executed by the API, not by us).
 const webSearchTool = (maxUses: number): Tool =>

@@ -1116,18 +1116,36 @@ function composeLens() {
   if (!parts.length) return '';
   return 'HOUSE KNOWLEDGE & FILTER — apply this as the lens for what to pick, what to ignore, and how to phrase it back to us:\n\n' + parts.join('\n\n');
 }
+// Lean lens for SCRIPT GENERATION only — just the writing-relevant parts (lens + messaging),
+// capped, so the generate prompt never blows the backend's length cap (offer-sheet / angle-logic
+// bulk isn't needed to write a script and was causing "prompt too long" → no scripts).
+function composeLensLite() {
+  const sf = (typeof config !== 'undefined' && config && config.settings) ? config.settings.systemFilter : null;
+  if (!sf || sf.enabled === false) return '';
+  const parts = [];
+  if (sf.lens) parts.push('OUR LENS:\n' + sf.lens);
+  if (sf.messaging) parts.push('MESSAGING & SCRIPTING (voice, tone, structure, rules):\n' + sf.messaging);
+  if (!parts.length) return '';
+  let s = 'HOUSE KNOWLEDGE & FILTER — write every script through this lens:\n\n' + parts.join('\n\n');
+  return s.length > 4500 ? s.slice(0, 4500) + '\n…' : s;
+}
 function withSystemFilter(body) {
   try {
     if (!body || !body.action || !LENS_ACTIONS[body.action]) return body;
     const parts = [];
-    const lens = composeLens();
-    if (lens) parts.push(lens);
-    // Bake in the first-liner engine where it belongs:
-    if (body.action === 'generate') parts.push(FIRST_LINER_ENGINE_SCRIPT);          // opening line of each script
-    if (body.action === 'suggest_angles' || body.action === 'suggest_offers' || body.action === 'build_icp' || body.action === 'fuse_angle') {
-      parts.push(FIRST_LINER_ENGINE_ANGLES);                                          // pain/angle/offer/ICP finding
-      const research = clientResearch();                                              // validate against the client's own research
-      if (research) parts.push(research);
+    if (body.action === 'generate') {
+      // keep generate lean — full lens + offer sheets can exceed the backend's prompt cap
+      const lite = composeLensLite();
+      if (lite) parts.push(lite);
+      parts.push(FIRST_LINER_ENGINE_SCRIPT);                                          // opening line of each script
+    } else {
+      const lens = composeLens();
+      if (lens) parts.push(lens);
+      if (body.action === 'suggest_angles' || body.action === 'suggest_offers' || body.action === 'build_icp' || body.action === 'fuse_angle') {
+        parts.push(FIRST_LINER_ENGINE_ANGLES);                                        // pain/angle/offer/ICP finding
+        const research = clientResearch();                                            // validate against the client's own research
+        if (research) parts.push(research);
+      }
     }
     if (!parts.length) return body;
     body = Object.assign({}, body);
@@ -1819,10 +1837,11 @@ async function generate() {
     // Aggregate case study, then apply the user's starred selections.
     const fav = c.favorites || { pains: [], desires: [], caseStudies: [], offers: [] };
     const caseStudyOut = { ...(c.caseStudy || {}) };
-    caseStudyOut.pains = clientPains(c);
-    caseStudyOut.desires = clientDesires(c);
-    caseStudyOut.offers = clientOffers(c);
-    caseStudyOut.caseStudies = clientCaseStudies(c);
+    // Cap each list so a client with lots of auto-saved pains/offers can't blow the backend prompt limit.
+    caseStudyOut.pains = clientPains(c).slice(0, 30);
+    caseStudyOut.desires = clientDesires(c).slice(0, 30);
+    caseStudyOut.offers = clientOffers(c).slice(0, 30);
+    caseStudyOut.caseStudies = clientCaseStudies(c).slice(0, 20);
     // Starred case studies/offers narrow the proof pool to exactly those picked.
     if (fav.caseStudies.length) caseStudyOut.caseStudies = fav.caseStudies;
     if (fav.offers.length) caseStudyOut.offers = fav.offers;
