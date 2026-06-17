@@ -1035,13 +1035,10 @@ function composeLens() {
   const sf = (typeof config !== 'undefined' && config && config.settings) ? config.settings.systemFilter : null;
   if (!sf || sf.enabled === false) return '';
   const parts = [];
-  if (sf.lens)         parts.push('OUR LENS (the overall filter — read everything below through this):\n' + sf.lens);
-  if (sf.messaging)    parts.push('MESSAGING (voice, tone and rules EVERY script must follow):\n' + sf.messaging);
-  if (sf.angleLogic)   parts.push('ANGLE LOGIC (how to find, create and judge angles):\n' + sf.angleLogic);
-  if (sf.scriptFilter) parts.push('SCRIPT FILTER (how to write and choose scripts):\n' + sf.scriptFilter);
-  if (sf.offersKB)     parts.push('WHAT WE KNOW ABOUT OFFERS:\n' + sf.offersKB);
-  if (sf.guaranteesKB) parts.push('WHAT WE KNOW ABOUT GUARANTEES:\n' + sf.guaranteesKB);
-  if (sf.offerSheet)   parts.push('OFFER CREATION SHEET (the framework our clients fill in — use it as the template for thinking about offers):\n' + sf.offerSheet);
+  if (sf.lens)        parts.push('OUR LENS (the overall filter — read everything below through this):\n' + sf.lens);
+  if (sf.messaging)   parts.push('MESSAGING & SCRIPTING (voice, tone, structure and rules EVERY script must follow):\n' + sf.messaging);
+  if (sf.icpScripter) parts.push('ICP BUILDER & ANGLES (how to find, judge and create pain points, desires and angles — for the client account, the ICP and the niche):\n' + sf.icpScripter);
+  if (sf.offers)      parts.push('OFFER CREATION & GUARANTEES (offers, guarantees, and the offer-creation framework — use it as the template for thinking about offers and risk-reversal):\n' + sf.offers);
   if (!parts.length) return '';
   return 'HOUSE KNOWLEDGE & FILTER — apply this as the lens for what to pick, what to ignore, and how to phrase it back to us:\n\n' + parts.join('\n\n');
 }
@@ -1261,7 +1258,18 @@ function migrateConfig(cfg) {
     cfg.settings.notionParentId = '3744fd2a4cfe8015830fc724e06dcdb3';
   }
   cfg.settings.growthRules = cfg.settings.growthRules || '';
-  cfg.settings.systemFilter = Object.assign({ enabled: true, model: 'sonnet', lens: '', messaging: '', angleLogic: '', scriptFilter: '', offersKB: '', guaranteesKB: '', offerSheet: '' }, cfg.settings.systemFilter || {});
+  {
+    const sf = Object.assign({ enabled: true, model: 'sonnet', lens: '', messaging: '', icpScripter: '', offers: '' }, cfg.settings.systemFilter || {});
+    const mergeTxt = (...xs) => xs.map(x => String(x || '').trim()).filter(Boolean).join('\n\n');
+    // Consolidate the old split fields into the merged ones, preserving every bit of data.
+    if (sf.scriptFilter != null) { sf.messaging = mergeTxt(sf.messaging, sf.scriptFilter); delete sf.scriptFilter; }
+    if (sf.angleLogic != null)   { sf.icpScripter = mergeTxt(sf.icpScripter, sf.angleLogic); delete sf.angleLogic; }
+    if (sf.offersKB != null || sf.guaranteesKB != null || sf.offerSheet != null) {
+      sf.offers = mergeTxt(sf.offers, sf.offersKB, sf.guaranteesKB, sf.offerSheet);
+      delete sf.offersKB; delete sf.guaranteesKB; delete sf.offerSheet;
+    }
+    cfg.settings.systemFilter = sf;
+  }
   // Backfill any planDefaults fields added in later versions (inbox/profile math).
   cfg.settings.planDefaults = cfg.settings.planDefaults || structuredClone(DEFAULT_CONFIG.settings.planDefaults);
   ['email', 'linkedin', 'personalization'].forEach(k => {
@@ -2584,13 +2592,10 @@ function adminSystemFilter() {
           <select class="form-input" id="sf-model">${models.map(m => `<option value="${m[0]}" ${(sf.model || 'sonnet') === m[0] ? 'selected' : ''}>${m[1]}</option>`).join('')}</select></div>
       </div>
       <div class="hint" style="margin:-4px 0 12px">When on, everything the AI creates — new scripts, ICPs, offers and angles — automatically runs through this filter as it's made. The knowledge below applies immediately (it's folded into the prompt); the model choice takes effect on the server when supported. To fix what's already in the app, use “Run the filter across everything” at the bottom.</div>
-      ${area('sf-lens', 'Our lens — the overall system prompt', sf.lens, 100, 'How we see outreach. What good looks like. What to always avoid. The bot reads everything else through this.')}
-      ${area('sf-messaging', 'Messaging — voice & rules every script runs through', sf.messaging, 100, 'Add this once: tone of voice, sentence length, openers/CTAs to use or avoid, banned words, formatting. Every script the bot writes is filtered through this.')}
-      ${area('sf-anglelogic', 'Angle logic — how to find & judge angles', sf.angleLogic, 90, 'How a strong angle is built, what makes one weak, what to prioritise when creating new angles…')}
-      ${area('sf-scriptfilter', 'Script filter — how to write & choose scripts', sf.scriptFilter, 90, 'What makes a script worth keeping — structure, tone, what to cut…')}
-      ${area('sf-offers', 'What we know about offers', sf.offersKB, 90, 'Everything you know about offers — what works, by niche, by stage…')}
-      ${area('sf-guarantees', 'What we know about guarantees', sf.guaranteesKB, 90, 'Guarantee structures, when to use which, risk-reversal that lands…')}
-      ${area('sf-offersheet', 'Offer creation sheet', sf.offerSheet, 150, 'Paste your offer-creation sheet / framework here — the one clients have filled in. The bot uses it as the template for thinking about offers.')}
+      ${area('sf-lens', 'System — the overall lens', sf.lens, 100, 'How we see outreach. What good looks like. What to always avoid. The bot reads everything else through this.')}
+      ${area('sf-messaging', 'Messaging & scripting — voice & rules every script runs through', sf.messaging, 120, 'Tone of voice, sentence length, openers/CTAs to use or avoid, banned words, structure, what makes a script worth keeping vs cutting. Every script the bot writes or chooses runs through this.')}
+      ${area('sf-icp', 'ICP builder scripter — pain points, desires & angles', sf.icpScripter, 120, 'How to find, judge and create pain points, desires and angles. Applied across the client account, the ICP and the niche.')}
+      ${area('sf-offers', 'Offer creation & guarantees', sf.offers, 150, 'Everything about offers and guarantees, plus your offer-creation sheet / framework — the bot uses it as the template for thinking about offers and risk-reversal.')}
       <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="mini-btn" onclick="saveSystemFilter()">💾 Save system filter</button></div>
       <hr style="border:none;border-top:1px solid var(--border);margin:20px 0">
       <div class="info-title" style="margin-bottom:4px">🔁 Run the filter across everything we already have</div>
@@ -2618,11 +2623,17 @@ async function runFilterAcrossAll() {
   if (doPains) {
     // The pain points seen everywhere live on each client's case study…
     config.clients.forEach(c => ((c.caseStudy || {}).pains || []).forEach((p, i) => jobs.push({ kind: 'pain', short: true, text: p, apply: t => { c.caseStudy.pains[i] = t; } })));
-    // …plus the niche angle lists and any saved custom angles.
+    // …plus the niche angle lists and any saved custom angles…
     config.niches.forEach(n => (n.angles || []).forEach((a, i) => jobs.push({ kind: 'pain', short: true, text: a, apply: t => { n.angles[i] = t; } })));
     config.clients.forEach(c => (c.savedAngles || []).forEach(x => { if (x && x.text) jobs.push({ kind: 'pain', short: true, text: x.text, apply: t => { x.text = t; } }); }));
+    // …and each ICP's objections (its pain-side intel).
+    config.clients.forEach(c => (c.icps || []).forEach(ic => (ic.objections || []).forEach((o, i) => jobs.push({ kind: 'pain', short: true, text: o, apply: t => { ic.objections[i] = t; } }))));
   }
-  if (doDesires) config.clients.forEach(c => ((c.caseStudy || {}).desires || []).forEach((d, i) => jobs.push({ kind: 'desire', short: true, text: d, apply: t => { c.caseStudy.desires[i] = t; } })));
+  if (doDesires) {
+    config.clients.forEach(c => ((c.caseStudy || {}).desires || []).forEach((d, i) => jobs.push({ kind: 'desire', short: true, text: d, apply: t => { c.caseStudy.desires[i] = t; } })));
+    // each ICP's own desires too
+    config.clients.forEach(c => (c.icps || []).forEach(ic => (ic.desires || []).forEach((d, i) => jobs.push({ kind: 'desire', short: true, text: d, apply: t => { ic.desires[i] = t; } }))));
+  }
   if (doOffers) config.clients.forEach(c => ((c.caseStudy || {}).offers || []).forEach((o, i) => jobs.push({ kind: 'offer', short: true, text: o, apply: t => { c.caseStudy.offers[i] = t; } })));
   if (doSizes) config.clients.forEach(c => { const cs = c.caseStudy || {}; if (cs.size) jobs.push({ kind: 'size', short: true, text: cs.size, apply: t => { c.caseStudy.size = t; } }); });
   if (!jobs.length) return showNotif('Nothing to run — no matching items found', true);
@@ -2663,11 +2674,8 @@ function saveSystemFilter() {
     model: document.getElementById('sf-model').value,
     lens: document.getElementById('sf-lens').value,
     messaging: document.getElementById('sf-messaging').value,
-    angleLogic: document.getElementById('sf-anglelogic').value,
-    scriptFilter: document.getElementById('sf-scriptfilter').value,
-    offersKB: document.getElementById('sf-offers').value,
-    guaranteesKB: document.getElementById('sf-guarantees').value,
-    offerSheet: document.getElementById('sf-offersheet').value
+    icpScripter: document.getElementById('sf-icp').value,
+    offers: document.getElementById('sf-offers').value
   };
   persistConfig();
   showNotif('System filter saved — now applied to every AI request');
