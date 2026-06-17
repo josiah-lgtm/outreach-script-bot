@@ -1253,6 +1253,18 @@ function migrateConfig(cfg) {
     c.guarantees = c.guarantees || [];
     c.savedAngles = c.savedAngles || [];
     c.scriptReservoir = c.scriptReservoir || [];
+    // Name every saved script "<D Mon> · v<n>" — sequential per day. Deterministic, so
+    // it also repairs legacy titles (framework names / "v14") across all clients.
+    {
+      const per = {}, MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      c.scriptReservoir.forEach(s => {
+        const iso = String(s.savedAt || '').slice(0, 10);
+        const dt = iso ? new Date(iso + 'T00:00:00') : null;
+        const label = (dt && !isNaN(dt.getTime())) ? `${dt.getDate()} ${MO[dt.getMonth()]}` : 'Undated';
+        per[iso] = (per[iso] || 0) + 1;
+        s.name = `${label} · v${per[iso]}`;
+      });
+    }
     c.transcripts = c.transcripts || [];
     c.favorites = c.favorites || { pains: [], desires: [], caseStudies: [], offers: [] };
     ['pains', 'desires', 'caseStudies', 'offers'].forEach(k => { if (!Array.isArray(c.favorites[k])) c.favorites[k] = []; });
@@ -6179,7 +6191,9 @@ loadConfigAndRender();
   .v9-colh{font-size:12px;font-weight:600;color:var(--subtle);margin-bottom:8px;display:flex;justify-content:space-between}
   .v9-scard{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:6px;cursor:grab;position:relative}
   .v9-sfw{font-size:11px;color:var(--accent2);font-weight:600}
-  .v9-sa{font-size:12px;margin-top:1px}
+  .v9-stitle{font-size:12px;font-weight:600;color:var(--text)}
+  .v9-ssub{font-size:10px;color:var(--accent2);font-weight:600;margin-top:1px}
+  .v9-sa{font-size:11px;color:var(--muted);margin-top:3px}
   .v9-empty{font-size:11px;color:var(--muted);text-align:center;padding:10px 0}
   .v9-tip{display:none;position:absolute;left:0;top:100%;z-index:5;width:260px;max-height:320px;overflow:auto;white-space:pre-wrap;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:11px;color:var(--subtle);margin-top:4px;line-height:1.5;box-shadow:0 6px 20px rgba(0,0,0,.12)}
   .v9-scard:hover .v9-tip{display:block}
@@ -6239,7 +6253,7 @@ loadConfigAndRender();
   function v9BoardHtml(c){var g=v9board(c);var cols=[['idea','Ideas','ti-bulb'],['testing','Testing','ti-flask'],['winning','Winning','ti-trophy']];
     var fus=c.followups||[];
     function fuCountFor(s){var key=s.label||((s.framework||'')+' · '+(s.angle||''));return fus.filter(function(f){return f.parentLabel===key;}).length;}
-    return '<div class="v9-kan">'+cols.map(function(col){var items=g[col[0]]||[];return '<div class="v9-col" ondragover="osAllow(event)" ondragenter="this.classList.add(\'over\')" ondragleave="this.classList.remove(\'over\')" ondrop="osDropCol(event,\''+col[0]+'\')"><div class="v9-colh"><span><i class="ti '+col[2]+'"></i> '+col[1]+'</span><span>'+items.length+'</span></div>'+(items.length?items.map(function(s){var fc=fuCountFor(s);var label=s.framework||s.name||'Script';var snip=(s.script||'').replace(/\s+/g,' ').trim();var snipShort=snip?(snip.length>90?snip.slice(0,90)+'…':snip):(s.angle||s.label||'(no text)');return '<div class="v9-scard'+(fc?' v9-scard-fu':'')+'" draggable="true" ondragstart="osDragS(event,\''+s.id+'\')" onclick="osEditScript(\''+s.id+'\')" title="Click to edit · drag to move"><div class="v9-sfw">'+esc(label)+(s.angle?' · '+esc(s.angle):'')+'</div><div class="v9-sa">'+esc(snipShort)+'</div>'+(fc?'<div class="v9-fulabel"><i class="ti ti-arrow-forward-up"></i> '+fc+' follow-up'+(fc>1?'s':'')+'</div>':'')+'<span class="v9-tip">'+esc(s.script||'(empty)')+'</span></div>';}).join(''):'<div class="v9-empty">—</div>')+'</div>';}).join('')+'</div>'+'<div class="v9-trash" ondragover="osAllow(event)" ondragenter="this.classList.add(\'over\')" ondragleave="this.classList.remove(\'over\')" ondrop="osDropDelete(event)"><i class="ti ti-trash"></i> Drop a script here to delete</div>';
+    return '<div class="v9-kan">'+cols.map(function(col){var items=g[col[0]]||[];return '<div class="v9-col" ondragover="osAllow(event)" ondragenter="this.classList.add(\'over\')" ondragleave="this.classList.remove(\'over\')" ondrop="osDropCol(event,\''+col[0]+'\')"><div class="v9-colh"><span><i class="ti '+col[2]+'"></i> '+col[1]+'</span><span>'+items.length+'</span></div>'+(items.length?items.map(function(s){var fc=fuCountFor(s);var title=s.name||nextScriptName(c);var sub=[s.framework,s.angle].filter(Boolean).join(' · ');var snip=(s.script||'').replace(/\s+/g,' ').trim();var snipShort=snip?(snip.length>90?snip.slice(0,90)+'…':snip):(s.label||'(no text)');return '<div class="v9-scard'+(fc?' v9-scard-fu':'')+'" draggable="true" ondragstart="osDragS(event,\''+s.id+'\')" onclick="osEditScript(\''+s.id+'\')" title="Click to edit · drag to move"><div class="v9-stitle">'+esc(title)+'</div>'+(sub?'<div class="v9-ssub">'+esc(sub)+'</div>':'')+'<div class="v9-sa">'+esc(snipShort)+'</div>'+(fc?'<div class="v9-fulabel"><i class="ti ti-arrow-forward-up"></i> '+fc+' follow-up'+(fc>1?'s':'')+'</div>':'')+'<span class="v9-tip">'+esc(s.script||'(empty)')+'</span></div>';}).join(''):'<div class="v9-empty">—</div>')+'</div>';}).join('')+'</div>'+'<div class="v9-trash" ondragover="osAllow(event)" ondragenter="this.classList.add(\'over\')" ondragleave="this.classList.remove(\'over\')" ondrop="osDropDelete(event)"><i class="ti ti-trash"></i> Drop a script here to delete</div>';
   }
 
   function v9Detail(c){
