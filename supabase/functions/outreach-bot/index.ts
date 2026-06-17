@@ -605,7 +605,7 @@ Deno.serve(async (req) => {
         const prompt = String(body.prompt ?? "").trim();
         if (!script || !prompt) return json({ ok: false, error: "script and prompt required" }, 400);
         const res = await claudeMessages({
-          model: CLAUDE_HAIKU,
+          model: CLAUDE_MODEL,
           max_tokens: 600,
           system: `You are a cold email editor. The user gives you a script and a revision instruction. Make ONLY the requested changes — preserve what works. Return ONLY the revised script text, no commentary, no quotes, no markdown.`,
           messages: [{ role: "user", content: `SCRIPT:\n${script}\n\nINSTRUCTION: ${prompt}` }],
@@ -619,7 +619,7 @@ Deno.serve(async (req) => {
         const prompt = String(body.prompt ?? "").trim();
         if (!script || !selection || !prompt) return json({ ok: false, error: "script, selection and prompt required" }, 400);
         const res = await claudeMessages({
-          model: CLAUDE_HAIKU,
+          model: CLAUDE_MODEL,
           max_tokens: 400,
           system:
             `You are a cold email editor. The user highlighted ONE EXCERPT of a script and wants only that excerpt rewritten. ` +
@@ -660,7 +660,7 @@ Deno.serve(async (req) => {
         const userPrompt = String(body.prompt ?? "").trim();
         if (!nicheName) return json({ ok: false, error: "niche required" }, 400);
         const res = await claudeMessages({
-          model: CLAUDE_HAIKU,
+          model: CLAUDE_MODEL,
           max_tokens: 600,
           system:
             `You generate testable cold email angle hooks for a specific niche. Each angle is a 5-14 word specific hook — a problem, trigger event, or curiosity gap. Make them distinct, concrete, and sendable as email openers.\n` +
@@ -723,7 +723,7 @@ Deno.serve(async (req) => {
         const ingredients = Array.isArray(body.ingredients) ? body.ingredients as Array<{ kind: string; text: string }> : [];
         if (!ingredients.length) return json({ ok: false, error: "ingredients required" }, 400);
         const res = await claudeMessages({
-          model: CLAUDE_HAIKU,
+          model: CLAUDE_MODEL,
           max_tokens: 300,
           system:
             `You fuse hand-picked ingredients (pains, desired outcomes, guarantees, offers) into ONE cold-email angle hook. ` +
@@ -751,7 +751,7 @@ Deno.serve(async (req) => {
         if (!text || !instruction) return json({ ok: false, error: "text and instruction required" }, 400);
         const rules = String(body.rules ?? "").trim();
         const res = await claudeMessages({
-          model: CLAUDE_HAIKU,
+          model: CLAUDE_MODEL,
           max_tokens: 1200,
           system:
             `You edit text inside a client-facing outbound growth plan document. The user highlighted a passage and gave an instruction ` +
@@ -989,7 +989,7 @@ Deno.serve(async (req) => {
         const context = String(body.context ?? "").slice(0, 6_000);
         if (!context.trim()) return json({ ok: false, error: "context required" }, 400);
         const res = await claudeMessages({
-          model: CLAUDE_HAIKU,
+          model: CLAUDE_MODEL,
           max_tokens: 800,
           system:
             `You are a cold outreach strategist. Given a client's case study data, suggest 4-6 distinct offer packages they could sell — each with a name and one-line description. Make them concrete, risk-reversed, and outcome-focused.\n` +

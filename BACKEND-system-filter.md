@@ -1,127 +1,56 @@
-# Backend change — route the System Filter through Claude Sonnet
+# System Filter → Claude Sonnet (Option A — DONE, needs deploy)
 
-**Goal:** make the Admin → 🧠 System Filter "model" choice (Sonnet by default) actually
-take effect, so the lens/messaging/offer knowledge is applied by Claude Sonnet instead of
-whatever model the edge function currently uses (Gemini 2.5 Flash).
+**Status:** implemented in `supabase/functions/outreach-bot/index.ts`. Takes effect once
+the edge function is **redeployed** (pushing to GitHub only updates the frontend, not the
+function).
 
-**Where:** the Supabase Edge Function behind
-`https://pturxqgrhywyhylxovun.supabase.co/functions/v1/outreach-bot`
-(action router — `generate`, `suggest_angles`, `suggest_offers`, `build_icp`,
-`research_niche`, `refine_script`, `extract_transcript`, `compose_growth_plan`, …).
-This function is **not** in this repo.
+## What was changed
 
-> The lens text already reaches the model today — the frontend folds it into the
-> `prompt` / `globalRules` / `context` fields the function already reads. The only thing
-> missing is **which model** runs these calls. That is a 100% backend decision.
+The backend already runs on Claude (`ANTHROPIC_API_KEY` is set; `CLAUDE_MODEL =
+"claude-sonnet-4-6"`). The "Gemini 2.5 Flash" string in the app config is only a
+cost-estimate label — it was never the model that runs.
 
----
+Several copy-writing actions were on the cheap **Haiku** model. Since the System Filter's
+lens is folded into these prompts, they now run on **Sonnet** so the filter is applied at
+full quality:
 
-## Why the frontend doesn't send a model field (read this first)
+| Action            | Before        | After         |
+|-------------------|---------------|---------------|
+| `refine_script`   | Haiku         | **Sonnet**    | ← powers the batch "Run filter" + AI rewrite
+| `refine_selection`| Haiku         | **Sonnet**    |
+| `suggest_angles`  | Haiku         | **Sonnet**    |
+| `fuse_angle`      | Haiku         | **Sonnet**    |
+| `ai_edit_text`    | Haiku         | **Sonnet**    |
+| `suggest_offers`  | Haiku         | **Sonnet**    |
 
-We previously sent `model: "sonnet"` on every request. The function passed it straight to
-the LLM as a model id, `"sonnet"` is not a valid id, and **every AI call errored**
-("444 skipped" on a filter run, and silent failures on generation). We reverted that.
+Already on Sonnet (unchanged): `generate`, `build_icp`, `extract_transcript`,
+`compose_client_brief`, `compose_growth_plan`, `compose_sales_plan`, `find_icp_example`,
+`generate_followups`.
 
-So the request body today is exactly the original shape, e.g. for `refine_script`:
+Left on Haiku (mechanical, not copy the filter shapes): `research_client_site` website
+summarisation.
 
-```json
-{ "action": "refine_script", "script": "…", "prompt": "…(house lens folded in)…" }
-```
+## Deploy
 
-Pick **Option A** (simplest) or **Option B** (honors the dropdown) below.
-
----
-
-## Option A — just use Sonnet for the AI actions (recommended, no frontend change)
-
-In the edge function, set the model for the generation/filter actions to Claude Sonnet.
-No request-shape change, zero regression risk on the client.
-
-```ts
-// Model ids (confirm against your account's current aliases):
-const SONNET = "claude-sonnet-4-6";
-
-// For the actions that write/judge copy, call Claude:
-async function callClaude(system: string, user: string, model = SONNET) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": Deno.env.get("ANTHROPIC_API_KEY")!,   // add this secret
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 1500,
-      system,                                   // your existing system prompt
-      messages: [{ role: "user", content: user }],
-    }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error?.message || `Anthropic ${res.status}`);
-  return data.content?.[0]?.text ?? "";         // <- the text the action returns
-}
-```
-
-Then in each action handler, replace the current Gemini call with `callClaude(system, prompt)`.
-Keep the **same JSON response shape** you already return (e.g. `{ ok:true, script:"…" }`,
-`{ ok:true, angles:[…] }`) — the frontend already parses those.
-
-**Setup:** add a Supabase secret:
 ```bash
-supabase secrets set ANTHROPIC_API_KEY=sk-ant-…
+./deploy.sh            # bundles index.html → html.ts and runs `supabase functions deploy outreach-bot`
+# or just the function:
+# supabase functions deploy outreach-bot
 ```
 
-That's it. The dropdown in the UI then just documents what's running.
+No new secret needed — `ANTHROPIC_API_KEY` is already configured.
 
----
-
-## Option B — honor the dropdown (Sonnet / Opus / Haiku / Gemini)
-
-1. **Backend:** read an optional `filterModel` and map it. Default to Sonnet.
-
-```ts
-const MODEL_MAP: Record<string, string> = {
-  sonnet: "claude-sonnet-4-6",
-  opus:   "claude-opus-4-8",
-  haiku:  "claude-haiku-4-5-20251001",
-  // "gemini" -> fall through to your existing Gemini path
-};
-const wanted = String(body.filterModel || "sonnet").toLowerCase();
-const claudeModel = MODEL_MAP[wanted];          // undefined => use existing Gemini code
-
-if (claudeModel) {
-  result = await callClaude(system, prompt, claudeModel);   // callClaude from Option A
-} else {
-  result = await callGemini(system, prompt);                // your current path
-}
-```
-
-Make sure the router **ignores unknown body keys** (the usual
-`const { action, prompt, script } = await req.json()` already does — it just doesn't read
-`filterModel` unless you destructure it). Do **not** reject unknown fields.
-
-2. **Frontend (apply only AFTER the backend above is deployed):** re-enable sending the
-   preference. One edit in `index.html`, inside `withSystemFilter(...)`, right after
-   `body = Object.assign({}, body);`:
-
-```js
-    // forward the Admin → System Filter model choice (backend maps it; unknown => ignored)
-    const sf = (config.settings && config.settings.systemFilter) || {};
-    if (sf.model) body.filterModel = sf.model;
-```
-
-   Leave it out until the backend accepts it, so we don't repeat the "444 skipped" regression.
-
----
-
-## Test after deploy
+## Verify after deploy
 
 1. Admin → 🧠 System Filter → put a distinctive rule in **Messaging**
-   (e.g. "every line must start with the word HEY").
-2. Generate a script, or run "Run filter now" on one client's Scripts.
-3. Confirm the output obeys the rule → Sonnet is being used with the lens.
-4. If anything errors, the filter run now prints the first error inline — capture it.
+   (e.g. "every line must start with HEY"), Save.
+2. Run "Run filter now" on one client's Scripts, or generate a script.
+3. Output should obey the rule → Sonnet + lens are live.
 
-Model ids above are the latest known aliases; confirm them against the account
-(`/v1/models` on the Anthropic API) before shipping.
+## Note on the model dropdown
+
+The dropdown (Sonnet/Opus/Haiku/Gemini) is still a saved preference only — the backend now
+uses Sonnet for the actions above regardless of the dropdown. To make the dropdown switch
+models per request, do Option B from git history (read `filterModel` in the function and
+add the one-line frontend send) — but only after confirming the function ignores unknown
+body keys, to avoid the earlier "model field" regression.
