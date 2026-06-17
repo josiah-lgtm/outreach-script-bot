@@ -6216,7 +6216,11 @@ loadConfigAndRender();
   .v9-av-lg{width:46px;height:46px;font-size:15px}
   .v9-name{font-weight:600;font-size:14px}
   .v9-meta{font-size:12px;color:var(--muted)}
-  .v9-counts{display:flex;gap:14px;font-size:12px;color:var(--muted);border-top:1px solid var(--border);padding-top:8px}
+  .v9-counts{display:flex;gap:14px;font-size:12px;color:var(--muted);border-top:1px solid var(--border);padding-top:8px;flex-wrap:wrap;align-items:center}
+  .v9-stat{display:inline-flex;align-items:center;gap:4px}
+  .v9-stat b{color:var(--text);font-weight:600}
+  .v9-csm{margin-left:auto;font-size:11px;color:var(--muted)}
+  .v9-icptag{font-size:11px;padding:2px 9px;border-radius:999px;background:rgba(245,158,11,.12);color:var(--amber);display:inline-flex;align-items:center;gap:3px}
   .v9-back{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:14px;padding:0;margin-bottom:14px}
   .v9-dethead{display:flex;align-items:center;gap:12px;margin-bottom:18px}
   .v9-detgrid{display:grid;grid-template-columns:180px 1fr;gap:20px;align-items:start}
@@ -6252,16 +6256,24 @@ loadConfigAndRender();
   function v9board(c){var g={idea:[],testing:[],winning:[]};(c.scriptReservoir||[]).forEach(function(s){(g[s.status]||(g[s.status]=[])).push(s);});return g;}
   function v9niche(c){return config.niches.find(function(n){return n.id===primaryNicheId(c)})||null;}
 
-  function v9Card(c){var b=v9board(c);
+  function v9Card(c){
     var sel=!!V9.selected[c.id];
     var cb=V9.selectMode?'<div class="v9-cbox '+(sel?'on':'')+'">'+(sel?'<i class="ti ti-check"></i>':'')+'</div>':'';
-    var primary=c.contact||c.name, secondary=c.contact?c.name:(c.meta||'');
+    var name=c.name||c.contact||'Client';
+    var from=c.meta||(c.contact?'':'');               // where they're from
     var stage=c.stage?'<span class="v9-stage">'+esc(c.stage)+'</span>':'';
+    // categorization: what they do (niche) + who they target (ICP)
     var nicheName=((typeof v9niche==='function'?v9niche(c):null)||{}).name||'';
-    var nicheTag=nicheName?'<span class="v9-nichetag">'+esc(nicheName)+'</span>':'';
+    var nicheTag=nicheName?'<span class="v9-nichetag" title="What they do">'+esc(nicheName)+'</span>':'';
+    var icps=c.icps||[];
+    var icpTag=icps.length?('<span class="v9-icptag" title="Who they target"><i class="ti ti-target"></i> '+esc(icps[0].title||'ICP')+(icps.length>1?(' +'+(icps.length-1)):'')+'</span>'):'';
     var tags=(c.tags||[]).map(function(t){return '<span class="v9-tagpill">'+esc(t)+'</span>';}).join('');
-    var tagrow=(nicheTag||tags)?'<div class="v9-cardtags">'+nicheTag+tags+'</div>':'';
-    return '<div class="v9-card'+(sel?' sel':'')+'" onclick="osCardClick(\''+c.id+'\')"><div class="v9-cardtop">'+cb+'<div class="v9-av">'+v9ini(primary)+'</div><div style="flex:1;min-width:0"><div class="v9-name">'+esc(primary)+'</div><div class="v9-meta">'+esc(secondary)+'</div></div>'+stage+'</div>'+tagrow+'<div class="v9-counts"><span><i class="ti ti-bulb"></i> '+b.idea.length+'</span><span><i class="ti ti-flask"></i> '+b.testing.length+'</span><span><i class="ti ti-trophy"></i> '+b.winning.length+'</span>'+(c.csm?'<span style="margin-left:auto">'+esc(c.csm)+'</span>':'')+'</div></div>';}
+    var tagrow=(nicheTag||icpTag||tags)?'<div class="v9-cardtags">'+nicheTag+icpTag+tags+'</div>':'';
+    // clear, labelled numbers
+    var nS=(c.scriptReservoir||[]).length, nI=icps.length, nP=(c.growthPlans||[]).length;
+    function stat(ico,n,label){return '<span class="v9-stat"><i class="ti '+ico+'"></i> <b>'+n+'</b> '+label+'</span>';}
+    var counts='<div class="v9-counts">'+stat('ti-file-text',nS,nS===1?'script':'scripts')+stat('ti-target',nI,nI===1?'ICP':'ICPs')+(nP?stat('ti-trending-up',nP,nP===1?'plan':'plans'):'')+(c.csm?'<span class="v9-csm" title="CSM">'+esc(c.csm)+'</span>':'')+'</div>';
+    return '<div class="v9-card'+(sel?' sel':'')+'" onclick="osCardClick(\''+c.id+'\')"><div class="v9-cardtop">'+cb+'<div class="v9-av">'+v9ini(name)+'</div><div style="flex:1;min-width:0"><div class="v9-name">'+esc(name)+'</div>'+(from?'<div class="v9-meta">'+esc(from)+'</div>':'')+'</div>'+stage+'</div>'+tagrow+counts+'</div>';}
 
   var STAGES=['Testing','Proof of concept','Scaling'];
   function v9Match(c){
@@ -6467,7 +6479,7 @@ loadConfigAndRender();
       var body;
       if(w.editing) body='<div class="v9-card2"><div class="v9-meta">'+esc(d.fw||'')+' · '+esc(d.angle||'')+'</div><textarea id="v9-edit" style="width:100%;min-height:150px;margin-top:6px">'+esc(sc)+'</textarea><div style="display:flex;justify-content:space-between;margin-top:8px"><button class="mini-btn" onclick="osWizAI()"><i class="ti ti-sparkles"></i> AI rewrite</button><button class="mini-btn" onclick="osWizEditDone()">Done</button></div></div>';
       else body='<div class="v9-swcard"><div class="v9-meta">'+esc(d.fw||'')+' · '+esc(d.angle||'')+'</div><div class="v9-swtext">'+esc(sc)+'</div></div><div class="v9-swbtns"><button class="v9-swipe no" onclick="osWizSwipe(false)" title="Pass"><i class="ti ti-x"></i></button><button class="mini-btn" onclick="osWizEdit()"><i class="ti ti-edit"></i> Edit</button><button class="v9-swipe yes" onclick="osWizSwipe(true)" title="Keep"><i class="ti ti-heart"></i></button></div>';
-      return cancel+'<div class="v9-rowbtn"><div class="v9-h" style="margin:0">Review scripts</div><div class="v9-meta">'+(w.i+1)+' of '+w.deck.length+' · '+(w.kept||0)+' kept</div></div>'+body;
+      return cancel+'<div class="v9-rowbtn"><div class="v9-h" style="margin:0">Review scripts</div><div class="v9-meta">'+(w.i+1)+' of '+w.deck.length+' · '+(w.kept||0)+' kept · <a onclick="osWizKeepAll()" style="color:var(--accent2);cursor:pointer;font-weight:600">Keep all →</a></div></div>'+body;
     }
     var steps=['ICP','Pain points','Desired outcomes','Mechanism','Proof','Framework'];
     var bar='<div class="v9-wsteps">'+steps.map(function(s,k){var st=k+1;return '<div class="v9-wstep '+(w.step>=st?'on':'')+'"><span class="n">'+(w.step>st?'<i class="ti ti-check"></i>':st)+'</span>'+s+'</div>';}).join('')+'</div>';
@@ -6517,6 +6529,7 @@ loadConfigAndRender();
     (function(){var ic=(c.icps||[]).find(function(x){return x.id===w.icpId;});function merge(arr,items){(items||[]).forEach(function(t){t=String(t||'').trim();if(t&&arr.indexOf(t)<0)arr.push(t);});}c.caseStudy=c.caseStudy||{};c.caseStudy.pains=c.caseStudy.pains||[];c.caseStudy.desires=c.caseStudy.desires||[];c.caseStudy.offers=c.caseStudy.offers||[];merge(c.caseStudy.pains,w.angles);merge(c.caseStudy.desires,w.desires);merge(c.caseStudy.offers,w.offers);if(ic){ic.pains=ic.pains||[];ic.desires=ic.desires||[];merge(ic.pains,w.angles);merge(ic.desires,(w.desires||[]).concat(w.offers||[]));}persistConfig();})();
     w.generating=true;renderV9();try{await generate();notifyFiltered();}catch(e){}w.deck=(scriptIndex||[]).map(function(s,idx){return {idx:idx,fw:s.framework,angle:s.angle};});w.i=0;w.kept=0;w.generating=false;w.phase='swipe';renderV9();};
   window.osWizSwipe=function(keep){var w=V9.wiz;w.keptIds=w.keptIds||[];if(keep){var d=w.deck[w.i];var c=client(V9.client);c.scriptReservoir=c.scriptReservoir||[];if(d.idx!=null&&scriptIndex[d.idx]){saveToReservoir(d.idx,'idea');var added=c.scriptReservoir[c.scriptReservoir.length-1];if(added){w.keptIds.push(added.id);}persistConfig();}else{var item={id:uid('sr'),script:d.text||'',label:(d.fw||'')+' · '+(d.angle||''),framework:d.fw||'Variation',angle:d.angle||'',nicheId:primaryNicheId(c),status:'idea',note:'',versions:[],savedAt:new Date().toISOString().slice(0,10)};item.name=nextScriptName(c);c.scriptReservoir.push(item);persistConfig();w.keptIds.push(item.id);}w.kept=(w.kept||0)+1;}w.i++;w.editing=false;renderV9();};
+  window.osWizKeepAll=function(){var w=V9.wiz;if(!w||w.phase!=='swipe')return;var c=client(V9.client);c.scriptReservoir=c.scriptReservoir||[];w.keptIds=w.keptIds||[];while(w.i<w.deck.length){var d=w.deck[w.i];if(d.idx!=null&&scriptIndex[d.idx]){saveToReservoir(d.idx,'idea');var added=c.scriptReservoir[c.scriptReservoir.length-1];if(added)w.keptIds.push(added.id);}else{var item={id:uid('sr'),script:d.text||'',label:(d.fw||'')+' · '+(d.angle||''),framework:d.fw||'Variation',angle:d.angle||'',nicheId:primaryNicheId(c),status:'idea',note:'',versions:[],savedAt:new Date().toISOString().slice(0,10)};item.name=nextScriptName(c);c.scriptReservoir.push(item);w.keptIds.push(item.id);}w.kept=(w.kept||0)+1;w.i++;}persistConfig();showNotif((w.kept||0)+' scripts saved to the board');renderV9();};
   window.osWizDoneFollowup=function(id){var cid=client(V9.client).id;V9.wiz=null;renderV9();if(typeof openFollowupsFromReservoir==='function')openFollowupsFromReservoir(cid,id);};
   window.osWizVariate=async function(baseText,fw,angle){var w=V9.wiz;w.busy=true;w.generating=true;w.phase='steps';renderV9();var prompts=['Rewrite as a fresh variation — same angle, keep merge tags.','Rewrite with a different angle on the same offer.','Expand the same angle deeper and more specific.'];var deck=[];for(var i=0;i<prompts.length;i++){try{var r=await api({action:'refine_script',script:baseText,prompt:prompts[i]});deck.push({text:(r&&r.script)||baseText,fw:fw||'Variation',angle:angle||''});}catch(e){deck.push({text:baseText,fw:fw||'Variation',angle:angle||''});}}notifyFiltered();w.deck=deck;w.i=0;w.kept=0;w.busy=false;w.generating=false;w.phase='swipe';renderV9();};
   window.osWizFromScript=function(id){var c=client(V9.client);var s=(c.scriptReservoir||[]).find(function(x){return x.id===id;});if(!s)return;osWizVariate(s.script||'',s.framework,s.angle);};
