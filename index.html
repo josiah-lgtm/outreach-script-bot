@@ -2585,9 +2585,10 @@ function adminSystemFilter() {
       <div class="hint" style="margin-bottom:10px">Applies your saved filter to existing content via AI, fixing what's already in the app. Scripts keep their previous version (you can roll back); angles, desires and offers are rewritten in place. Save your filter above first.</div>
       <div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:12px">
         <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="cf-scripts" checked> Scripts</label>
-        <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="cf-angles"> Angles</label>
-        <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="cf-desires"> Desires</label>
-        <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="cf-offers"> Offers</label>
+        <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="cf-pains" checked> Pain points</label>
+        <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="cf-desires" checked> Desires</label>
+        <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="cf-offers" checked> Offers</label>
+        <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="cf-sizes" checked> Sizes</label>
       </div>
       <div style="display:flex;align-items:center;gap:12px"><button class="mini-btn" id="cf-run" onclick="runFilterAcrossAll()"><i class="ti ti-wand"></i> Run filter now</button><span class="hint" id="cf-status"></span></div>
     </div>`;
@@ -2598,21 +2599,25 @@ async function runFilterAcrossAll() {
   if (sf.enabled === false) return showNotif('Turn the filter on first', true);
   if (!composeLens()) return showNotif('Add some filter content first (lens / messaging / offers…)', true);
   const pick = id => { const el = document.getElementById(id); return el && el.checked; };
-  const doScripts = pick('cf-scripts'), doAngles = pick('cf-angles'), doDesires = pick('cf-desires'), doOffers = pick('cf-offers');
-  if (!(doScripts || doAngles || doDesires || doOffers)) return showNotif('Pick at least one thing to run', true);
+  const doScripts = pick('cf-scripts'), doPains = pick('cf-pains'), doDesires = pick('cf-desires'), doOffers = pick('cf-offers'), doSizes = pick('cf-sizes');
+  if (!(doScripts || doPains || doDesires || doOffers || doSizes)) return showNotif('Pick at least one thing to run', true);
   const jobs = [];
   if (doScripts) config.clients.forEach(c => (c.scriptReservoir || []).forEach(s => { if (s.script) jobs.push({ kind: 'script', text: s.script, apply: t => { s._versions = s._versions || []; s._versions.push({ id: uid('v'), label: 'Pre-filter', tag: 'orig', text: s.script }); s.script = t; } }); }));
-  if (doAngles) {
-    config.niches.forEach(n => (n.angles || []).forEach((a, i) => jobs.push({ kind: 'angle', short: true, text: a, apply: t => { n.angles[i] = t; } })));
-    config.clients.forEach(c => (c.savedAngles || []).forEach(x => { if (x && x.text) jobs.push({ kind: 'angle', short: true, text: x.text, apply: t => { x.text = t; } }); }));
+  if (doPains) {
+    // The pain points seen everywhere live on each client's case study…
+    config.clients.forEach(c => ((c.caseStudy || {}).pains || []).forEach((p, i) => jobs.push({ kind: 'pain', short: true, text: p, apply: t => { c.caseStudy.pains[i] = t; } })));
+    // …plus the niche angle lists and any saved custom angles.
+    config.niches.forEach(n => (n.angles || []).forEach((a, i) => jobs.push({ kind: 'pain', short: true, text: a, apply: t => { n.angles[i] = t; } })));
+    config.clients.forEach(c => (c.savedAngles || []).forEach(x => { if (x && x.text) jobs.push({ kind: 'pain', short: true, text: x.text, apply: t => { x.text = t; } }); }));
   }
   if (doDesires) config.clients.forEach(c => ((c.caseStudy || {}).desires || []).forEach((d, i) => jobs.push({ kind: 'desire', short: true, text: d, apply: t => { c.caseStudy.desires[i] = t; } })));
   if (doOffers) config.clients.forEach(c => ((c.caseStudy || {}).offers || []).forEach((o, i) => jobs.push({ kind: 'offer', short: true, text: o, apply: t => { c.caseStudy.offers[i] = t; } })));
+  if (doSizes) config.clients.forEach(c => { const cs = c.caseStudy || {}; if (cs.size) jobs.push({ kind: 'size', short: true, text: cs.size, apply: t => { c.caseStudy.size = t; } }); });
   if (!jobs.length) return showNotif('Nothing to run — no matching items found', true);
   if (!confirm(`Run the filter through ${jobs.length} item(s) across all clients?\n\nThis rewrites existing text to match your filter. Scripts keep their previous version; angles, desires and offers are replaced in place. Continue?`)) return;
   const btn = document.getElementById('cf-run'); if (btn) btn.disabled = true;
   const status = document.getElementById('cf-status');
-  let done = 0, failed = 0, firstErr = '', completed = 0;
+  let changed = 0, same = 0, failed = 0, firstErr = '', completed = 0;
   const CONCURRENCY = 3;   // run 3 at once ≈ 3× faster than one-at-a-time
   async function runOne(job) {
     const prompt = job.short
@@ -2622,7 +2627,9 @@ async function runFilterAcrossAll() {
       const r = await api({ action: 'refine_script', script: job.text, prompt });
       let out = (r && (r.script || r.text || r.result || r.refined || r.output || r.content || r.rewrite)) || (typeof r === 'string' ? r : '');
       out = String(out).replace(/\n*\(mock refinement applied\)\s*$/, '').trim();
-      if (out) { job.apply(out); done++; } else { failed++; if (!firstErr) firstErr = 'empty response (' + JSON.stringify(Object.keys(r || {})) + ')'; }
+      if (out && out !== String(job.text).trim()) { job.apply(out); changed++; }   // only count + write real changes
+      else if (out) { same++; }                                                     // came back identical
+      else { failed++; if (!firstErr) firstErr = 'empty response (' + JSON.stringify(Object.keys(r || {})) + ')'; }
     } catch (e) { failed++; if (!firstErr) firstErr = e.message || ('' + e); }
     completed++;
     if (status) status.textContent = `Filtering ${completed} / ${jobs.length}…`;
@@ -2631,10 +2638,10 @@ async function runFilterAcrossAll() {
   async function worker() { while (next < jobs.length) { await runOne(jobs[next++]); } }
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, worker));
   persistConfig();
-  const tail = `${done} updated${failed ? `, ${failed} skipped` : ''}` + (failed && firstErr ? ` — first issue: ${firstErr}` : '');
+  const tail = `${changed} changed${same ? `, ${same} already on-brand` : ''}${failed ? `, ${failed} skipped` : ''}` + (failed && firstErr ? ` — first issue: ${firstErr}` : '');
   if (status) status.textContent = `Done — ${tail}`;
   if (btn) btn.disabled = false;
-  showNotif(`Filter run complete — ${tail}`, failed > 0 && done === 0);
+  showNotif(`Filter run complete — ${tail}`, failed > 0 && changed === 0);
   if (typeof renderV9 === 'function') { try { renderV9(); } catch (e) {} }
 }
 function saveSystemFilter() {
