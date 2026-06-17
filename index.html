@@ -6426,9 +6426,9 @@ loadConfigAndRender();
     if(!items.length) return null;
     var prompt='Group these '+label+' into 3-6 clearly-themed buckets so similar ones sit together (big themes with their sub-items). Return ONLY JSON, no prose: {"groups":[{"topic":"short theme name","items":["exact item text", ...]}]}. Use the EXACT item text given; put every item in exactly one bucket. Items:\n- '+items.join('\n- ');
     var r=await api({action:'refine_script',script:items.join('\n'),prompt:prompt});
-    var txt=(r&&(r.script||r.text||r.result||r.content))||'';
-    var m=String(txt).match(/\{[\s\S]*\}/); if(!m) return null;
-    try{var obj=JSON.parse(m[0]);var gs=(obj.groups||[]).map(function(g){return {id:uid('grp'),topic:g.topic||'Group',items:(g.items||[]).filter(Boolean)};}).filter(function(g){return g.items.length;});return gs.length?gs:null;}catch(e){return null;}
+    var txt=String((r&&(r.script||r.text||r.result||r.content))||'').replace(/```json|```/gi,'').trim();
+    var m=txt.match(/\{[\s\S]*\}/); if(!m) return null;
+    try{var obj=JSON.parse(m[0]);var gs=(obj.groups||[]).map(function(g){return {id:uid('grp'),topic:g.topic||'Group',items:(g.items||[]).map(function(x){return String(x||'').trim();}).filter(Boolean)};}).filter(function(g){return g.items.length;});return gs.length?gs:null;}catch(e){return null;}
   }
   function v9Wizard(c){
     var w=V9.wiz; var cancel='<button class="v9-back" onclick="osWizCancel()"><i class="ti ti-x"></i> Cancel</button>';
