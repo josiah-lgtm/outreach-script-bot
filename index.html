@@ -2382,6 +2382,17 @@ function modalFollowups() {
   openFollowups(state.clientId, modalCtx.title + (modalCtx.sub ? ' · ' + modalCtx.sub : ''), document.getElementById('modalScript').value);
 }
 
+// Shared script name: "<day Mon> · v<n>" where n counts scripts saved on the same
+// day for this client (so each day's scripts run v1, v2, v3…). Call BEFORE the new
+// item is pushed so the count excludes it.
+function nextScriptName(c) {
+  const d = new Date();
+  const mo = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()];
+  const today = d.toISOString().slice(0, 10);
+  const n = (c.scriptReservoir || []).filter(s => String(s.savedAt || '').slice(0, 10) === today).length + 1;
+  return `${d.getDate()} ${mo} · v${n}`;
+}
+
 function saveToReservoir(idx, status) {
   const c = client(state.clientId);
   if (!c) return showNotif('Select a client first', true);
@@ -2390,6 +2401,7 @@ function saveToReservoir(idx, status) {
   if (!script || !s) return;
   c.scriptReservoir.push({
     id: uid('sr'),
+    name: nextScriptName(c),
     script,
     label: `${s.framework} · ${s.angle}`,
     framework: s.framework,
@@ -6386,8 +6398,7 @@ loadConfigAndRender();
   window.osWizNext=function(){var w=V9.wiz;if(w.step===1&&!w.niche)return;if(w.step===2&&!w.angles.length)return;w.step++;renderV9();};
   window.osWizBack=function(){V9.wiz.step--;renderV9();};
   window.osWizGen=async function(){var c=client(V9.client),w=V9.wiz;state.clientId=c.id;state.nicheId=w.niche;state.angles=new Set(w.angles);state.frameworks=new Set(Object.keys(w.fws).filter(function(k){return w.fws[k];}));state.variantsPer=w.variants;state.selectedIcpId=w.icpId||null;state.selectedGuarantee=(w.guarantees&&w.guarantees.length)?w.guarantees.join(' '):'';c.favorites=c.favorites||{pains:[],desires:[],caseStudies:[],offers:[]};c.favorites.offers=(w.offers||[]).slice();c.favorites.desires=(w.desires||[]).slice();c.favorites.caseStudies=(w.caseStudies||[]).slice();w.generating=true;renderV9();try{await generate();}catch(e){}w.deck=(scriptIndex||[]).map(function(s,idx){return {idx:idx,fw:s.framework,angle:s.angle};});w.i=0;w.kept=0;w.generating=false;w.phase='swipe';renderV9();};
-  function v9Name(c){var d=new Date();var mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];return d.getDate()+' '+mo+' · v'+(c.scriptReservoir.length);}
-  window.osWizSwipe=function(keep){var w=V9.wiz;w.keptIds=w.keptIds||[];if(keep){var d=w.deck[w.i];var c=client(V9.client);c.scriptReservoir=c.scriptReservoir||[];if(d.idx!=null&&scriptIndex[d.idx]){saveToReservoir(d.idx,'idea');var added=c.scriptReservoir[c.scriptReservoir.length-1];if(added){added.name=v9Name(c);w.keptIds.push(added.id);}persistConfig();}else{var item={id:uid('sr'),script:d.text||'',label:(d.fw||'')+' · '+(d.angle||''),framework:d.fw||'Variation',angle:d.angle||'',nicheId:primaryNicheId(c),status:'idea',note:'',versions:[],savedAt:new Date().toISOString().slice(0,10)};c.scriptReservoir.push(item);item.name=v9Name(c);persistConfig();w.keptIds.push(item.id);}w.kept=(w.kept||0)+1;}w.i++;w.editing=false;renderV9();};
+  window.osWizSwipe=function(keep){var w=V9.wiz;w.keptIds=w.keptIds||[];if(keep){var d=w.deck[w.i];var c=client(V9.client);c.scriptReservoir=c.scriptReservoir||[];if(d.idx!=null&&scriptIndex[d.idx]){saveToReservoir(d.idx,'idea');var added=c.scriptReservoir[c.scriptReservoir.length-1];if(added){w.keptIds.push(added.id);}persistConfig();}else{var item={id:uid('sr'),script:d.text||'',label:(d.fw||'')+' · '+(d.angle||''),framework:d.fw||'Variation',angle:d.angle||'',nicheId:primaryNicheId(c),status:'idea',note:'',versions:[],savedAt:new Date().toISOString().slice(0,10)};item.name=nextScriptName(c);c.scriptReservoir.push(item);persistConfig();w.keptIds.push(item.id);}w.kept=(w.kept||0)+1;}w.i++;w.editing=false;renderV9();};
   window.osWizDoneFollowup=function(id){var cid=client(V9.client).id;V9.wiz=null;renderV9();if(typeof openFollowupsFromReservoir==='function')openFollowupsFromReservoir(cid,id);};
   window.osWizVariate=async function(baseText,fw,angle){var w=V9.wiz;w.busy=true;w.generating=true;w.phase='steps';renderV9();var prompts=['Rewrite as a fresh variation — same angle, keep merge tags.','Rewrite with a different angle on the same offer.','Expand the same angle deeper and more specific.'];var deck=[];for(var i=0;i<prompts.length;i++){try{var r=await api({action:'refine_script',script:baseText,prompt:prompts[i]});deck.push({text:(r&&r.script)||baseText,fw:fw||'Variation',angle:angle||''});}catch(e){deck.push({text:baseText,fw:fw||'Variation',angle:angle||''});}}w.deck=deck;w.i=0;w.kept=0;w.busy=false;w.generating=false;w.phase='swipe';renderV9();};
   window.osWizFromScript=function(id){var c=client(V9.client);var s=(c.scriptReservoir||[]).find(function(x){return x.id===id;});if(!s)return;osWizVariate(s.script||'',s.framework,s.angle);};
