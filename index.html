@@ -1031,6 +1031,38 @@ let keyFromLink = false;
 // One configurable knowledge + filter layer (Admin → System Filter) that gets fed
 // into every AI action so the bot picks, judges and phrases things through our lens.
 const LENS_ACTIONS = { generate:1, suggest_angles:1, suggest_offers:1, fuse_angle:1, ai_edit_text:1, build_icp:1, research_niche:1, research:1, research_client_site:1, refine_script:1, extract_transcript:1, compose_growth_plan:1, compose_client_brief:1 };
+
+// ─── FIRST-LINER ENGINE (baked-in methodology) ───────────────────────────────────
+// How we find pains/angles — fed into angle, pain, ICP and offer generation.
+const FIRST_LINER_ENGINE_ANGLES =
+`FIRST-LINER ENGINE — how to find pains & angles:
+1) Build a pain library: from what the client offers, write the specific customer pain each thing solves, framed as what goes WRONG without it (describe the felt problem, not the service). Add well-known ICP/industry pains the services hint at.
+2) Validate against the research provided (the client's call transcripts and saved sources ARE the research). A pain real people actually complain about = GOLD; a library pain nobody mentions = WEAK; a strong complaint in the research that's not yet in the library = ADD it as GOLD. Rank GOLD first, keep only pains the client can actually solve.
+3) Per pain pick an angle type: clear real pain (GOLD/high confidence) = PAIN angle; solid business / no strong pain signal = CURIOSITY angle.
+Return specific, plain-language pains/angles in the prospect's own words (a 12-year-old gets them). No marketing language, no jargon.`;
+// How the OPENING line of a generated script must read (still inside the framework).
+const FIRST_LINER_ENGINE_SCRIPT =
+`FIRST-LINER FILTER — the OPENING line of the script (it must still fit the framework's structure):
+The first line's only job is to make a stranger stop, feel something, and keep reading. No offer, ask, link or call request in the first line — stop right after the pain or hook lands so the rest of the framework (the offer) carries the weight.
+PAIN-angle opener = Observation (one true, specific thing about them, plain words) + the Pain Said Plainly (land the real problem so they nod; pin it on the situation, never the person; show what it costs them, e.g. the lead going to a competitor), then stop.
+CURIOSITY-angle opener = one of: Open loop (say something true, then hint at a "but" without finishing); Pattern (point at a pattern across similar businesses so they wonder which side they're on); Genuine question (a real, specific, low-effort question about how they do one thing).
+Banned: "I imagine", "I figure", "I guess", "leverage", "solutions", "circle back", "touch base", "hope this finds you well", and anything brochure-like. Short sentences, talk like a real person, never accuse.`;
+// The client's own research (call transcripts + saved sources) — used to validate pains.
+function clientResearch() {
+  try {
+    const c = (typeof V9 !== 'undefined' && V9 && V9.client && client(V9.client)) || (typeof state !== 'undefined' && state ? client(state.clientId) : null);
+    if (!c) return '';
+    const bits = [];
+    (c.transcripts || []).forEach(t => {
+      if (t.text) bits.push(String(t.text).slice(0, 1500));
+      const tags = [].concat(t.pains || [], t.angles || [], t.desires || []);
+      if (tags.length) bits.push(tags.join('; '));
+    });
+    if (c.sources) Object.keys(c.sources).forEach(k => bits.push(k));
+    const txt = bits.filter(Boolean).join('\n').slice(0, 4000);
+    return txt ? ('RESEARCH (this client\'s call transcripts / saved sources — validate pains against this, real complaints beat inference):\n' + txt) : '';
+  } catch (e) { return ''; }
+}
 // Run a single manually-typed idea (an offer, angle, pain or desire) through the
 // house filter so things you add by hand are on-brand too. Falls back to the raw
 // text when the filter is off / empty / no admin key. Returns {text, filtered}.
@@ -1060,18 +1092,24 @@ function composeLens() {
 function withSystemFilter(body) {
   try {
     if (!body || !body.action || !LENS_ACTIONS[body.action]) return body;
+    const parts = [];
     const lens = composeLens();
-    if (!lens) return body;
+    if (lens) parts.push(lens);
+    // Bake in the first-liner engine where it belongs:
+    if (body.action === 'generate') parts.push(FIRST_LINER_ENGINE_SCRIPT);          // opening line of each script
+    if (body.action === 'suggest_angles' || body.action === 'suggest_offers' || body.action === 'build_icp' || body.action === 'fuse_angle') {
+      parts.push(FIRST_LINER_ENGINE_ANGLES);                                          // pain/angle/offer/ICP finding
+      const research = clientResearch();                                              // validate against the client's own research
+      if (research) parts.push(research);
+    }
+    if (!parts.length) return body;
     body = Object.assign({}, body);
-    // Backend-safe: never add unknown top-level keys (some backends reject them) and
-    // never override `model` (a friendly name like "sonnet" isn't a valid model id).
-    // Just fold the lens into a free-text field the backend already reads.
-    const block = '\n\n' + lens;
+    // Backend-safe: never add unknown top-level keys, never override `model`. Just fold
+    // everything into a free-text field the backend already reads.
+    const block = '\n\n' + parts.join('\n\n');
     const fields = ['prompt', 'context', 'clientContext', 'rules', 'globalRules'];
     for (const f of fields) { if (typeof body[f] === 'string') { body[f] += block; return body; } }
-    // No standard text field on this action — carry the lens in globalRules (a known
-    // field backends ignore when unused), so it's wired even for actions like fuse_angle.
-    body.globalRules = (body.globalRules || '') + block;
+    body.globalRules = (body.globalRules || '') + block;   // actions with no standard text field
     return body;
   } catch (e) { return body; }
 }
