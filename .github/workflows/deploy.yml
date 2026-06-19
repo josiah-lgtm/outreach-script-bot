@@ -1,0 +1,52 @@
+name: Deploy outreach-bot
+
+# Auto-deploys the Edge Function (and the bundled UI) to Supabase on every push to
+# main that touches the app or the function. The Supabase token lives ONLY as an
+# encrypted GitHub secret — it is never in the repo and never pasted into chat.
+#
+# One-time setup: add a repository secret named SUPABASE_ACCESS_TOKEN
+#   GitHub → Settings → Secrets and variables → Actions → New repository secret
+#   (or:  gh secret set SUPABASE_ACCESS_TOKEN --repo josiah-lgtm/outreach-script-bot )
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'supabase/functions/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-outreach-bot
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: pturxqgrhywyhylxovun
+    steps:
+      - name: Check the deploy token is configured
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN secret is not set. Add it once at GitHub → Settings → Secrets and variables → Actions → New repository secret (name: SUPABASE_ACCESS_TOKEN)."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Bundle index.html into the function
+        run: deno run --allow-read --allow-write supabase/functions/outreach-bot/bundle.ts
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy edge function
+        run: supabase functions deploy outreach-bot --project-ref "$PROJECT_REF" --no-verify-jwt
