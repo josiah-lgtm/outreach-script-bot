@@ -1035,6 +1035,20 @@ Deno.serve(async (req) => {
         const out: Record<string, any> = {};
         const titleName = names.find((n) => props[n].type === "title");
         if (titleName) out[titleName] = { title: nRich(String(body.title ?? "Script testing")) };
+        // Pick the existing select/status option that best matches the requested value.
+        // status options CANNOT be created via the API, so we must use one that exists.
+        const matchOption = (value: string, options: Array<{ name?: string }>): string | null => {
+          const opts = (options || []).map((o) => o.name || "").filter(Boolean);
+          if (!opts.length) return null;
+          const v = value.toLowerCase().trim();
+          let hit = opts.find((o) => o.toLowerCase() === v); // exact
+          if (hit) return hit;
+          hit = opts.find((o) => o.toLowerCase().includes(v) || v.includes(o.toLowerCase())); // substring either way
+          if (hit) return hit;
+          const pre = v.slice(0, 4); // prefix (winner≈winning, testing≈test)
+          hit = opts.find((o) => o.toLowerCase().slice(0, 4) === pre);
+          return hit || null;
+        };
         const setProp = (aliases: string[], value: unknown) => {
           if (value === undefined || value === null || value === "") return;
           const name = findProp(aliases);
@@ -1042,10 +1056,18 @@ Deno.serve(async (req) => {
           const type = props[name].type;
           const sv = String(value);
           if (type === "rich_text") out[name] = { rich_text: nRich(sv) };
-          else if (type === "select") out[name] = { select: { name: sv } };
-          else if (type === "multi_select") out[name] = { multi_select: sv.split(",").map((s) => ({ name: s.trim() })).filter((x) => x.name) };
-          else if (type === "status") out[name] = { status: { name: sv } };
-          else if (type === "date") out[name] = { date: { start: sv } };
+          else if (type === "select") {
+            // select lets the API create new options, but reuse an existing match when there is one.
+            const m = matchOption(sv, props[name].select?.options || []);
+            out[name] = { select: { name: m || sv } };
+          } else if (type === "multi_select") {
+            const opts = props[name].multi_select?.options || [];
+            out[name] = { multi_select: sv.split(",").map((s) => s.trim()).filter(Boolean).map((s) => ({ name: matchOption(s, opts) || s })) };
+          } else if (type === "status") {
+            // status options can't be created via API — only set it if we can match an existing one.
+            const m = matchOption(sv, props[name].status?.options || []);
+            if (m) out[name] = { status: { name: m } };
+          } else if (type === "date") out[name] = { date: { start: sv } };
           else if (type === "number") out[name] = { number: Number(value) };
           else if (type === "url") out[name] = { url: sv };
           else if (type === "title") out[name] = { title: nRich(sv) };
