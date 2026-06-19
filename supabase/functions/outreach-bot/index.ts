@@ -18,7 +18,13 @@
 // Anthropic's side; no search API keys needed. No API keys ever reach the
 // browser.
 
-import { CLAUDE_HAIKU, CLAUDE_MODEL, messages as claudeMessages, type Tool } from "../_shared/anthropic.ts";
+import { CLAUDE_HAIKU, CLAUDE_MODEL, CLAUDE_MODEL_OPUS, messages as claudeMessages, type Tool } from "../_shared/anthropic.ts";
+
+// Map a safe model alias (from the UI) to a real Claude model id. Unknown → default.
+function pickModel(alias: unknown): string {
+  const map: Record<string, string> = { sonnet: CLAUDE_MODEL, opus: CLAUDE_MODEL_OPUS, haiku: CLAUDE_HAIKU };
+  return map[String(alias ?? "").toLowerCase()] || CLAUDE_MODEL;
+}
 import { HTML } from "./html.ts";
 
 // ─── Limits ───────────────────────────────────────────────────────────────────
@@ -605,7 +611,7 @@ Deno.serve(async (req) => {
         const prompt = String(body.prompt ?? "").trim();
         if (!script || !prompt) return json({ ok: false, error: "script and prompt required" }, 400);
         const res = await claudeMessages({
-          model: CLAUDE_MODEL,
+          model: pickModel(body.model),   // builder buttons can pick sonnet/opus/haiku; default sonnet
           max_tokens: 4000,   // was 600 — too small for JSON tasks (mechanism builder / grouping) that ride on refine_script
           system: `You are a cold email editor. The user gives you a script and a revision instruction. Make ONLY the requested changes — preserve what works. Return ONLY the revised script text, no commentary, no quotes, no markdown.`,
           messages: [{ role: "user", content: `SCRIPT:\n${script}\n\nINSTRUCTION: ${prompt}` }],
