@@ -1117,8 +1117,8 @@ Deno.serve(async (req) => {
             title: [{ type: "text", text: { content: title } }],
             properties: {
               "Name": { title: {} },
-              "Client": { select: {} },
-              "Niche": { select: {} },
+              "Client": { rich_text: {} },
+              "Niche": { rich_text: {} },
               "Status": { select: { options: [
                 { name: "Test idea", color: "gray" },
                 { name: "Testing", color: "yellow" },
