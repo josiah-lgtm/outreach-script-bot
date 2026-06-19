@@ -4357,6 +4357,14 @@ function adminSettings() {
         <button class="mini-btn" onclick="saveNotionBoardDb()">Save</button>
       </div>
       <div class="hint" id="es-notiondb-status"></div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:14px 0">
+      <div class="info-title" style="margin-bottom:4px;font-size:13px">⚡ Don't have the database yet? Create it</div>
+      <div class="hint" style="margin-bottom:8px">Creates the “clients script testing board” database (Client, Niche, Status [Test idea/Testing/Winner], Who we're targeting, # tests, Date) under a Notion page you choose, and saves its ID above automatically. <b>Share that parent page with your integration first.</b></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input class="form-input" id="es-notionboard-parent" value="${esc(config.settings?.notionBoardParent || '3444fd2a4cfe80fa9f77dddfab8ad806')}" placeholder="Parent Notion page ID or URL" style="max-width:420px">
+        <button class="mini-btn" onclick="createNotionBoard()"><i class="ti ti-plus"></i> Create database in Notion</button>
+      </div>
+      <div class="hint" id="es-notionboard-status"></div>
     </div>
     <div class="info-block">
       <div class="info-title">📊 Growth plan defaults (funnel + personalization)</div>
@@ -4444,6 +4452,28 @@ function saveNotionBoardDb() {
   if (raw) { const m = raw.match(/[0-9a-f]{32}/i) || raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i); id = (m ? m[0] : raw).replace(/-/g, ''); }
   config.settings.notionBoardDbId = id;
   persistConfig(); showNotif(id ? 'Script board database saved' : 'Cleared — will auto-find by name');
+}
+
+// One-click: create the board database under a parent page, save its id for exports.
+async function createNotionBoard() {
+  const raw = (document.getElementById('es-notionboard-parent').value || '').trim();
+  const m = raw.match(/[0-9a-f]{32}/i) || raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  const parentId = (m ? m[0] : raw).replace(/-/g, '');
+  const el = document.getElementById('es-notionboard-status');
+  if (!parentId) { if (el) el.textContent = 'Paste the parent Notion page ID or URL first.'; return; }
+  config.settings.notionBoardParent = parentId; persistConfig();
+  if (el) el.textContent = 'Creating the database in Notion…';
+  try {
+    const r = await api({ action: 'create_notion_db', parentId, title: config.settings?.notionBoardName || 'clients script testing board' });
+    config.settings.notionBoardDbId = (r.id || '').replace(/-/g, '');
+    persistConfig();
+    const inp = document.getElementById('es-notiondb'); if (inp) inp.value = config.settings.notionBoardDbId;
+    if (el) el.innerHTML = `✅ Created — <a href="${esc(r.url || '#')}" target="_blank" style="color:var(--accent2)">open the database ↗</a>. Exports will go here automatically.`;
+    showNotif('✅ Script testing board created in Notion');
+  } catch (e) {
+    if (el) el.innerHTML = '❌ ' + esc(e.message) + ' — make sure the parent page is shared with your integration (page → ••• → Connections).';
+    showNotif('Could not create the database: ' + e.message, true);
+  }
 }
 
 async function testNotion() {

@@ -1100,6 +1100,41 @@ Deno.serve(async (req) => {
         return json({ ok: true, url: page.url });
       }
 
+      // Create the "clients script testing board" database under a given Notion page,
+      // with the schema the export expects (Status is a SELECT so options are API-creatable).
+      case "create_notion_db": {
+        const key = Deno.env.get("NOTION_API_KEY");
+        if (!key) return json({ ok: false, error: "NOTION_API_KEY not set on the server" }, 400);
+        const parentId = dashifyId(String(body.parentId ?? "").trim());
+        if (!parentId) return json({ ok: false, error: "parentId (Notion page) required" }, 400);
+        const headers = { "Authorization": `Bearer ${key}`, "Notion-Version": "2022-06-28", "Content-Type": "application/json" };
+        const title = String(body.title ?? "clients script testing board");
+        const res = await fetch("https://api.notion.com/v1/databases", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            parent: { type: "page_id", page_id: parentId },
+            title: [{ type: "text", text: { content: title } }],
+            properties: {
+              "Name": { title: {} },
+              "Client": { select: {} },
+              "Niche": { select: {} },
+              "Status": { select: { options: [
+                { name: "Test idea", color: "gray" },
+                { name: "Testing", color: "yellow" },
+                { name: "Winner", color: "green" },
+              ] } },
+              "Who we're targeting": { rich_text: {} },
+              "Number of tests": { number: {} },
+              "Date": { date: {} },
+            },
+          }),
+        });
+        if (!res.ok) return json({ ok: false, error: `Notion ${res.status}: ${(await res.text()).slice(0, 300)}` }, 422);
+        const db = await res.json();
+        return json({ ok: true, id: db.id, url: db.url });
+      }
+
       case "suggest_offers": {
         const context = String(body.context ?? "").slice(0, 6_000);
         if (!context.trim()) return json({ ok: false, error: "context required" }, 400);
