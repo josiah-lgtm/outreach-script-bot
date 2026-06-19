@@ -13,6 +13,10 @@
 
 set -e
 
+# Always run from the project root (this script's own folder), so it works no
+# matter what directory you invoke it from.
+cd "$(cd "$(dirname "$0")" && pwd)"
+
 PROJECT_REF=pturxqgrhywyhylxovun
 
 # ── Locate the Supabase CLI ───────────────────────────────────────────────────
