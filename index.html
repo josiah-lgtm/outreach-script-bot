@@ -871,6 +871,7 @@
           <button class="tab-btn" id="atab-agency" onclick="switchAdminTab('agency')">🤝 Our Agency</button>
           <button class="tab-btn" id="atab-tools" onclick="switchAdminTab('tools')">🧰 Tools KB</button>
           <button class="tab-btn" id="atab-systemfilter" onclick="switchAdminTab('systemfilter')">🧠 System Filter</button>
+          <button class="tab-btn" id="atab-builderbtns" onclick="switchAdminTab('builderbtns')">🎛 Builder Buttons</button>
           <button class="tab-btn" id="atab-settings" onclick="switchAdminTab('settings')">Settings</button>
         </div>
         <div id="adminBody"></div>
@@ -1379,9 +1380,28 @@ function clientOffers(c)      { return dedupeStr([...(c?.caseStudy?.offers || []
 function clientCaseStudies(c) { return dedupeStr(c?.caseStudy?.caseStudies || []); }
 // Niche-scoped data (per client, per niche). Pains also include that niche's angle list.
 function nicheBucket(c, nid) { c.nicheData = c.nicheData || {}; if (!c.nicheData[nid]) c.nicheData[nid] = { pains: [], desires: [], offers: [] }; var b = c.nicheData[nid]; b.pains = b.pains || []; b.desires = b.desires || []; b.offers = b.offers || []; return b; }
-function nichePains(c, nid)   { if (!nid) return clientPains(c);   var b = nicheBucket(c, nid); return dedupeStr([...(b.pains || []), ...((niche(nid) || {}).angles || [])]); }
-function nicheDesires(c, nid) { if (!nid) return clientDesires(c); return dedupeStr(nicheBucket(c, nid).desires || []); }
-function nicheOffers(c, nid)  { if (!nid) return clientOffers(c);  return dedupeStr(nicheBucket(c, nid).offers || []); }
+// Research/composed angles the user saved for THIS niche (text only). These are where
+// "add research to this niche" pains land, so they must surface in the builder.
+function nicheSavedAngles(c, nid) { return (c?.savedAngles || []).filter(a => a && a.text && a.nicheId === nid).map(a => a.text); }
+// A niche's full pain pool = its bucket + the niche's angle list + research angles tagged to it.
+// For the client's PRIMARY niche we also fold in client-wide case-study/transcript pains, since
+// research and edit-profile pains land in caseStudy.pains (not niche-tagged) — without this they'd
+// be invisible in the builder. Non-primary niches stay isolated to avoid cross-niche leak.
+function nichePains(c, nid)   { if (!nid) return clientPains(c);   var b = nicheBucket(c, nid); var a = [...(b.pains || []), ...((niche(nid) || {}).angles || []), ...nicheSavedAngles(c, nid)]; if (nid === primaryNicheId(c)) a = a.concat(clientPains(c)); return dedupeStr(a); }
+function nicheDesires(c, nid) { if (!nid) return clientDesires(c); var b = nicheBucket(c, nid); var a = [...(b.desires || [])]; if (nid === primaryNicheId(c)) a = a.concat(clientDesires(c)); return dedupeStr(a); }
+function nicheOffers(c, nid)  { if (!nid) return clientOffers(c);  var b = nicheBucket(c, nid); var a = [...(b.offers || [])];  if (nid === primaryNicheId(c)) a = a.concat(clientOffers(c));  return dedupeStr(a); }
+// ── Script Builder rewrite buttons (user-configurable in Admin → Builder Buttons) ──
+function defaultBuilderButtons() {
+  return [
+    { id: 'shorten', label: 'Shorten', icon: 'ti-arrows-minimize', keepStructure: false, enabled: true, examples: '', prompt: 'Make this shorter and more concise — cut filler and repetition, keep the core message and every {{merge_tag}}. Return only the script.' },
+    { id: 'simpler', label: 'Simpler', icon: 'ti-mood-smile', keepStructure: true, enabled: true, examples: '', prompt: 'Make this SIMPLER and easier to understand — clearer wording, shorter phrases, swap long/technical words for plain ones (a 12-year-old reads it easily). No jargon.' },
+    { id: 'conversational', label: 'Conversational', icon: 'ti-message-circle', keepStructure: true, enabled: true, examples: '', prompt: 'Make this more CONVERSATIONAL and human — like a real person talking, warm and natural, with everyday contractions and a relaxed opener. No stiff or robotic phrasing.' },
+    { id: 'salesy', label: 'Salesy', icon: 'ti-trending-up', keepStructure: true, enabled: true, examples: '', prompt: 'Make this more SALESY — more outcome-driven and direct. Emphasise desired outcomes (more revenue, more qualified inquiries, more booked calls, predictable growth), use stronger but truthful claims and specific numbers only if already supported by the offer. Do NOT invent claims or numbers.' },
+    { id: 'softer', label: 'Softer', icon: 'ti-feather', keepStructure: true, enabled: true, examples: '', prompt: 'Make this SOFTER and lower-pressure — less direct, less pushy. Reduce hard claims and aggressive language, soften the ask, make it feel relaxed and no-pressure.' },
+    { id: 'reformat', label: 'Reformat', icon: 'ti-layout-list', keepStructure: false, enabled: true, examples: '', prompt: 'Reformat this into a clean, easy-to-read layout: a short greeting line, the body broken into short readable lines / short paragraphs, and the CTA on its own line at the end. Keep the EXACT wording, message, offer and every {{merge_tag}} — only change spacing and line breaks.' },
+  ];
+}
+function builderButtons() { config.settings = config.settings || {}; if (!Array.isArray(config.settings.builderButtons) || !config.settings.builderButtons.length) config.settings.builderButtons = defaultBuilderButtons(); return config.settings.builderButtons; }
 
 // Where did this piece of intel come from? Transcripts are checked first
 // (they carry their own provenance), then the recorded sources map; anything
@@ -2749,7 +2769,7 @@ function adminEdit(type, id) {
 }
 
 function renderAdmin() {
-  ['frameworks', 'winning', 'niches', 'clients', 'followups', 'agency', 'tools', 'systemfilter', 'settings'].forEach(t =>
+  ['frameworks', 'winning', 'niches', 'clients', 'followups', 'agency', 'tools', 'systemfilter', 'builderbtns', 'settings'].forEach(t =>
     document.getElementById('atab-' + t).classList.toggle('active', t === state.adminTab));
   const body = document.getElementById('adminBody');
 
@@ -2787,6 +2807,7 @@ function adminTabHtml() {
   if (t === 'followups') return adminFollowups();
   if (t === 'agency') return adminAgency();
   if (t === 'systemfilter') return adminSystemFilter();
+  if (t === 'builderbtns') return adminBuilderButtons();
   return adminSettings();
 }
 
@@ -2829,6 +2850,48 @@ function adminSystemFilter() {
       <div style="display:flex;align-items:center;gap:12px"><button class="mini-btn" id="ga-run" onclick="runGroupAll()"><i class="ti ti-layout-grid"></i> Group everything now</button><span class="hint" id="ga-status"></span></div>
     </div>`;
 }
+// — Builder Buttons (configurable script-rewrite buttons in the create-script review) —
+function adminBuilderButtons() {
+  const btns = builderButtons();
+  const card = (b) => {
+    const en = b.enabled !== false, keep = b.keepStructure !== false;
+    return `<div class="editor" style="margin-bottom:14px;border:1px solid var(--border);border-radius:10px;padding:14px" data-bb="${esc(b.id)}">
+      <div class="grid2" style="align-items:end">
+        <div class="form-group"><label class="form-label">Button label</label>
+          <input class="form-input" value="${esc(b.label || '')}" onchange="osBtnField('${esc(b.id)}','label',this)" placeholder="e.g. Punchier"></div>
+        <div class="form-group"><label class="form-label">Icon (Tabler name, optional)</label>
+          <input class="form-input" value="${esc(b.icon || '')}" onchange="osBtnField('${esc(b.id)}','icon',this)" placeholder="ti-wand"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Prompt — what this button tells the AI to do to the script</label>
+        <textarea class="form-textarea" style="min-height:90px" onchange="osBtnField('${esc(b.id)}','prompt',this)" placeholder="e.g. Make this punchier — short, high-energy sentences…">${esc(b.prompt || '')}</textarea></div>
+      <div class="form-group"><label class="form-label">Examples (optional) — the AI matches their STYLE, not the words</label>
+        <textarea class="form-textarea" style="min-height:60px" onchange="osBtnField('${esc(b.id)}','examples',this)" placeholder="Paste 1–3 example scripts written the way you want this button to sound.">${esc(b.examples || '')}</textarea></div>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between">
+        <div style="display:flex;flex-wrap:wrap;gap:16px">
+          <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" ${en ? 'checked' : ''} onchange="osBtnField('${esc(b.id)}','enabled',this)"> Show in builder</label>
+          <label style="display:flex;gap:6px;align-items:center" title="Keep the same framework, structure and length — only change the style. Turn off for buttons that should restructure or change length (e.g. Shorten, Reformat)."><input type="checkbox" ${keep ? 'checked' : ''} onchange="osBtnField('${esc(b.id)}','keepStructure',this)"> Keep structure &amp; length</label>
+        </div>
+        <button class="mini-btn" onclick="osBtnDel('${esc(b.id)}')" title="Delete this button"><i class="ti ti-trash"></i> Delete</button>
+      </div>
+    </div>`;
+  };
+  return `
+    <div class="info-block"><div class="info-title">🎛 Script Builder buttons</div>
+      <div class="hint">These are the one-click rewrite buttons in the create-script review (the swipe screen). Edit each button's prompt, add example scripts to steer its style, rename it, turn it on/off, or add your own. “Keep structure &amp; length” keeps the same framework and size (good for tone tweaks); turn it off for buttons that should restructure or resize (like Shorten or Reformat). Changes apply the next time you open the review.</div>
+    </div>
+    <div class="editor">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="info-title" style="margin:0">${btns.length} button${btns.length === 1 ? '' : 's'}</div>
+        <div style="display:flex;gap:8px"><button class="mini-btn" onclick="osBtnReset()" title="Restore the built-in buttons"><i class="ti ti-refresh"></i> Reset to defaults</button><button class="mini-btn" onclick="osBtnAdd()"><i class="ti ti-plus"></i> Add button</button></div>
+      </div>
+      ${btns.map(card).join('') || '<div class="hint">No buttons yet — add one.</div>'}
+    </div>`;
+}
+window.osBtnField = function (id, field, el) { const b = builderButtons().find(x => x.id === id); if (!b) return; b[field] = (el.type === 'checkbox') ? el.checked : el.value; persistConfig(); };
+window.osBtnAdd = function () { builderButtons().push({ id: 'btn' + Date.now().toString(36), label: 'New button', icon: 'ti-wand', keepStructure: true, enabled: true, examples: '', prompt: '' }); persistConfig(); renderAdmin(); };
+window.osBtnDel = function (id) { const arr = builderButtons(); const i = arr.findIndex(x => x.id === id); if (i < 0) return; if (!confirm('Delete this button?')) return; arr.splice(i, 1); persistConfig(); renderAdmin(); showNotif('Button deleted'); };
+window.osBtnReset = function () { if (!confirm('Reset all Script Builder buttons to the defaults? Your custom buttons and prompt edits will be lost.')) return; config.settings = config.settings || {}; config.settings.builderButtons = defaultBuilderButtons(); persistConfig(); renderAdmin(); showNotif('Builder buttons reset to defaults'); };
+
 async function runGroupAll() {
   if (!adminKey) return showNotif('Admin key required to run the AI grouping', true);
   const jobs = [];
@@ -6746,7 +6809,7 @@ loadConfigAndRender();
       var body;
       if(w.editing) body='<div class="v9-card2"><div class="v9-meta">'+esc(d.fw||'')+' · '+esc(d.angle||'')+'</div><textarea id="v9-edit" style="width:100%;min-height:150px;margin-top:6px">'+esc(sc)+'</textarea><div style="display:flex;justify-content:space-between;margin-top:8px"><button class="mini-btn" onclick="osWizAI()"><i class="ti ti-sparkles"></i> AI rewrite</button><button class="mini-btn" onclick="osWizEditDone()">Done</button></div></div>';
       else body='<div class="v9-swcard"><div class="v9-meta">'+esc(d.fw||'')+' · '+esc(d.angle||'')+'</div><div class="v9-swtext">'+esc(sc)+'</div></div>'
-        +'<div class="v9-swtools"><button class="mini-btn" onclick="osWizUndo()"'+((d._hist&&d._hi>0)?'':' disabled')+' title="Undo"><i class="ti ti-arrow-back-up"></i></button><button class="mini-btn" onclick="osWizRedo()"'+((d._hist&&d._hi<d._hist.length-1)?'':' disabled')+' title="Redo"><i class="ti ti-arrow-forward-up"></i></button>'+(w.busy?'<span class="v9-meta"><i class="ti ti-loader-2"></i> Working…</span>':('<button class="mini-btn" onclick="osWizCleanup()" title="Remove dashes"><i class="ti ti-eraser"></i> Clean up</button><button class="mini-btn" onclick="osWizSimplify()"><i class="ti ti-arrows-minimize"></i> Shorten</button><button class="mini-btn" onclick="osWizLowerReading()"><i class="ti ti-mood-smile"></i> Simpler</button><button class="mini-btn" onclick="osWizConversational()"><i class="ti ti-message-circle"></i> Conversational</button><button class="mini-btn" onclick="osWizSalesy()"><i class="ti ti-trending-up"></i> Salesy</button><button class="mini-btn" onclick="osWizSofter()"><i class="ti ti-feather"></i> Softer</button>'))+'</div>'
+        +'<div class="v9-swtools"><button class="mini-btn" onclick="osWizUndo()"'+((d._hist&&d._hi>0)?'':' disabled')+' title="Undo"><i class="ti ti-arrow-back-up"></i></button><button class="mini-btn" onclick="osWizRedo()"'+((d._hist&&d._hi<d._hist.length-1)?'':' disabled')+' title="Redo"><i class="ti ti-arrow-forward-up"></i></button>'+(w.busy?'<span class="v9-meta"><i class="ti ti-loader-2"></i> Working…</span>':('<button class="mini-btn" onclick="osWizCleanup()" title="Remove dashes"><i class="ti ti-eraser"></i> Clean up</button>'+builderButtons().filter(function(b){return b.enabled!==false;}).map(function(b){return '<button class="mini-btn" onclick="osWizTx(\''+b.id+'\')" title="'+esc(b.label||'')+'"><i class="ti '+esc(b.icon||'ti-wand')+'"></i> '+esc(b.label||'')+'</button>';}).join('')))+'</div>'
         +'<div class="v9-swbtns"><button class="v9-swipe no" onclick="osWizSwipe(false)" title="Pass"><i class="ti ti-x"></i></button><button class="mini-btn" onclick="osWizEdit()"><i class="ti ti-edit"></i> Edit</button><button class="v9-swipe yes" onclick="osWizSwipe(true)" title="Keep"><i class="ti ti-heart"></i></button></div>'
         +'<div class="v9-swmore"><span class="v9-meta">More variants of this:</span>'+[1,2,3,5].map(function(k){return '<button class="mini-btn" onclick="osWizMoreVariants('+k+')"'+(w.busy?' disabled':'')+'>+'+k+'</button>';}).join('')+'</div>';
       return cancel+'<div class="v9-rowbtn"><div class="v9-h" style="margin:0">Review scripts</div><div class="v9-meta">'+(w.i+1)+' of '+w.deck.length+' · '+(w.kept||0)+' kept · <a onclick="osWizKeepAll()" style="color:var(--accent2);cursor:pointer;font-weight:600">Keep all →</a></div></div>'+(w.dedupNote?'<div class="v9-meta" style="margin:-4px 0 8px">✨ '+esc(w.dedupNote)+'</div>':'')+body;
@@ -6755,7 +6818,8 @@ loadConfigAndRender();
     var bar='<div class="v9-wsteps">'+steps.map(function(s,k){var st=k+1;return '<div class="v9-wstep '+(w.step>=st?'on':'')+'"><span class="n">'+(w.step>st?'<i class="ti ti-check"></i>':st)+'</span>'+s+'</div>';}).join('')+'</div>';
     var bd='';
     if(w.step===1){
-      var groupIds=(c.nicheIds&&c.nicheIds.length?c.nicheIds:config.niches.map(function(n){return n.id;}));
+      // ONLY this client's own niches/groups — never all niches in the system.
+      var groupIds=(c.nicheIds||[]).filter(function(id){return !!niche(id);});
       var hasMech=!!((c.caseStudy||{}).mechanism)||((c.mechanisms||[]).length>0);
       var groupCards=groupIds.map(function(id){var nm=(niche(id)||{}).name||id;var np=nichePains(c,id).length,nd=nicheDesires(c,id).length,no=nicheOffers(c,id).length;var complete=np&&(nd||no)&&hasMech;var badge=complete?'<span class="v9-meta" style="color:var(--green,#2a9d57)">✓ ready</span>':'<span class="v9-meta" style="color:var(--amber,#c87f00)">needs setup</span>';var on=w.niche===id;return '<div class="v9-pickrow '+(on?'on':'')+'" onclick="osWizPickGroup(\''+id+'\')"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>'+(on?'<i class="ti ti-check"></i> ':'')+'<b>'+esc(nm)+'</b></span>'+badge+'</div><div class="v9-meta" style="margin-top:4px">'+np+' pains · '+(nd+no)+' outcomes/offers · '+(hasMech?'mechanism ✓':'no mechanism')+'</div></div>';}).join('');
       var icps=c.icps||[];
@@ -6914,12 +6978,10 @@ loadConfigAndRender();
   // Clean up = strip the AI-tell dashes (em/en dash → comma; spaced hyphen → space). No AI, instant.
   window.osWizCleanup=function(){var cur=swCur();if(!cur)return;var out=cur.replace(/\s*[—–]\s*/g,', ').replace(/\s+-\s+/g,' ').replace(/ ,/g,',').replace(/,\s*,/g,', ').replace(/[ \t]{2,}/g,' ').trim();swSet(out);showNotif('Dashes cleaned up');renderV9();};
   async function swRefine(prompt){var w=V9.wiz,cur=swCur();if(!cur)return;w.busy=true;renderV9();try{var r=await api({action:'refine_script',script:cur,prompt:prompt});var out=(r&&(r.script||r.text||r.result||r.content))||'';out=String(out).replace(/\n*\(mock refinement applied\)\s*$/,'').trim();if(out)swSet(out);notifyFiltered();}catch(e){showNotif('AI failed',true);}w.busy=false;renderV9();}
-  window.osWizSimplify=function(){return swRefine('Make this shorter and more concise — cut filler and repetition, keep the core message and every {{merge_tag}}. Return only the script.');};
   var STRUCT=' Keep the SAME framework, structure and roughly the same length (within ~15% of the original character count). Keep the same offer/pain/desire/mechanism context, the same ask, and every {{merge_tag}}. Only change the style described — do not regenerate a different script. Return only the rewritten script.';
-  window.osWizLowerReading=function(){return swRefine('Make this SIMPLER and easier to understand — clearer wording, shorter phrases, swap long/technical words for plain ones (a 12-year-old reads it easily). No jargon.'+STRUCT);};
-  window.osWizConversational=function(){return swRefine('Make this more CONVERSATIONAL and human — like a real person talking, warm and natural, with everyday contractions and a relaxed opener. No stiff or robotic phrasing.'+STRUCT);};
-  window.osWizSalesy=function(){return swRefine('Make this more SALESY — more outcome-driven and direct. Emphasise desired outcomes (more revenue, more qualified inquiries, more booked calls, predictable growth), use stronger but truthful claims and specific numbers only if already supported by the offer. Do NOT invent claims or numbers.'+STRUCT);};
-  window.osWizSofter=function(){return swRefine('Make this SOFTER and lower-pressure — less direct, less pushy. Reduce hard claims and aggressive language, soften the ask, make it feel relaxed and no-pressure.'+STRUCT);};
+  // Generic, config-driven rewrite button. Looks up the button by id (Admin → Builder Buttons),
+  // folds in any examples, and applies the keep-structure guard unless the button opts out.
+  window.osWizTx=function(id){var b=builderButtons().find(function(x){return x.id===id;});if(!b){showNotif('Button not found',true);return;}var p=String(b.prompt||'').trim();if(!p){showNotif('This button has no prompt yet — add one in Admin → Builder Buttons',true);return;}if(b.examples&&String(b.examples).trim())p+='\n\nMatch the STYLE of these examples (not the literal words):\n'+String(b.examples).trim();return swRefine(p+(b.keepStructure===false?' Return only the rewritten script.':STRUCT));};
   window.osWizMoreVariants=async function(n){var w=V9.wiz,d=w.deck[w.i];if(!d)return;var cur=swCur();if(!cur)return;n=Math.max(1,Math.min(n||1,5));w.busy=true;renderV9();var made=[];for(var i=0;i<n;i++){try{var r=await api({action:'refine_script',script:cur,prompt:'Rewrite as a fresh variation — same offer and angle, different wording and structure. Keep every {{merge_tag}}. Return only the script.'});var t=(r&&(r.script||r.text||r.result||r.content))||'';t=String(t).replace(/\n*\(mock refinement applied\)\s*$/,'').trim();if(t)made.push({text:t,fw:d.fw||'Variation',angle:d.angle||''});}catch(e){}}if(made.length)Array.prototype.splice.apply(w.deck,[w.i+1,0].concat(made));w.busy=false;notifyFiltered();showNotif('Added '+made.length+' variant'+(made.length===1?'':'s')+' to review next');renderV9();};
   window.osWizSwipe=function(keep){var w=V9.wiz;w.keptIds=w.keptIds||[];if(keep){var d=w.deck[w.i];var c=client(V9.client);c.scriptReservoir=c.scriptReservoir||[];if(d.idx!=null&&scriptIndex[d.idx]){saveToReservoir(d.idx,'idea');var added=c.scriptReservoir[c.scriptReservoir.length-1];if(added){w.keptIds.push(added.id);}persistConfig();}else{var item={id:uid('sr'),script:d.text||'',label:(d.fw||'')+' · '+(d.angle||''),framework:d.fw||'Variation',angle:d.angle||'',nicheId:primaryNicheId(c),status:'idea',note:'',versions:[],savedAt:new Date().toISOString().slice(0,10)};item.name=nextScriptName(c);c.scriptReservoir.push(item);persistConfig();w.keptIds.push(item.id);}w.kept=(w.kept||0)+1;}w.i++;w.editing=false;renderV9();};
   window.osWizBackToFw=function(){var w=V9.wiz;if(!w)return;w.phase='steps';w.step=6;w.genError='';renderV9();};
