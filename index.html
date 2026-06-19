@@ -411,6 +411,7 @@
     background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
     margin-bottom: 8px; overflow: hidden;
   }
+  .res-card.selected { border-color: var(--accent2); box-shadow: 0 0 0 1px var(--accent2) inset; }
   .res-card-head {
     padding: 7px 11px; display: flex; align-items: center; gap: 8px; justify-content: space-between;
     border-bottom: 1px solid var(--border); flex-wrap: wrap;
@@ -2665,15 +2666,19 @@ function renderReservoir(body) {
   const all = c.scriptReservoir || [];
   const filter = state.reservoirFilter;
   const shown = filter === 'all' ? all : all.filter(s => s.status === filter);
+  // Notion-export selection (per client).
+  if (!state.boardSel || state.boardSelClient !== c.id) { state.boardSel = new Set(); state.boardSelClient = c.id; }
+  const sel = state.boardSel;
 
   const counts = { all: all.length, idea: all.filter(x=>x.status==='idea').length, testing: all.filter(x=>x.status==='testing').length, winning: all.filter(x=>x.status==='winning').length };
   const filterBtn = (f, label) => `<button class="tab-btn ${filter===f?'active':''}" onclick="state.reservoirFilter='${f}';renderOutput()">${label} <span style="opacity:.6">${counts[f]}</span></button>`;
 
   const cards = shown.length ? shown.map(s => {
     const nextLabel = { idea: '→ Testing', testing: '→ Winning', winning: '→ Idea' };
-    return `<div class="res-card">
+    return `<div class="res-card${sel.has(s.id) ? ' selected' : ''}">
       <div class="res-card-head">
         <div class="res-card-labels">
+          <input type="checkbox" class="board-sel" ${sel.has(s.id) ? 'checked' : ''} onclick="event.stopPropagation();toggleBoardSel('${s.id}')" title="Select for Notion export" style="margin-right:2px;cursor:pointer">
           <span class="status-badge status-${s.status}" onclick="cycleReservoirStatus('${c.id}','${s.id}',this)" title="Click to advance status">${nextLabel[s.status]||s.status}</span>
           <span style="font-size:11px;font-weight:600;color:var(--text)">${esc(s.framework||'')}</span>
           ${s.angle ? `<span style="font-size:10px;color:var(--muted)">${esc(s.angle)}</span>` : ''}
@@ -2721,7 +2726,15 @@ function renderReservoir(body) {
         </div>`).join('')}
     </div>`).join('');
 
+  const selCount = sel.size;
+  const exportBar = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:0 14px 10px">
+      <span style="font-size:11px;color:var(--muted)">${selCount ? selCount + ' selected' : 'Select scripts to export'}</span>
+      <button class="copy-btn" onclick="boardSelectAllShown()" ${shown.length ? '' : 'disabled'}>Select all shown</button>
+      ${selCount ? `<button class="copy-btn" onclick="boardClearSel()">Clear</button>` : ''}
+      <button class="mini-btn" ${selCount ? '' : 'disabled'} onclick="openBoardExport()" style="margin-left:auto">📤 Export ${selCount || ''} to Notion</button>
+    </div>`;
   body.innerHTML = `<div class="res-filter" style="padding-bottom:10px">${filterBtn('all','All')}${filterBtn('idea','Ideas')}${filterBtn('testing','Testing')}${filterBtn('winning','Winning')}</div>
+    ${all.length ? exportBar : ''}
     <div style="padding:0 14px 14px">${cards}
     ${seqs.length ? `<div class="section-label" style="margin:16px 0 8px">↪ Outbound follow-up sequences (${seqs.length})</div>${fuCards}` : ''}</div>`;
 }
@@ -2753,6 +2766,93 @@ function deleteReservoirScript(clientId, scriptId) {
   const c = client(clientId); if (!c) return;
   c.scriptReservoir = c.scriptReservoir.filter(x => x.id !== scriptId);
   persistConfig(); renderOutput();
+}
+
+// ── Notion script-board export ──────────────────────────────────────────────
+const BOARD_STATUS_LABEL = { idea: 'Test idea', testing: 'Testing', winning: 'Winner' };
+function boardSel() { const c = client(state.clientId); if (!c) return new Set(); if (!state.boardSel || state.boardSelClient !== c.id) { state.boardSel = new Set(); state.boardSelClient = c.id; } return state.boardSel; }
+function toggleBoardSel(id) { const s = boardSel(); if (s.has(id)) s.delete(id); else s.add(id); renderOutput(); }
+function boardClearSel() { boardSel().clear(); renderOutput(); }
+function boardSelectAllShown() {
+  const c = client(state.clientId); if (!c) return;
+  const filter = state.reservoirFilter;
+  const shown = (c.scriptReservoir || []).filter(x => filter === 'all' || x.status === filter);
+  const s = boardSel(); const allOn = shown.length && shown.every(x => s.has(x.id));
+  if (allOn) shown.forEach(x => s.delete(x.id)); else shown.forEach(x => s.add(x.id));
+  renderOutput();
+}
+
+function openBoardExport() {
+  const c = client(state.clientId); if (!c) return;
+  const sel = boardSel(); const picks = (c.scriptReservoir || []).filter(x => sel.has(x.id));
+  if (!picks.length) return showNotif('Select at least one script first', true);
+  const nicheName = (c.nicheIds || []).map(id => niche(id)?.name).filter(Boolean).join(', ') || '';
+  const today = new Date().toISOString().slice(0, 10);
+  // Prefill target from the primary ICP title, else the niche.
+  const target = (c.icps && c.icps[0] && (c.icps[0].title || c.icps[0].description)) || nicheName || '';
+  // Prefill status from the most common status among picks.
+  const tally = {}; picks.forEach(p => { tally[p.status] = (tally[p.status] || 0) + 1; });
+  const topStatus = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0] || 'idea';
+  const opt = (v, lbl) => `<option value="${v}" ${BOARD_STATUS_LABEL[topStatus] === lbl ? 'selected' : ''}>${lbl}</option>`;
+  let ov = document.getElementById('boardExportModal');
+  if (!ov) { ov = document.createElement('div'); ov.id = 'boardExportModal'; ov.className = 'modal-overlay'; ov.onclick = (e) => { if (e.target === ov) closeBoardExport(); }; document.body.appendChild(ov); }
+  ov.innerHTML = `<div class="modal" style="width:min(520px,94vw);height:auto">
+    <div class="modal-head"><div><span class="modal-title">📤 Export to Notion board</span><span class="modal-sub">${picks.length} script${picks.length === 1 ? '' : 's'}</span></div><button class="modal-close" onclick="closeBoardExport()">✕</button></div>
+    <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+      <div class="hint">Adds one row to your <b>clients script testing board</b> database with these scripts in the page.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label class="form-label">Client</label><input class="form-input" id="be-client" value="${esc(c.name || '')}"></div>
+        <div class="form-group"><label class="form-label">Niche</label><input class="form-input" id="be-niche" value="${esc(nicheName)}"></div>
+        <div class="form-group"><label class="form-label">Date</label><input class="form-input" id="be-date" value="${esc(today)}"></div>
+        <div class="form-group"><label class="form-label"># of tests</label><input class="form-input" id="be-tests" type="number" value="${picks.length}"></div>
+        <div class="form-group" style="grid-column:1/3"><label class="form-label">Who we're targeting</label><input class="form-input" id="be-target" value="${esc(target)}" placeholder="e.g. Heads of Sales at 50-200 person SaaS"></div>
+        <div class="form-group"><label class="form-label">Status</label><select class="form-input" id="be-status">${opt('idea', 'Test idea')}${opt('testing', 'Testing')}${opt('winning', 'Winner')}</select></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px"><button class="mini-btn" onclick="closeBoardExport()">Cancel</button><button class="mini-btn" id="be-go" onclick="boardDoExport()">📤 Export to Notion</button></div>
+      <div class="hint" id="be-status-msg"></div>
+    </div>`;
+  ov.classList.add('show');
+}
+function closeBoardExport() { const ov = document.getElementById('boardExportModal'); if (ov) ov.classList.remove('show'); }
+
+async function boardDoExport() {
+  const c = client(state.clientId); if (!c) return;
+  const sel = boardSel(); const picks = (c.scriptReservoir || []).filter(x => sel.has(x.id));
+  if (!picks.length) return;
+  const g = id => (document.getElementById(id)?.value || '').trim();
+  const clientName = g('be-client'), nicheName = g('be-niche'), date = g('be-date'), target = g('be-target');
+  const tests = g('be-tests') || String(picks.length);
+  const statusKey = document.getElementById('be-status')?.value || 'idea';
+  const statusLabel = BOARD_STATUS_LABEL[statusKey] || 'Test idea';
+  const title = `${clientName} — ${target || nicheName || 'script testing'} (${date})`;
+  // Page body: summary + each script.
+  const blocks = [{ t: 'callout', text: `Client: ${clientName}  ·  Niche: ${nicheName || '—'}  ·  Target: ${target || '—'}  ·  Tests: ${tests}  ·  Status: ${statusLabel}  ·  ${date}` }];
+  picks.forEach((s, i) => {
+    blocks.push({ t: 'h3', text: `${i + 1}. ${s.framework || 'Script'}${s.angle ? ' · ' + s.angle : ''}` });
+    blocks.push({ t: 'bullet', text: `Status: ${BOARD_STATUS_LABEL[s.status] || s.status || '—'}${s.savedAt ? '  ·  saved ' + s.savedAt : ''}` });
+    (String(s.script || '').split(/\n{2,}/).filter(Boolean)).forEach(para => blocks.push({ t: 'paragraph', text: para }));
+    if (s.note) blocks.push({ t: 'callout', text: `Note: ${s.note}` });
+    blocks.push({ t: 'divider' });
+  });
+  const msg = document.getElementById('be-status-msg'); const btn = document.getElementById('be-go');
+  if (btn) btn.disabled = true; if (msg) msg.textContent = 'Exporting to Notion…';
+  try {
+    const r = await api({
+      action: 'export_notion_db',
+      databaseId: config.settings?.notionBoardDbId || '',
+      databaseName: config.settings?.notionBoardName || 'clients script testing board',
+      title,
+      fields: { client: clientName, niche: nicheName, status: statusLabel, target, tests, date },
+      blocks,
+    });
+    if (msg) msg.innerHTML = `✅ Added to Notion — <a href="${esc(r.url || '#')}" target="_blank" style="color:var(--accent2)">open ↗</a>`;
+    showNotif('✅ Exported to Notion board');
+    boardClearSel();
+  } catch (e) {
+    if (msg) msg.innerHTML = '❌ ' + esc(e.message);
+    if (btn) btn.disabled = false;
+    showNotif('Notion export failed: ' + e.message, true);
+  }
 }
 
 function updateReservoirNote(clientId, scriptId, note) {
@@ -4179,6 +4279,15 @@ function adminSettings() {
       <div class="hint" id="es-notion-status"></div>
     </div>
     <div class="info-block">
+      <div class="info-title">🧪 Script testing board (Notion database)</div>
+      <div class="hint" style="margin-bottom:8px">When you export scripts from a client's script board, they're added as a row in this Notion <b>database</b> (one row per export, with the client, niche, status, target &amp; number of tests as properties). Paste the database ID or URL — or leave blank to auto-find a database named “${esc(config.settings?.notionBoardName || 'clients script testing board')}”. Share the database with your integration first.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input class="form-input" id="es-notiondb" value="${esc(config.settings?.notionBoardDbId || '')}" placeholder="Notion database ID or URL (optional)" style="max-width:420px">
+        <button class="mini-btn" onclick="saveNotionBoardDb()">Save</button>
+      </div>
+      <div class="hint" id="es-notiondb-status"></div>
+    </div>
+    <div class="info-block">
       <div class="info-title">📊 Growth plan defaults (funnel + personalization)</div>
       <div class="hint" style="margin-bottom:8px">Starting assumptions for new plans (each plan can override). Rates are percentages (4 = 4%).</div>
       <div class="grid2">
@@ -4255,6 +4364,15 @@ function saveNotionParent() {
   const id = (m ? m[0] : raw).replace(/-/g, '');
   config.settings.notionParentId = id;
   persistConfig(); showNotif('Notion destination saved');
+}
+
+// Script testing board database — accept a URL or raw id; blank is OK (server name-searches).
+function saveNotionBoardDb() {
+  const raw = document.getElementById('es-notiondb').value.trim();
+  let id = '';
+  if (raw) { const m = raw.match(/[0-9a-f]{32}/i) || raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i); id = (m ? m[0] : raw).replace(/-/g, ''); }
+  config.settings.notionBoardDbId = id;
+  persistConfig(); showNotif(id ? 'Script board database saved' : 'Cleared — will auto-find by name');
 }
 
 async function testNotion() {

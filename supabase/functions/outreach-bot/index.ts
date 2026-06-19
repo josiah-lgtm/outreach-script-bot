@@ -985,6 +985,93 @@ Deno.serve(async (req) => {
         return json({ ok: true, url: page.url });
       }
 
+      // Export selected scripts as ONE row in a Notion database (the "clients script testing board").
+      // Schema-aware: reads the database's columns and maps our fields to whatever they're named.
+      case "export_notion_db": {
+        const key = Deno.env.get("NOTION_API_KEY");
+        if (!key) return json({ ok: false, error: "NOTION_API_KEY not set on the server — add it as a Supabase secret and redeploy" }, 400);
+        const headers = { "Authorization": `Bearer ${key}`, "Notion-Version": "2022-06-28", "Content-Type": "application/json" };
+
+        // Resolve the destination database by id, or by name via search.
+        let dbId = dashifyId(String(body.databaseId ?? "").trim());
+        const wantName = String(body.databaseName ?? "clients script testing board").trim();
+        if (!dbId && wantName) {
+          const sr = await fetch("https://api.notion.com/v1/search", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ query: wantName, filter: { property: "object", value: "database" } }),
+          });
+          if (sr.ok) {
+            const sd = await sr.json();
+            const wn = wantName.toLowerCase();
+            // deno-lint-ignore no-explicit-any
+            const hit = (sd.results || []).find((r: any) => {
+              const t = (r.title || []).map((x: { plain_text?: string }) => x.plain_text || "").join("").toLowerCase();
+              return t === wn || t.includes(wn);
+            }) || (sd.results || [])[0];
+            if (hit) dbId = hit.id;
+          }
+        }
+        if (!dbId) return json({ ok: false, error: `Couldn't find the Notion database. Set its ID in Settings, or share a database named "${wantName}" with the integration.` }, 422);
+
+        // Read the schema so we map to the user's actual column names/types.
+        const dbRes = await fetch(`https://api.notion.com/v1/databases/${dbId}`, { headers });
+        if (!dbRes.ok) return json({ ok: false, error: `Notion ${dbRes.status}: ${(await dbRes.text()).slice(0, 200)}` }, 422);
+        const db = await dbRes.json();
+        // deno-lint-ignore no-explicit-any
+        const props: Record<string, any> = db.properties || {};
+        const names = Object.keys(props);
+        const findProp = (aliases: string[]) => {
+          for (const a of aliases) { const n = names.find((nm) => nm.toLowerCase().includes(a)); if (n) return n; }
+          return null;
+        };
+        // deno-lint-ignore no-explicit-any
+        const out: Record<string, any> = {};
+        const titleName = names.find((n) => props[n].type === "title");
+        if (titleName) out[titleName] = { title: nRich(String(body.title ?? "Script testing")) };
+        const setProp = (aliases: string[], value: unknown) => {
+          if (value === undefined || value === null || value === "") return;
+          const name = findProp(aliases);
+          if (!name || name === titleName) return;
+          const type = props[name].type;
+          const sv = String(value);
+          if (type === "rich_text") out[name] = { rich_text: nRich(sv) };
+          else if (type === "select") out[name] = { select: { name: sv } };
+          else if (type === "multi_select") out[name] = { multi_select: sv.split(",").map((s) => ({ name: s.trim() })).filter((x) => x.name) };
+          else if (type === "status") out[name] = { status: { name: sv } };
+          else if (type === "date") out[name] = { date: { start: sv } };
+          else if (type === "number") out[name] = { number: Number(value) };
+          else if (type === "url") out[name] = { url: sv };
+          else if (type === "title") out[name] = { title: nRich(sv) };
+        };
+        const f = (body.fields ?? {}) as Record<string, unknown>;
+        setProp(["client", "account", "company", "customer"], f.client);
+        setProp(["niche", "industry", "vertical", "category"], f.niche);
+        setProp(["status", "stage", "state", "type"], f.status);
+        setProp(["who", "target", "audience", "icp", "prospect"], f.target);
+        setProp(["number of test", "# test", "tests", "test count", "count"], f.tests);
+        setProp(["date", "day", "when"], f.date);
+
+        const blocks = Array.isArray(body.blocks) && body.blocks.length
+          ? (body.blocks as Array<{ t: string }>).map(toNotionBlock)
+          : [{ object: "block", type: "paragraph", paragraph: { rich_text: nRich("(no scripts)") } }];
+        const createRes = await fetch("https://api.notion.com/v1/pages", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ parent: { database_id: dbId }, properties: out, children: blocks.slice(0, 100) }),
+        });
+        if (!createRes.ok) return json({ ok: false, error: `Notion ${createRes.status}: ${(await createRes.text()).slice(0, 300)}` }, 422);
+        const page = await createRes.json();
+        let rest = blocks.slice(100);
+        while (rest.length) {
+          const chunk = rest.slice(0, 100);
+          rest = rest.slice(100);
+          const ap = await fetch(`https://api.notion.com/v1/blocks/${page.id}/children`, { method: "PATCH", headers, body: JSON.stringify({ children: chunk }) });
+          if (!ap.ok) break;
+        }
+        return json({ ok: true, url: page.url });
+      }
+
       case "suggest_offers": {
         const context = String(body.context ?? "").slice(0, 6_000);
         if (!context.trim()) return json({ ok: false, error: "context required" }, 400);
