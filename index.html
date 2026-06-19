@@ -1695,8 +1695,43 @@ function showScreen(s) {
   if (s === 'growth') openGrowth();
   if (s === 'sales') renderSales();
   if (v9view && typeof renderV9 === 'function') renderV9();
+  syncHash();
 }
 function osNav(s){ window.__builderSub = false; if (s === 'builder') V9.client = null; showScreen(s); }
+
+// ── Hash routing: every view has a URL → refresh restores it, and cards/links
+//    can be cmd/middle-clicked to open in new tabs. ──────────────────────────
+function currentRoute() {
+  const s = state.screen;
+  if (s === 'admin') return '#/admin/' + (state.adminTab || 'frameworks');
+  if (s === 'sales') return '#/sales';
+  if (s === 'growth') return '#/growth';
+  if (window.__builderSub) return '#/build';
+  if (window.V9 && V9.client && client(V9.client)) return '#/client/' + V9.client + '/' + (V9.sec || 'overview');
+  return '#/clients';
+}
+// Write the current view into the URL (no reload). The hashchange listener no-ops
+// because the new hash already matches the current state.
+function syncHash() { try { const r = currentRoute(); if (location.hash !== r) location.hash = r; } catch (e) {} }
+// Set the app's state/view from a URL hash (used on load + back/forward + new tab).
+function applyRoute(hash) {
+  const h = String(hash || '').replace(/^#\/?/, '');
+  const parts = h.split('/').filter(Boolean);
+  const head = parts[0] || 'clients';
+  if (head === 'admin') { window.__builderSub = false; state.adminTab = parts[1] || state.adminTab || 'frameworks'; showScreen('admin'); return; }
+  if (head === 'sales') { window.__builderSub = false; showScreen('sales'); return; }
+  if (head === 'growth') { window.__builderSub = false; showScreen('growth'); return; }
+  if (head === 'client' && parts[1] && client(parts[1])) {
+    window.__builderSub = false; V9.client = parts[1]; state.clientId = parts[1]; V9.sec = parts[2] || 'overview';
+    showScreen('builder'); return;
+  }
+  window.__builderSub = false; if (window.V9) V9.client = null; showScreen('builder');
+}
+window.addEventListener('hashchange', function () {
+  // Ignore the hashchange we caused ourselves (state already matches the URL).
+  if (location.hash === currentRoute()) return;
+  applyRoute(location.hash);
+});
 
 function switchTab(tab) {
   state.tab = tab;
@@ -1708,6 +1743,7 @@ function switchTab(tab) {
 function switchAdminTab(tab) {
   state.adminTab = tab; state.editing = null;
   renderAdmin();
+  syncHash();
 }
 
 // ─── BUILDER RENDER ────────────────────────────────────────────────────────────
@@ -2769,21 +2805,25 @@ function deleteReservoirScript(clientId, scriptId) {
 }
 
 // ── Notion script-board export ──────────────────────────────────────────────
+// Works from both the Reservoir tab (sub-builder) and the V9 client overview board.
 const BOARD_STATUS_LABEL = { idea: 'Test idea', testing: 'Testing', winning: 'Winner' };
-function boardSel() { const c = client(state.clientId); if (!c) return new Set(); if (!state.boardSel || state.boardSelClient !== c.id) { state.boardSel = new Set(); state.boardSelClient = c.id; } return state.boardSel; }
-function toggleBoardSel(id) { const s = boardSel(); if (s.has(id)) s.delete(id); else s.add(id); renderOutput(); }
-function boardClearSel() { boardSel().clear(); renderOutput(); }
+function boardV9Active() { return state.screen === 'builder' && !window.__builderSub; }
+function boardCid() { return boardV9Active() ? ((window.V9 && V9.client) || state.clientId) : state.clientId; }
+function boardRerender() { if (boardV9Active() && typeof renderV9 === 'function') renderV9(); else renderOutput(); }
+function boardSel() { const c = client(boardCid()); if (!c) return new Set(); if (!state.boardSel || state.boardSelClient !== c.id) { state.boardSel = new Set(); state.boardSelClient = c.id; } return state.boardSel; }
+function toggleBoardSel(id) { const s = boardSel(); if (s.has(id)) s.delete(id); else s.add(id); boardRerender(); }
+function boardClearSel() { boardSel().clear(); boardRerender(); }
 function boardSelectAllShown() {
-  const c = client(state.clientId); if (!c) return;
-  const filter = state.reservoirFilter;
+  const c = client(boardCid()); if (!c) return;
+  const filter = boardV9Active() ? 'all' : state.reservoirFilter;
   const shown = (c.scriptReservoir || []).filter(x => filter === 'all' || x.status === filter);
   const s = boardSel(); const allOn = shown.length && shown.every(x => s.has(x.id));
   if (allOn) shown.forEach(x => s.delete(x.id)); else shown.forEach(x => s.add(x.id));
-  renderOutput();
+  boardRerender();
 }
 
 function openBoardExport() {
-  const c = client(state.clientId); if (!c) return;
+  const c = client(boardCid()); if (!c) return;
   const sel = boardSel(); const picks = (c.scriptReservoir || []).filter(x => sel.has(x.id));
   if (!picks.length) return showNotif('Select at least one script first', true);
   const nicheName = (c.nicheIds || []).map(id => niche(id)?.name).filter(Boolean).join(', ') || '';
@@ -2816,7 +2856,7 @@ function openBoardExport() {
 function closeBoardExport() { const ov = document.getElementById('boardExportModal'); if (ov) ov.classList.remove('show'); }
 
 async function boardDoExport() {
-  const c = client(state.clientId); if (!c) return;
+  const c = client(boardCid()); if (!c) return;
   const sel = boardSel(); const picks = (c.scriptReservoir || []).filter(x => sel.has(x.id));
   if (!picks.length) return;
   const g = id => (document.getElementById(id)?.value || '').trim();
@@ -6519,11 +6559,14 @@ function renderEverything() {
 }
 
 async function loadConfigAndRender() {
+  const bootHash = location.hash;   // capture before any render overwrites it
   await loadConfig();
   migrateConfig(config);
   setConfigPill(configSource === 'server' ? 'server' : 'local');
   initSelections();
   renderEverything();
+  // Restore the page from the URL (refresh / shared link / new tab); else default + stamp URL.
+  if ((bootHash || '').length > 2) applyRoute(bootHash); else syncHash();
   if (!adminKey) showLogin();
   if (keyFromLink) {
     keyFromLink = false;
@@ -6591,6 +6634,11 @@ loadConfigAndRender();
   .v9-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .v9-newbtn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:7px 14px;font:600 13px 'Inter',sans-serif;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
   .v9-newbtn:hover{background:var(--accent2)}
+  .v9-searchrow{display:flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;margin-bottom:14px;max-width:480px}
+  .v9-searchrow i{color:var(--muted);font-size:16px}
+  .v9-searchrow input{flex:1;border:none;background:transparent;outline:none;color:var(--text);font:500 14px 'Inter',sans-serif}
+  .v9-searchx{border:none;background:transparent;color:var(--muted);cursor:pointer;padding:2px;display:flex}
+  .v9-searchx:hover{color:var(--text)}
   .v9-quickbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:18px}
   .v9-qchip{font-size:13px;padding:6px 14px;border-radius:999px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;color:var(--muted);transition:.12s}
   .v9-qchip:hover{border-color:var(--accent)}
@@ -6607,7 +6655,8 @@ loadConfigAndRender();
   .v9-fpanel input{height:34px}
   .v9-grouplabel{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 8px}
   .v9-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
-  .v9-card{text-align:left;cursor:pointer;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:13px;display:flex;flex-direction:column;gap:10px;font:inherit;color:inherit}
+  .v9-card{text-align:left;cursor:pointer;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:13px;display:flex;flex-direction:column;gap:10px;font:inherit;color:inherit;text-decoration:none}
+  a.v9-card,a.v9-card:hover,a.v9-card:visited{color:inherit;text-decoration:none}
   .v9-card:hover{border-color:var(--accent)}
   .v9-cardtop{display:flex;align-items:center;gap:10px}
   .v9-av{width:34px;height:34px;border-radius:50%;background:var(--bg3);color:var(--subtle);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none}
@@ -6633,6 +6682,10 @@ loadConfigAndRender();
   .v9-col.over{outline:2px dashed var(--accent);outline-offset:-2px}
   .v9-colh{font-size:12px;font-weight:600;color:var(--subtle);margin-bottom:8px;display:flex;justify-content:space-between}
   .v9-scard{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:6px;cursor:grab;position:relative}
+  .v9-scard-sel{border-color:var(--accent2);box-shadow:0 0 0 1px var(--accent2) inset}
+  .v9-scard-check{position:absolute;top:6px;right:6px;z-index:2;cursor:pointer;padding:2px}
+  .v9-scard-check input{cursor:pointer}
+  .v9-scard .v9-stitle{padding-right:20px}
   .v9-sfw{font-size:11px;color:var(--accent2);font-weight:600}
   .v9-stitle{font-size:12px;font-weight:600;color:var(--text)}
   .v9-ssub{font-size:10px;color:var(--accent2);font-weight:600;margin-top:1px}
@@ -6688,7 +6741,7 @@ loadConfigAndRender();
     var nS=(c.scriptReservoir||[]).length, nI=icps.length, nP=(c.growthPlans||[]).length;
     function stat(ico,n,label){return '<span class="v9-stat"><i class="ti '+ico+'"></i> <b>'+n+'</b> '+label+'</span>';}
     var counts='<div class="v9-counts">'+stat('ti-file-text',nS,nS===1?'script':'scripts')+stat('ti-target',nI,nI===1?'ICP':'ICPs')+(nP?stat('ti-trending-up',nP,nP===1?'plan':'plans'):'')+(c.csm?'<span class="v9-csm" title="CSM">'+esc(c.csm)+'</span>':'')+'</div>';
-    return '<div class="v9-card'+(sel?' sel':'')+'" onclick="osCardClick(\''+c.id+'\')"><div class="v9-cardtop">'+cb+'<div class="v9-av">'+v9ini(name)+'</div><div style="flex:1;min-width:0"><div class="v9-name">'+esc(name)+'</div>'+(from?'<div class="v9-meta">'+esc(from)+'</div>':'')+'</div>'+stage+'</div>'+tagrow+counts+'</div>';}
+    return '<a class="v9-card'+(sel?' sel':'')+'" href="#/client/'+c.id+'/overview" onclick="if(event.metaKey||event.ctrlKey||event.shiftKey)return;event.preventDefault();osCardClick(\''+c.id+'\')"><div class="v9-cardtop">'+cb+'<div class="v9-av">'+v9ini(name)+'</div><div style="flex:1;min-width:0"><div class="v9-name">'+esc(name)+'</div>'+(from?'<div class="v9-meta">'+esc(from)+'</div>':'')+'</div>'+stage+'</div>'+tagrow+counts+'</a>';}
 
   var STAGES=['Testing','Proof of concept','Scaling'];
   function v9Match(c){
@@ -6714,18 +6767,20 @@ loadConfigAndRender();
       (tags.length?'<span class="v9-qsep"></span>'+tags.map(function(t){return '<button class="v9-qchip '+(V9.filterTag===t?'on':'')+'" onclick="osSetF(\'Tag\','+JSON.stringify(t).replace(/"/g,'&quot;')+')">'+esc(t)+'</button>';}).join(''):'')+'</div>';
     // fuller filter panel (clean)
     var nicheRow='<div class="v9-frow"><span class="v9-flabel">Niche</span><button class="v9-fchip '+((!V9.filterNiche||V9.filterNiche==='All')?'on':'')+'" onclick="osFilterNiche(\'All\')">All</button>'+config.niches.map(function(nn){return '<button class="v9-fchip '+(V9.filterNiche===nn.id?'on':'')+'" onclick="osFilterNiche(\''+nn.id+'\')">'+esc(nn.name)+'</button>';}).join('')+'</div>';
-    var panel=V9.filterOpen?('<div class="v9-fpanel"><div class="v9-rowbtn" style="margin-bottom:10px"><div class="v9-sec" style="margin:0">Filters</div><button class="mini-btn" onclick="osQuickAll()">Clear all</button></div>'+nicheRow+frow('CSM','Csm',uniqVals(function(c){return c.csm;}))+frow('Tag','Tag',tags)+frow('Stage','Stage',STAGES.concat(uniqVals(function(c){return c.stage;}).filter(function(s){return STAGES.indexOf(s)<0;})))+'<div class="v9-frow"><span class="v9-flabel">Search</span><input id="v9-search" placeholder="Search clients…" value="'+esc(V9.search||'')+'" oninput="osSearch(this.value)" style="flex:1"></div></div>'):'';
+    var panel=V9.filterOpen?('<div class="v9-fpanel"><div class="v9-rowbtn" style="margin-bottom:10px"><div class="v9-sec" style="margin:0">Filters</div><button class="mini-btn" onclick="osQuickAll()">Clear all</button></div>'+nicheRow+frow('CSM','Csm',uniqVals(function(c){return c.csm;}))+frow('Tag','Tag',tags)+frow('Stage','Stage',STAGES.concat(uniqVals(function(c){return c.stage;}).filter(function(s){return STAGES.indexOf(s)<0;})))+'</div>'):'';
     // bulk bar
     var bulk=V9.selectMode?('<div class="v9-bulk"><div class="v9-bulkhead"><b>'+n+' selected</b><span><button class="mini-btn" onclick="osSelectAllShown()">Select all</button> <button class="mini-btn" onclick="osClearSel()">Clear</button> <button class="mini-btn danger" onclick="osBulkDelete()"><i class="ti ti-trash"></i> Delete'+(n?' ('+n+')':'')+'</button></span></div><div class="v9-bulkrow"><span class="v9-flabel">Stage</span>'+STAGES.map(function(s){return '<button class="v9-fchip" onclick="osBulkStage(\''+s+'\')">'+s+'</button>';}).join('')+'</div><div class="v9-bulkrow"><span class="v9-flabel">CSM</span><input id="v9-bulkcsm" placeholder="Name" style="width:120px"><button class="mini-btn" onclick="osBulkCsm()">Assign</button> &nbsp; <span class="v9-flabel">Tag</span><input id="v9-bulktag" placeholder="Tag" style="width:110px"><button class="mini-btn" onclick="osBulkTag()">Add</button></div></div>'):'';
+    var search='<div class="v9-searchrow"><i class="ti ti-search"></i><input id="v9-search" placeholder="Search clients by name or contact…" value="'+esc(V9.search||'')+'" oninput="osSearch(this.value)" autocomplete="off">'+((V9.search||'')?'<button class="v9-searchx" onclick="osSearch(\'\')" title="Clear search"><i class="ti ti-x"></i></button>':'')+'</div>';
     var shown=config.clients.filter(v9Match);
-    var body=shown.length?('<div class="v9-grid">'+shown.map(v9Card).join('')+'</div>'):(config.clients.length?'<div class="v9-sub" style="margin-top:14px">No clients match these filters.</div>':'<div class="v9-sub" style="margin-top:14px">No clients yet — add one.</div>');
-    return top+quick+panel+bulk+body;
+    var q=(V9.search||'').trim();
+    var body=shown.length?('<div class="v9-grid">'+shown.map(v9Card).join('')+'</div>'):(config.clients.length?('<div class="v9-sub" style="margin-top:14px">No clients match'+(q?' “'+esc(q)+'”':' these filters')+'.</div>'):'<div class="v9-sub" style="margin-top:14px">No clients yet — add one.</div>');
+    return top+search+quick+panel+bulk+body;
   }
 
   function v9BoardHtml(c){var g=v9board(c);var cols=[['idea','Ideas','ti-bulb'],['testing','Testing','ti-flask'],['winning','Winning','ti-trophy']];
-    var fus=c.followups||[];
+    var fus=c.followups||[];var sel=boardSel();
     function fuCountFor(s){var key=s.label||((s.framework||'')+' · '+(s.angle||''));return fus.filter(function(f){return f.parentLabel===key;}).length;}
-    return '<div class="v9-kan">'+cols.map(function(col){var items=g[col[0]]||[];return '<div class="v9-col" ondragover="osAllow(event)" ondragenter="this.classList.add(\'over\')" ondragleave="this.classList.remove(\'over\')" ondrop="osDropCol(event,\''+col[0]+'\')"><div class="v9-colh"><span><i class="ti '+col[2]+'"></i> '+col[1]+'</span><span>'+items.length+'</span></div>'+(items.length?items.map(function(s){var fc=fuCountFor(s);var title=s.name||nextScriptName(c);var sub=[s.framework,s.angle].filter(Boolean).join(' · ');var snip=(s.script||'').replace(/\s+/g,' ').trim();var snipShort=snip?(snip.length>90?snip.slice(0,90)+'…':snip):(s.label||'(no text)');return '<div class="v9-scard'+(fc?' v9-scard-fu':'')+'" draggable="true" ondragstart="osDragS(event,\''+s.id+'\')" onclick="osEditScript(\''+s.id+'\')" title="Click to edit · drag to move"><div class="v9-stitle">'+esc(title)+'</div>'+(sub?'<div class="v9-ssub">'+esc(sub)+'</div>':'')+'<div class="v9-sa">'+esc(snipShort)+'</div>'+(fc?'<div class="v9-fulabel"><i class="ti ti-arrow-forward-up"></i> '+fc+' follow-up'+(fc>1?'s':'')+'</div>':'')+'<span class="v9-tip">'+esc(s.script||'(empty)')+'</span></div>';}).join(''):'<div class="v9-empty">—</div>')+'</div>';}).join('')+'</div>'+'<div class="v9-trash" ondragover="osAllow(event)" ondragenter="this.classList.add(\'over\')" ondragleave="this.classList.remove(\'over\')" ondrop="osDropDelete(event)"><i class="ti ti-trash"></i> Drop a script here to delete</div>';
+    return '<div class="v9-kan">'+cols.map(function(col){var items=g[col[0]]||[];return '<div class="v9-col" ondragover="osAllow(event)" ondragenter="this.classList.add(\'over\')" ondragleave="this.classList.remove(\'over\')" ondrop="osDropCol(event,\''+col[0]+'\')"><div class="v9-colh"><span><i class="ti '+col[2]+'"></i> '+col[1]+'</span><span>'+items.length+'</span></div>'+(items.length?items.map(function(s){var fc=fuCountFor(s);var title=s.name||nextScriptName(c);var sub=[s.framework,s.angle].filter(Boolean).join(' · ');var snip=(s.script||'').replace(/\s+/g,' ').trim();var snipShort=snip?(snip.length>90?snip.slice(0,90)+'…':snip):(s.label||'(no text)');return '<div class="v9-scard'+(fc?' v9-scard-fu':'')+(sel.has(s.id)?' v9-scard-sel':'')+'" draggable="true" ondragstart="osDragS(event,\''+s.id+'\')" onclick="osEditScript(\''+s.id+'\')" title="Click to edit · drag to move"><label class="v9-scard-check" onclick="event.stopPropagation()"><input type="checkbox" '+(sel.has(s.id)?'checked':'')+' onclick="event.stopPropagation();toggleBoardSel(\''+s.id+'\')"></label><div class="v9-stitle">'+esc(title)+'</div>'+(sub?'<div class="v9-ssub">'+esc(sub)+'</div>':'')+'<div class="v9-sa">'+esc(snipShort)+'</div>'+(fc?'<div class="v9-fulabel"><i class="ti ti-arrow-forward-up"></i> '+fc+' follow-up'+(fc>1?'s':'')+'</div>':'')+'<span class="v9-tip">'+esc(s.script||'(empty)')+'</span></div>';}).join(''):'<div class="v9-empty">—</div>')+'</div>';}).join('')+'</div>'+'<div class="v9-trash" ondragover="osAllow(event)" ondragenter="this.classList.add(\'over\')" ondragleave="this.classList.remove(\'over\')" ondrop="osDropDelete(event)"><i class="ti ti-trash"></i> Drop a script here to delete</div>';
   }
 
   function v9Detail(c){
@@ -6790,7 +6845,9 @@ loadConfigAndRender();
     if(V9.sec==='overview'){
       if(V9.wiz) return v9Wizard(c);
       var fu=c.followups||[];
-      return '<div class="v9-rowbtn"><div class="v9-sec" style="margin:0">Scripts board</div><button class="mini-btn" onclick="osWizStart()">+ Create new script</button></div><div class="v9-muted2"><i class="ti ti-arrows-move"></i> Drag between columns · hover to preview</div>'+v9BoardHtml(c)+
+      var bsel=boardSel(),bn=bsel.size,nScripts=(c.scriptReservoir||[]).length;
+      var exportBar=nScripts?('<div class="v9-rowbtn" style="margin:8px 0"><div class="v9-meta">'+(bn?bn+' selected for export':'Tick scripts to export to Notion')+'</div><span style="display:flex;gap:6px"><button class="mini-btn" onclick="boardSelectAllShown()"><i class="ti ti-checks"></i> Select all</button>'+(bn?'<button class="mini-btn" onclick="boardClearSel()">Clear</button>':'')+'<button class="mini-btn" '+(bn?'':'disabled')+' onclick="openBoardExport()" style="'+(bn?'background:var(--accent2);color:#fff;border-color:var(--accent2)':'')+'"><i class="ti ti-brand-notion"></i> Export '+(bn||'')+' to Notion</button></span></div>'):'';
+      return '<div class="v9-rowbtn"><div class="v9-sec" style="margin:0">Scripts board</div><button class="mini-btn" onclick="osWizStart()">+ Create new script</button></div><div class="v9-muted2"><i class="ti ti-arrows-move"></i> Drag between columns · tick to export · hover to preview</div>'+exportBar+v9BoardHtml(c)+
         '<div class="v9-card2"><div class="v9-sec">ICP they’re targeting</div>'+(nn?('<div class="v9-name">'+esc(nn.name)+'</div><div class="v9-meta" style="margin-top:2px">'+((nn.angles||[]).slice(0,4).map(esc).join(' · ')||'—')+'</div>'):'<div class="v9-muted2">No ICP set.</div>')+'</div>'+
         '<div class="v9-card2"><div class="v9-sec">Follow-ups</div>'+(fu.length?fu.map(function(s){return '<div class="v9-rowi"><span><i class="ti ti-arrow-forward-up"></i> '+esc(s.parentLabel||'sequence')+'</span><span class="v9-meta">'+(s.items?s.items.length:0)+' steps</span></div>';}).join(''):'<div class="v9-muted2">No follow-ups yet.</div>')+'</div>'+
         '<div class="v9-rowbtn" style="margin-top:12px"><div class="v9-sec" style="margin:0">Mechanism — how we get the result</div><button class="mini-btn" onclick="osMechBuild()"'+(V9.mechBusy?' disabled':'')+'><i class="ti ti-wand"></i> '+(V9.mechBusy?'Building…':((c.mechanisms||[]).length?'Rebuild (AI)':'Build mechanism (AI)'))+'</button></div>'+(V9.mechError?'<div class="v9-card2" style="border-color:var(--red)"><div class="v9-meta" style="white-space:pre-wrap;color:var(--red)"><i class="ti ti-alert-triangle"></i> '+esc(V9.mechError)+'</div></div>':'')+(mechCardsHtml(c.mechanisms||[],'How this helps')||'<div class="v9-muted2">No mechanism built yet — tap “Build mechanism (AI)”.</div>')+
@@ -7152,7 +7209,7 @@ loadConfigAndRender();
   window.osWizEdit=function(){var w=V9.wiz,d=w.deck[w.i];var cur=(d.idx!=null&&scriptIndex[d.idx])?scriptIndex[d.idx].script:(d.text||'');d._store=d._store||{framework:d.fw||'Script',angle:d.angle||'',script:cur,_versions:d._versions||[],_activeVersion:(d._versions?d._versions.length-1:0)};d._store.script=cur;if(typeof openModalCtx!=='function'){V9.wiz.editing=true;renderV9();return;}openModalCtx({title:d.fw||'Script',sub:d.angle||'',store:d._store,fallbackText:cur,applyLabel:'Save',showReservoir:false,showFollowups:false,onApply:function(text){if(d.idx!=null&&scriptIndex[d.idx])scriptIndex[d.idx].script=text;else d.text=text;d._versions=d._store._versions;renderV9();}});};
   window.osWizEditDone=function(){var w=V9.wiz,el=document.getElementById('v9-edit'),d=w.deck[w.i];if(el){if(d.idx!=null&&scriptIndex[d.idx])scriptIndex[d.idx].script=el.value;else d.text=el.value;}w.editing=false;renderV9();};
   window.osWizAI=async function(){var w=V9.wiz,el=document.getElementById('v9-edit'),d=w.deck[w.i];var cur=el?el.value:((d.idx!=null&&scriptIndex[d.idx])?scriptIndex[d.idx].script:d.text);try{var r=await api({action:'refine_script',script:cur,prompt:'Make it tighter and punchier with one clear ask. Keep merge tags.'});var out=(r&&(r.script||r.text||r.result))||cur;if(d.idx!=null&&scriptIndex[d.idx])scriptIndex[d.idx].script=out;else d.text=out;}catch(e){}renderV9();};
-  window.renderV9=function(){var el=document.getElementById('panelV9');if(!el||typeof config==='undefined'||!config)return;el.innerHTML=(V9.client===null||!client(V9.client))?v9List():v9Detail(client(V9.client));if(V9._refocus){var si=document.getElementById('v9-search');if(si){si.focus();try{si.setSelectionRange(si.value.length,si.value.length);}catch(e){}}V9._refocus=false;}};
+  window.renderV9=function(){var el=document.getElementById('panelV9');if(!el||typeof config==='undefined'||!config)return;el.innerHTML=(V9.client===null||!client(V9.client))?v9List():v9Detail(client(V9.client));if(V9._refocus){var si=document.getElementById('v9-search');if(si){si.focus();try{si.setSelectionRange(si.value.length,si.value.length);}catch(e){}}V9._refocus=false;}if(typeof syncHash==='function')syncHash();};
   window.osFilterNiche=function(id){V9.filterNiche=id;renderV9();};
   window.osSetF=function(dim,val){V9['filter'+dim]=val;renderV9();};
   window.osQuickAll=function(){V9.filterStage='All';V9.filterTag='All';V9.filterNiche='All';V9.filterCsm='All';V9.search='';renderV9();};
