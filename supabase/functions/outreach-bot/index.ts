@@ -18,12 +18,40 @@
 // Anthropic's side; no search API keys needed. No API keys ever reach the
 // browser.
 
-import { CLAUDE_HAIKU, CLAUDE_MODEL, CLAUDE_MODEL_OPUS, messages as claudeMessages, type Tool } from "../_shared/anthropic.ts";
+import { CLAUDE_HAIKU, CLAUDE_MODEL, CLAUDE_MODEL_OPUS, messages as rawClaudeMessages, type Tool } from "../_shared/anthropic.ts";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 // Map a safe model alias (from the UI) to a real Claude model id. Unknown → default.
 function pickModel(alias: unknown): string {
   const map: Record<string, string> = { sonnet: CLAUDE_MODEL, opus: CLAUDE_MODEL_OPUS, haiku: CLAUDE_HAIKU };
   return map[String(alias ?? "").toLowerCase()] || CLAUDE_MODEL;
+}
+
+// ─── Usage metering (powers the admin Usage dashboard) ───────────────────────
+// Approx Anthropic prices, USD per 1M tokens (input/output). Adjust if pricing changes.
+const RATES: Record<string, { in: number; out: number }> = {
+  sonnet: { in: 3, out: 15 }, opus: { in: 15, out: 75 }, haiku: { in: 0.8, out: 4 },
+};
+function modelKey(m: unknown): string {
+  const s = String(m ?? "").toLowerCase();
+  return s.includes("opus") ? "opus" : s.includes("haiku") ? "haiku" : "sonnet";
+}
+interface UsageAccum { input: number; output: number; cost: number }
+// Per-request accumulator, concurrency-safe via AsyncLocalStorage.
+const usageCtx = new AsyncLocalStorage<UsageAccum>();
+// Wrapper around the Claude client: every call adds its tokens + cost to the current request's accumulator.
+// deno-lint-ignore no-explicit-any
+async function claudeMessages(opts: any): Promise<any> {
+  const res = await rawClaudeMessages(opts);
+  const s = usageCtx.getStore();
+  const u = (res as { usage?: { input_tokens?: number; output_tokens?: number } })?.usage;
+  if (s && u) {
+    const r = RATES[modelKey(opts?.model)] || RATES.sonnet;
+    s.input += u.input_tokens ?? 0;
+    s.output += u.output_tokens ?? 0;
+    s.cost += ((u.input_tokens ?? 0) / 1e6) * r.in + ((u.output_tokens ?? 0) / 1e6) * r.out;
+  }
+  return res;
 }
 import { HTML } from "./html.ts";
 
@@ -167,25 +195,64 @@ async function usersSave(users: TeamUser[]): Promise<void> {
   if (!res.ok) throw new Error(`users save failed: ${res.status}`);
 }
 
-// ─── Daily AI-call counter (spend safety cap) ────────────────────────────────
-// Stored as usage.json in the same private bucket: { day: 'YYYY-MM-DD', calls }.
-// Increments and checks in one pass; best-effort (a small race across instances is fine for a safety cap).
-async function usageBumpAndCheck(): Promise<{ ok: boolean; calls: number; cap: number }> {
-  if (!DAILY_AI_CALL_CAP || DAILY_AI_CALL_CAP <= 0) return { ok: true, calls: 0, cap: 0 };
-  const today = new Date().toISOString().slice(0, 10);
-  let calls = 0;
+// ─── Usage metering + daily spend cap ────────────────────────────────────────
+// Stored as usage.json in the private bucket:
+//   { days: { 'YYYY-MM-DD': { requests, input, output, cost, actions: { [action]: {requests,input,output,cost} } } } }
+// deno-lint-ignore no-explicit-any
+type UsageDoc = { days: Record<string, any> };
+function todayUTC(): string { return new Date().toISOString().slice(0, 10); }
+async function usageLoad(): Promise<UsageDoc> {
   try {
     const { url, headers } = storageEnv();
     const res = await fetch(`${url}/storage/v1/object/${BUCKET}/usage.json`, { headers });
-    if (res.ok) { const d = await res.json().catch(() => null); if (d && d.day === today) calls = Number(d.calls) || 0; }
-    calls += 1;
+    if (res.ok) { const d = await res.json().catch(() => null); if (d && d.days) return d; }
+  } catch { /* fall through */ }
+  return { days: {} };
+}
+async function usageSave(d: UsageDoc): Promise<void> {
+  try {
+    const { url, headers } = storageEnv();
     await fetch(`${url}/storage/v1/object/${BUCKET}/usage.json`, {
       method: "POST",
       headers: { ...headers, "Content-Type": "application/json", "x-upsert": "true" },
-      body: JSON.stringify({ day: today, calls }),
-    }).catch(() => {});
-  } catch { return { ok: true, calls: 0, cap: DAILY_AI_CALL_CAP }; }  // storage down → don't block legitimate use
-  return { ok: calls <= DAILY_AI_CALL_CAP, calls, cap: DAILY_AI_CALL_CAP };
+      body: JSON.stringify(d),
+    });
+  } catch { /* best effort */ }
+}
+// deno-lint-ignore no-explicit-any
+function dayRec(d: UsageDoc, day: string): any {
+  d.days[day] = d.days[day] || { requests: 0, input: 0, output: 0, cost: 0, actions: {} };
+  return d.days[day];
+}
+function pruneDays(d: UsageDoc, keep = 60): void {
+  const ks = Object.keys(d.days).sort();
+  while (ks.length > keep) { delete d.days[ks.shift() as string]; }
+}
+// Pre-call: count one request for this action today + enforce the daily cap.
+async function usageBumpAndCheck(action: string): Promise<{ ok: boolean; calls: number; cap: number }> {
+  const cap = DAILY_AI_CALL_CAP;
+  try {
+    const d = await usageLoad();
+    const rec = dayRec(d, todayUTC());
+    rec.requests += 1;
+    const a = rec.actions[action] = rec.actions[action] || { requests: 0, input: 0, output: 0, cost: 0 };
+    a.requests += 1;
+    pruneDays(d);
+    await usageSave(d);
+    return { ok: !cap || cap <= 0 || rec.requests <= cap, calls: rec.requests, cap };
+  } catch {
+    return { ok: true, calls: 0, cap };  // storage down → fail open, never block legit use
+  }
+}
+// Post-call: add the tokens + cost this request actually consumed.
+async function recordActionUsage(action: string, s: UsageAccum | undefined): Promise<void> {
+  if (!s || (!s.input && !s.output)) return;
+  const d = await usageLoad();
+  const rec = dayRec(d, todayUTC());
+  rec.input += s.input; rec.output += s.output; rec.cost += s.cost;
+  const a = rec.actions[action] = rec.actions[action] || { requests: 0, input: 0, output: 0, cost: 0 };
+  a.input += s.input; a.output += s.output; a.cost += s.cost;
+  await usageSave(d);
 }
 
 // Actions that call Claude (and therefore cost money) — the daily cap applies to these only.
@@ -573,16 +640,28 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "unauthorized — missing or wrong x-admin-key" }, 401);
   }
 
+  const action = String(body.action);
+  const isAi = AI_ACTIONS.has(action);
+
   // Daily spend safety cap: block AI actions once the day's call budget is exhausted.
-  if (AI_ACTIONS.has(String(body.action))) {
-    const u = await usageBumpAndCheck();
+  if (isAi) {
+    const u = await usageBumpAndCheck(action);
     if (!u.ok) {
       return json({ ok: false, error: `Daily AI limit reached (${u.cap} calls/day). This is a safety cap to control spend; it resets at UTC midnight. Raise it by setting the DAILY_AI_CALL_CAP secret.` }, 429);
     }
   }
 
+  // Run the action inside a usage accumulator so every Claude call's tokens/cost are metered,
+  // then persist what this request consumed (for the Usage dashboard).
+  return await usageCtx.run({ input: 0, output: 0, cost: 0 }, async () => {
   try {
+    // deno-lint-ignore no-explicit-any
+    const __result: any = await (async () => {
     switch (body.action) {
+      case "get_usage": {
+        return json({ ok: true, usage: await usageLoad(), cap: DAILY_AI_CALL_CAP, rates: RATES });
+      }
+
       case "get_config": {
         const config = await configLoad();
         return json({ ok: true, config });
@@ -1219,8 +1298,13 @@ Deno.serve(async (req) => {
       default:
         return json({ ok: false, error: "unknown action" }, 400);
     }
+    })();
+    // Persist the tokens/cost this request consumed (for the Usage dashboard).
+    if (isAi) { try { await recordActionUsage(action, usageCtx.getStore()); } catch (_e) { /* ignore */ } }
+    return __result;
   } catch (err) {
     console.error("outreach-bot error:", err);
     return json({ ok: false, error: String((err as Error).message ?? err) }, 502);
   }
+  });
 });

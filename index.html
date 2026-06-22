@@ -873,6 +873,7 @@
           <button class="tab-btn" id="atab-tools" onclick="switchAdminTab('tools')">🧰 Tools KB</button>
           <button class="tab-btn" id="atab-systemfilter" onclick="switchAdminTab('systemfilter')">🧠 System Filter</button>
           <button class="tab-btn" id="atab-builderbtns" onclick="switchAdminTab('builderbtns')">🎛 Builder Buttons</button>
+          <button class="tab-btn" id="atab-usage" onclick="switchAdminTab('usage')">📊 Usage</button>
           <button class="tab-btn" id="atab-settings" onclick="switchAdminTab('settings')">Settings</button>
         </div>
         <div id="adminBody"></div>
@@ -2909,7 +2910,7 @@ function adminEdit(type, id) {
 }
 
 function renderAdmin() {
-  ['frameworks', 'winning', 'niches', 'clients', 'followups', 'agency', 'tools', 'systemfilter', 'builderbtns', 'settings'].forEach(t =>
+  ['frameworks', 'winning', 'niches', 'clients', 'followups', 'agency', 'tools', 'systemfilter', 'builderbtns', 'usage', 'settings'].forEach(t =>
     document.getElementById('atab-' + t).classList.toggle('active', t === state.adminTab));
   const body = document.getElementById('adminBody');
 
@@ -2928,6 +2929,7 @@ function renderAdmin() {
   body.innerHTML = keyBlock + adminTabHtml();
   wireAdminTags();
   if (state.adminTab === 'settings') loadTeamUsers();
+  if (state.adminTab === 'usage') loadUsage();
 }
 
 function setAdminKey() {
@@ -2948,6 +2950,7 @@ function adminTabHtml() {
   if (t === 'agency') return adminAgency();
   if (t === 'systemfilter') return adminSystemFilter();
   if (t === 'builderbtns') return adminBuilderButtons();
+  if (t === 'usage') return adminUsage();
   return adminSettings();
 }
 
@@ -3062,6 +3065,96 @@ window.osBtnSaveAll = function () {
   persistConfig();
   showNotif('✅ Builder buttons saved');
 };
+
+// ─── Usage dashboard (Admin → 📊 Usage) ──────────────────────────────────────
+function adminUsage() {
+  return `
+    <div class="info-block"><div class="info-title">📊 API usage &amp; spend</div>
+      <div class="hint">Tokens and estimated cost of every AI action the bot runs through your Anthropic key, by day and by task. Cost is an estimate from the model used per call (Sonnet $3/$15, Opus $15/$75, Haiku $0.80/$4 per 1M in/out). The authoritative number is always your <a href="https://console.anthropic.com" target="_blank" style="color:var(--accent2)">Anthropic Console</a>.</div>
+    </div>
+    <div id="usage-host" class="editor"><div class="hint">Loading usage…</div></div>`;
+}
+
+async function loadUsage() {
+  const host = document.getElementById('usage-host'); if (!host) return;
+  if (!adminKey) { host.innerHTML = '<div class="hint">Enter your admin key (top of this page) to view usage.</div>'; return; }
+  host.innerHTML = '<div class="hint">Loading usage…</div>';
+  try {
+    const r = await api({ action: 'get_usage' });
+    host.innerHTML = renderUsageDashboard(r.usage || { days: {} }, r.cap || 0);
+  } catch (e) {
+    host.innerHTML = '<div class="hint">Could not load usage: ' + esc(e.message) + (/unknown action/i.test(e.message) ? ' — the backend needs to be redeployed (it auto-deploys on push).' : '') + '</div>';
+  }
+}
+
+function renderUsageDashboard(usage, cap) {
+  const days = usage.days || {};
+  const allDates = Object.keys(days).sort();          // ascending
+  if (!allDates.length) return '<div class="hint">No usage recorded yet. Run a few AI actions (generate, filter, etc.) and check back — this populates as the bot makes calls.</div>';
+  const win = allDates.slice(-30);                     // last 30 days for the graph
+  const money = n => '$' + (Number(n) || 0).toFixed(2);
+  const num = n => (Number(n) || 0).toLocaleString();
+  const today = new Date().toISOString().slice(0, 10);
+
+  // window totals + per-task aggregation
+  let tReq = 0, tIn = 0, tOut = 0, tCost = 0; const byTask = {};
+  win.forEach(d => {
+    const r = days[d] || {}; tReq += r.requests || 0; tIn += r.input || 0; tOut += r.output || 0; tCost += r.cost || 0;
+    Object.keys(r.actions || {}).forEach(a => {
+      const x = r.actions[a]; const t = byTask[a] = byTask[a] || { requests: 0, input: 0, output: 0, cost: 0 };
+      t.requests += x.requests || 0; t.input += x.input || 0; t.output += x.output || 0; t.cost += x.cost || 0;
+    });
+  });
+  const todayCost = (days[today] || {}).cost || 0, todayReq = (days[today] || {}).requests || 0;
+
+  // bar graph of daily cost
+  const maxCost = Math.max(0.0001, ...win.map(d => (days[d] || {}).cost || 0));
+  const BW = 26, BH = 120, GAP = 6, PAD = 8;
+  const w = PAD * 2 + win.length * (BW + GAP), h = BH + 34;
+  const bars = win.map((d, i) => {
+    const c = (days[d] || {}).cost || 0;
+    const bh = Math.max(1, Math.round((c / maxCost) * BH));
+    const x = PAD + i * (BW + GAP), y = PAD + (BH - bh);
+    const dd = d.slice(8), mm = d.slice(5, 7);
+    const isToday = d === today;
+    return `<g>
+      <rect x="${x}" y="${y}" width="${BW}" height="${bh}" rx="3" fill="${isToday ? 'var(--accent2)' : 'var(--accent2)'}" opacity="${isToday ? '1' : '0.55'}"><title>${d}: ${money(c)} · ${num((days[d] || {}).requests || 0)} req · ${num((days[d] || {}).input || 0)}/${num((days[d] || {}).output || 0)} tok</title></rect>
+      <text x="${x + BW / 2}" y="${PAD + BH + 12}" font-size="8" fill="var(--muted)" text-anchor="middle">${dd}/${mm}</text>
+    </g>`;
+  }).join('');
+  const graph = `<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:14px">
+    <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block">${bars}</svg></div>`;
+
+  // stat cards
+  const card = (label, val, sub) => `<div style="flex:1;min-width:120px;border:1px solid var(--border);border-radius:10px;padding:12px"><div class="hint" style="margin:0">${label}</div><div style="font:700 20px Inter,sans-serif;margin-top:2px">${val}</div>${sub ? `<div class="hint" style="margin:0">${sub}</div>` : ''}</div>`;
+  const stats = `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+    ${card('Today', money(todayCost), num(todayReq) + ' req' + (cap ? ' · cap ' + num(cap) : ''))}
+    ${card('Last 30 days', money(tCost), num(tReq) + ' requests')}
+    ${card('Tokens (30d)', num(tIn + tOut), num(tIn) + ' in · ' + num(tOut) + ' out')}
+  </div>`;
+
+  // daily receipts (newest first)
+  const recRows = win.slice().reverse().map(d => {
+    const r = days[d] || {};
+    return `<tr><td>${d}${d === today ? ' <span class="hint">(today)</span>' : ''}</td><td style="text-align:right">${num(r.requests || 0)}</td><td style="text-align:right">${num(r.input || 0)}</td><td style="text-align:right">${num(r.output || 0)}</td><td style="text-align:right">${money(r.cost || 0)}</td></tr>`;
+  }).join('');
+  const receipts = `<div class="info-title" style="margin:6px 0 8px">🧾 Daily receipts</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="text-align:left;color:var(--muted)"><th>Date</th><th style="text-align:right">Requests</th><th style="text-align:right">Input tok</th><th style="text-align:right">Output tok</th><th style="text-align:right">Est. cost</th></tr></thead>
+      <tbody>${recRows}</tbody></table></div>`;
+
+  // by task (cost desc)
+  const taskRows = Object.keys(byTask).sort((a, b) => byTask[b].cost - byTask[a].cost).map(a => {
+    const t = byTask[a];
+    return `<tr><td><code>${esc(a)}</code></td><td style="text-align:right">${num(t.requests)}</td><td style="text-align:right">${num(t.input + t.output)}</td><td style="text-align:right">${money(t.cost)}</td><td style="text-align:right">${tCost ? Math.round((t.cost / tCost) * 100) : 0}%</td></tr>`;
+  }).join('') || '<tr><td colspan="5" class="hint">No task data yet.</td></tr>';
+  const tasks = `<div class="info-title" style="margin:18px 0 8px">🛠️ Which tasks are spending (last 30 days)</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="text-align:left;color:var(--muted)"><th>Task (action)</th><th style="text-align:right">Requests</th><th style="text-align:right">Tokens</th><th style="text-align:right">Est. cost</th><th style="text-align:right">% spend</th></tr></thead>
+      <tbody>${taskRows}</tbody></table></div>`;
+
+  return `<style>#usage-host td,#usage-host th{padding:6px 8px;border-bottom:1px solid var(--border)}#usage-host code{font-size:12px}</style><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div class="info-title" style="margin:0">Daily estimated cost (last ${win.length} day${win.length === 1 ? '' : 's'})</div><button class="mini-btn" onclick="loadUsage()"><i class="ti ti-refresh"></i> Refresh</button></div>${graph}${stats}${receipts}${tasks}`;
+}
 
 async function runGroupAll() {
   if (!adminKey) return showNotif('Admin key required to run the AI grouping', true);
