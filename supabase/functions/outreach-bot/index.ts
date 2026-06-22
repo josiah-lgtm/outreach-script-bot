@@ -31,8 +31,11 @@ import { HTML } from "./html.ts";
 const MAX_FRAMEWORKS = 6;
 const MAX_ANGLES = 8;
 const MAX_VARIANTS_PER_ANGLE = 3;
-const MAX_TOTAL_SCRIPTS = 48;
-const MAX_PROMPT_CHARS = 150_000;  // Sonnet handles ~200k context; 40k was rejecting filter-laden prompts
+const MAX_TOTAL_SCRIPTS = Number(Deno.env.get("MAX_TOTAL_SCRIPTS") || 24);   // was 48 — caps scripts (and output cost) per generate run
+const MAX_PROMPT_CHARS = Number(Deno.env.get("MAX_PROMPT_CHARS") || 80_000);  // input ceiling; was 150k. 40k was too small for filter-laden prompts, 80k is safe + cheaper
+// Daily safety cap on AI calls to control spend if the admin key is ever abused. 0 disables.
+// Override at runtime with the DAILY_AI_CALL_CAP secret (no code change / redeploy of logic needed).
+const DAILY_AI_CALL_CAP = Number(Deno.env.get("DAILY_AI_CALL_CAP") || 1000);
 
 // Anthropic server-side web search tool (executed by the API, not by us).
 const webSearchTool = (maxUses: number): Tool =>
@@ -163,6 +166,36 @@ async function usersSave(users: TeamUser[]): Promise<void> {
   });
   if (!res.ok) throw new Error(`users save failed: ${res.status}`);
 }
+
+// ─── Daily AI-call counter (spend safety cap) ────────────────────────────────
+// Stored as usage.json in the same private bucket: { day: 'YYYY-MM-DD', calls }.
+// Increments and checks in one pass; best-effort (a small race across instances is fine for a safety cap).
+async function usageBumpAndCheck(): Promise<{ ok: boolean; calls: number; cap: number }> {
+  if (!DAILY_AI_CALL_CAP || DAILY_AI_CALL_CAP <= 0) return { ok: true, calls: 0, cap: 0 };
+  const today = new Date().toISOString().slice(0, 10);
+  let calls = 0;
+  try {
+    const { url, headers } = storageEnv();
+    const res = await fetch(`${url}/storage/v1/object/${BUCKET}/usage.json`, { headers });
+    if (res.ok) { const d = await res.json().catch(() => null); if (d && d.day === today) calls = Number(d.calls) || 0; }
+    calls += 1;
+    await fetch(`${url}/storage/v1/object/${BUCKET}/usage.json`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json", "x-upsert": "true" },
+      body: JSON.stringify({ day: today, calls }),
+    }).catch(() => {});
+  } catch { return { ok: true, calls: 0, cap: DAILY_AI_CALL_CAP }; }  // storage down → don't block legitimate use
+  return { ok: calls <= DAILY_AI_CALL_CAP, calls, cap: DAILY_AI_CALL_CAP };
+}
+
+// Actions that call Claude (and therefore cost money) — the daily cap applies to these only.
+const AI_ACTIONS = new Set([
+  "generate", "suggest_angles", "build_icp", "suggest_offers", "fuse_angle", "ai_edit_text",
+  "refine_script", "refine_selection", "extract_transcript", "extract_framework",
+  "research", "research_client_site", "research_niche", "research_competitors",
+  "compose_growth_plan", "compose_client_brief", "compose_sales_plan",
+  "find_icp_example", "generate_followups",
+]);
 
 const hexBytes = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 
@@ -540,6 +573,14 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "unauthorized — missing or wrong x-admin-key" }, 401);
   }
 
+  // Daily spend safety cap: block AI actions once the day's call budget is exhausted.
+  if (AI_ACTIONS.has(String(body.action))) {
+    const u = await usageBumpAndCheck();
+    if (!u.ok) {
+      return json({ ok: false, error: `Daily AI limit reached (${u.cap} calls/day). This is a safety cap to control spend; it resets at UTC midnight. Raise it by setting the DAILY_AI_CALL_CAP secret.` }, 429);
+    }
+  }
+
   try {
     switch (body.action) {
       case "get_config": {
@@ -625,7 +666,7 @@ Deno.serve(async (req) => {
         const prompt = String(body.prompt ?? "").trim();
         if (!script || !selection || !prompt) return json({ ok: false, error: "script, selection and prompt required" }, 400);
         const res = await claudeMessages({
-          model: CLAUDE_MODEL,
+          model: CLAUDE_HAIKU,   // light single-excerpt rewrite — Haiku is plenty and ~10x cheaper
           max_tokens: 400,
           system:
             `You are a cold email editor. The user highlighted ONE EXCERPT of a script and wants only that excerpt rewritten. ` +
@@ -757,7 +798,7 @@ Deno.serve(async (req) => {
         if (!text || !instruction) return json({ ok: false, error: "text and instruction required" }, 400);
         const rules = String(body.rules ?? "").trim();
         const res = await claudeMessages({
-          model: CLAUDE_MODEL,
+          model: CLAUDE_HAIKU,   // inline highlight-edit helper — Haiku is plenty and ~10x cheaper
           max_tokens: 1200,
           system:
             `You edit text inside a client-facing outbound growth plan document. The user highlighted a passage and gave an instruction ` +
