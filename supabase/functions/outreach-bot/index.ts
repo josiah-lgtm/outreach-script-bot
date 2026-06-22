@@ -36,15 +36,28 @@ function modelKey(m: unknown): string {
   const s = String(m ?? "").toLowerCase();
   return s.includes("opus") ? "opus" : s.includes("haiku") ? "haiku" : "sonnet";
 }
-interface UsageAccum { input: number; output: number; cost: number }
+interface UsageAccum { input: number; output: number; cost: number; lens?: string }
 // Per-request accumulator, concurrency-safe via AsyncLocalStorage.
 const usageCtx = new AsyncLocalStorage<UsageAccum>();
-// Wrapper around the Claude client: ensures the right key is loaded, then meters tokens + cost.
+// Wrapper around the Claude client: loads the key, folds the house lens in as a CACHED prefix
+// (so it's billed once and ~90% cheaper on repeats), then meters tokens + cost.
 // deno-lint-ignore no-explicit-any
 async function claudeMessages(opts: any): Promise<any> {
   await ensureAnthropicKey();
-  const res = await rawClaudeMessages(opts);
   const s = usageCtx.getStore();
+  const lens = s && s.lens;
+  let sys = opts?.system;
+  if (lens && lens.length) {
+    // deno-lint-ignore no-explicit-any
+    const lensBlock: any = { type: "text", text: lens };
+    if (lens.length >= 4000) lensBlock.cache_control = { type: "ephemeral" };  // only cache when big enough to qualify
+    sys = typeof sys === "string" ? (sys ? [lensBlock, { type: "text", text: sys }] : [lensBlock]) : Array.isArray(sys) ? [lensBlock, ...sys] : [lensBlock];
+    opts = { ...opts, system: sys };
+  } else if (typeof sys === "string" && sys.length >= 4096) {
+    // No lens, but a big stable system prompt → cache it (helps repeated generate/research).
+    opts = { ...opts, system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }] };
+  }
+  const res = await rawClaudeMessages(opts);
   const u = (res as { usage?: { input_tokens?: number; output_tokens?: number } })?.usage;
   if (s && u) {
     const r = RATES[modelKey(opts?.model)] || RATES.sonnet;
@@ -702,7 +715,7 @@ Deno.serve(async (req) => {
 
   // Run the action inside a usage accumulator so every Claude call's tokens/cost are metered,
   // then persist what this request consumed (for the Usage dashboard).
-  return await usageCtx.run({ input: 0, output: 0, cost: 0 }, async () => {
+  return await usageCtx.run({ input: 0, output: 0, cost: 0, lens: typeof body.lensPrefix === "string" ? body.lensPrefix : "" }, async () => {
   try {
     // deno-lint-ignore no-explicit-any
     const __result: any = await (async () => {

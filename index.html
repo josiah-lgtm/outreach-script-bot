@@ -1228,11 +1228,13 @@ function withSystemFilter(body) {
     // Backend-safe: never add unknown top-level keys, never override `model`. Just fold
     // everything into a free-text field the backend already reads. Cap the total so a long
     // filter (e.g. a pasted offer sheet) can't bloat the request and fail the fetch.
-    let block = '\n\n' + parts.join('\n\n');
+    let block = parts.join('\n\n');
     if (block.length > 8000) block = block.slice(0, 8000) + '\n…(filter trimmed to fit)';
-    const fields = ['prompt', 'context', 'clientContext', 'rules', 'globalRules'];
-    for (const f of fields) { if (typeof body[f] === 'string') { body[f] += block; return body; } }
-    body.globalRules = (body.globalRules || '') + block;   // actions with no standard text field
+    // Send the lens as a dedicated prefix. The backend prepends it as a CACHED system block,
+    // so this large, identical block is billed once and ~90% cheaper on every repeat call —
+    // instead of re-paying full price for it inside every user message.
+    body = Object.assign({}, body);
+    body.lensPrefix = block;
     return body;
   } catch (e) { return body; }
 }
