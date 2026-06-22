@@ -57,8 +57,11 @@ export interface MessagesResponse {
   usage: { input_tokens: number; output_tokens: number };
 }
 
+// Optional runtime override (set from the admin console). Falls back to the env secret.
+let keyOverride: string | null = null;
+export function setApiKeyOverride(k: string | null): void { keyOverride = (k && k.trim()) ? k.trim() : null; }
 function apiKey(): string {
-  const k = Deno.env.get("ANTHROPIC_API_KEY");
+  const k = keyOverride || Deno.env.get("ANTHROPIC_API_KEY");
   if (!k) throw new Error("ANTHROPIC_API_KEY is not set");
   return k;
 }

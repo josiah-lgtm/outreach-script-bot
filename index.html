@@ -2929,7 +2929,7 @@ function renderAdmin() {
   body.innerHTML = keyBlock + adminTabHtml();
   wireAdminTags();
   if (state.adminTab === 'settings') loadTeamUsers();
-  if (state.adminTab === 'usage') loadUsage();
+  if (state.adminTab === 'usage') { loadUsage(); loadKeyStatus(); }
 }
 
 function setAdminKey() {
@@ -3069,10 +3069,65 @@ window.osBtnSaveAll = function () {
 // ─── Usage dashboard (Admin → 📊 Usage) ──────────────────────────────────────
 function adminUsage() {
   return `
+    <div class="info-block"><div class="info-title">🔑 Anthropic API key</div>
+      <div class="hint">The key the bot uses for every AI call. Rotate it here after creating a new one at <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--accent2)">console.anthropic.com</a>. It's stored server-side (your private bucket), <b>never shown in full or sent back to the browser</b>, and overrides the deployed env key. “Use deployed default” clears it and falls back to the env key.</div>
+      <div class="hint" id="ak-status" style="margin-top:8px">Checking key…</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <input class="form-input" id="ak-input" type="password" placeholder="sk-ant-… paste a new key" style="max-width:420px" autocomplete="off">
+        <button class="mini-btn" onclick="testAnthropicKeyInput()"><i class="ti ti-plug"></i> Test</button>
+        <button class="mini-btn" onclick="saveAnthropicKey()" style="background:var(--accent2);color:#fff;border-color:var(--accent2)"><i class="ti ti-device-floppy"></i> Save &amp; verify</button>
+        <button class="mini-btn" onclick="clearAnthropicKey()">Use deployed default</button>
+      </div>
+      <div class="hint" id="ak-msg" style="margin-top:6px"></div>
+    </div>
     <div class="info-block"><div class="info-title">📊 API usage &amp; spend</div>
       <div class="hint">Tokens and estimated cost of every AI action the bot runs through your Anthropic key, by day and by task. Cost is an estimate from the model used per call (Sonnet $3/$15, Opus $15/$75, Haiku $0.80/$4 per 1M in/out). The authoritative number is always your <a href="https://console.anthropic.com" target="_blank" style="color:var(--accent2)">Anthropic Console</a>.</div>
     </div>
     <div id="usage-host" class="editor"><div class="hint">Loading usage…</div></div>`;
+}
+
+async function loadKeyStatus() {
+  const el = document.getElementById('ak-status'); if (!el) return;
+  if (!adminKey) { el.textContent = 'Enter your admin key (top of this page) to manage the API key.'; return; }
+  try {
+    const r = await api({ action: 'get_key_status' }); const s = r.status || {};
+    el.innerHTML = s.set
+      ? `Current key: <b>••••${esc(s.last4)}</b> · source: <b>${esc(s.source)}</b>${s.source === 'stored' ? ' (set here)' : ' (deployed env)'}`
+      : '⚠️ No API key set — the bot can\'t make AI calls until you add one.';
+  } catch (e) { el.textContent = 'Could not read key status: ' + e.message; }
+}
+async function testAnthropicKeyInput() {
+  const inp = document.getElementById('ak-input'), msg = document.getElementById('ak-msg');
+  const cand = inp ? inp.value.trim() : '';
+  if (msg) msg.textContent = cand ? 'Testing the pasted key…' : 'Testing the current key…';
+  try {
+    const r = await api({ action: 'test_anthropic_key', key: cand || undefined });
+    const res = r.result || {};
+    if (msg) msg.innerHTML = res.ok ? `✅ Works (responded on ${esc(res.model || 'Claude')})` : '❌ ' + esc(res.error || 'failed');
+  } catch (e) { if (msg) msg.innerHTML = '❌ ' + esc(e.message); }
+}
+async function saveAnthropicKey() {
+  const inp = document.getElementById('ak-input'), msg = document.getElementById('ak-msg');
+  const key = inp ? inp.value.trim() : '';
+  if (!key) { if (msg) msg.textContent = 'Paste a key first.'; return; }
+  if (msg) msg.textContent = 'Verifying & saving…';
+  try {
+    await api({ action: 'set_anthropic_key', key });
+    if (inp) inp.value = '';
+    if (msg) msg.innerHTML = '✅ Saved & verified — the bot now uses this key.';
+    showNotif('✅ Anthropic key updated');
+    loadKeyStatus();
+  } catch (e) { if (msg) msg.innerHTML = '❌ ' + esc(e.message); }
+}
+async function clearAnthropicKey() {
+  if (!confirm('Clear the stored key and fall back to the deployed env key?')) return;
+  const msg = document.getElementById('ak-msg');
+  try {
+    await api({ action: 'clear_anthropic_key' });
+    if (msg) msg.innerHTML = 'Cleared — using the deployed env key.';
+    showNotif('Stored key cleared');
+    loadKeyStatus();
+  } catch (e) { if (msg) msg.innerHTML = '❌ ' + esc(e.message); }
 }
 
 async function loadUsage() {

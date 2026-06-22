@@ -18,7 +18,7 @@
 // Anthropic's side; no search API keys needed. No API keys ever reach the
 // browser.
 
-import { CLAUDE_HAIKU, CLAUDE_MODEL, CLAUDE_MODEL_OPUS, messages as rawClaudeMessages, type Tool } from "../_shared/anthropic.ts";
+import { CLAUDE_HAIKU, CLAUDE_MODEL, CLAUDE_MODEL_OPUS, messages as rawClaudeMessages, setApiKeyOverride, type Tool } from "../_shared/anthropic.ts";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 // Map a safe model alias (from the UI) to a real Claude model id. Unknown → default.
@@ -39,9 +39,10 @@ function modelKey(m: unknown): string {
 interface UsageAccum { input: number; output: number; cost: number }
 // Per-request accumulator, concurrency-safe via AsyncLocalStorage.
 const usageCtx = new AsyncLocalStorage<UsageAccum>();
-// Wrapper around the Claude client: every call adds its tokens + cost to the current request's accumulator.
+// Wrapper around the Claude client: ensures the right key is loaded, then meters tokens + cost.
 // deno-lint-ignore no-explicit-any
 async function claudeMessages(opts: any): Promise<any> {
+  await ensureAnthropicKey();
   const res = await rawClaudeMessages(opts);
   const s = usageCtx.getStore();
   const u = (res as { usage?: { input_tokens?: number; output_tokens?: number } })?.usage;
@@ -52,6 +53,54 @@ async function claudeMessages(opts: any): Promise<any> {
     s.cost += ((u.input_tokens ?? 0) / 1e6) * r.in + ((u.output_tokens ?? 0) / 1e6) * r.out;
   }
   return res;
+}
+
+// ─── Anthropic key management (admin can rotate from the console) ─────────────
+// An admin-set key in secrets.json overrides the env ANTHROPIC_API_KEY; clearing reverts to env.
+let __keyAt = 0;
+async function secretsLoad(): Promise<Record<string, string>> {
+  try {
+    const { url, headers } = storageEnv();
+    const r = await fetch(`${url}/storage/v1/object/${BUCKET}/secrets.json`, { headers });
+    if (r.ok) { const d = await r.json().catch(() => null); if (d && typeof d === "object") return d as Record<string, string>; }
+  } catch { /* ignore */ }
+  return {};
+}
+async function secretsSave(s: Record<string, string>): Promise<void> {
+  const { url, headers } = storageEnv();
+  await fetch(`${url}/storage/v1/bucket`, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ id: BUCKET, name: BUCKET, public: false }) }).catch(() => {});
+  const res = await fetch(`${url}/storage/v1/object/${BUCKET}/secrets.json`, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json", "x-upsert": "true" },
+    body: JSON.stringify(s),
+  });
+  if (!res.ok) throw new Error(`secrets save failed: ${res.status}`);
+}
+async function ensureAnthropicKey(): Promise<void> {
+  const now = Date.now();
+  if (now - __keyAt < 30_000) return;   // refresh the override at most every 30s per isolate
+  __keyAt = now;
+  try { const s = await secretsLoad(); setApiKeyOverride(s.anthropicKey || null); } catch { /* keep env */ }
+}
+async function anthropicKeyStatus(): Promise<{ set: boolean; source: string; last4: string }> {
+  const stored = (await secretsLoad()).anthropicKey;
+  const env = Deno.env.get("ANTHROPIC_API_KEY");
+  const k = stored || env || "";
+  return { set: !!k, source: stored ? "stored" : (env ? "env" : "none"), last4: k ? k.slice(-4) : "" };
+}
+// Tiny 1-token call to validate a key. Tests the given key, or the resolved (stored/env) one.
+async function testAnthropicKey(candidate?: string): Promise<{ ok: boolean; model?: string; error?: string }> {
+  const key = (candidate && candidate.trim()) || (await secretsLoad()).anthropicKey || Deno.env.get("ANTHROPIC_API_KEY") || "";
+  if (!key) return { ok: false, error: "No key set" };
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: CLAUDE_HAIKU, max_tokens: 1, messages: [{ role: "user", content: "ping" }] }),
+    });
+    if (res.ok) return { ok: true, model: CLAUDE_HAIKU };
+    return { ok: false, error: `Anthropic ${res.status}: ${(await res.text()).slice(0, 160)}` };
+  } catch (e) { return { ok: false, error: String((e as Error).message ?? e) }; }
 }
 import { HTML } from "./html.ts";
 
@@ -660,6 +709,39 @@ Deno.serve(async (req) => {
     switch (body.action) {
       case "get_usage": {
         return json({ ok: true, usage: await usageLoad(), cap: DAILY_AI_CALL_CAP, rates: RATES });
+      }
+
+      case "get_key_status": {
+        return json({ ok: true, status: await anthropicKeyStatus() });
+      }
+
+      case "set_anthropic_key": {
+        const key = String(body.key ?? "").trim();
+        if (!key) return json({ ok: false, error: "key required" }, 400);
+        if (!key.startsWith("sk-ant-")) return json({ ok: false, error: "That doesn't look like an Anthropic key (should start with sk-ant-)." }, 400);
+        // Validate before saving so we never store a dud.
+        const t = await testAnthropicKey(key);
+        if (!t.ok) return json({ ok: false, error: "Key rejected by Anthropic: " + (t.error || "invalid") }, 400);
+        const s = await secretsLoad();
+        s.anthropicKey = key;
+        await secretsSave(s);
+        setApiKeyOverride(key);
+        __keyAt = Date.now();
+        return json({ ok: true, status: await anthropicKeyStatus() });
+      }
+
+      case "clear_anthropic_key": {
+        const s = await secretsLoad();
+        delete s.anthropicKey;
+        await secretsSave(s);
+        setApiKeyOverride(null);
+        __keyAt = Date.now();
+        return json({ ok: true, status: await anthropicKeyStatus() });
+      }
+
+      case "test_anthropic_key": {
+        const cand = body.key ? String(body.key).trim() : undefined;
+        return json({ ok: true, result: await testAnthropicKey(cand) });
       }
 
       case "get_config": {
