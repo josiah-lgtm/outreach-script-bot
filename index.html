@@ -66,6 +66,7 @@
   }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
   .dot.warn { background: var(--amber); }
+  .dot.err { background: var(--red); }
   .dot.searching { animation: pulse 1s infinite; background: var(--amber); }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
@@ -1638,34 +1639,119 @@ const frameworksForNiche = nicheId =>
   config.frameworks.filter(f => !(f.nicheIds || []).length || (f.nicheIds || []).includes(nicheId));
 
 // ─── CONFIG LOAD / SAVE ────────────────────────────────────────────────────────
+// Keep a small ring of local backups so a bad sync can always be rolled back.
+function backupConfig(cfg, tag) {
+  if (!cfg || typeof cfg !== 'object') return;
+  try {
+    const at = new Date().toISOString();
+    const entry = JSON.stringify({ at, tag: tag || '', clients: (cfg.clients || []).length, config: cfg });
+    const key = 'outreach_config_bak_' + Date.now();
+    safeStorageSet(key, entry);
+    let idx = []; try { idx = JSON.parse(safeStorageGet('outreach_config_bak_index') || '[]'); } catch {}
+    idx.push(key);
+    while (idx.length > 3) { const old = idx.shift(); try { localStorage.removeItem(old); } catch {} }
+    safeStorageSet('outreach_config_bak_index', JSON.stringify(idx));
+  } catch {}
+}
+function listBackups() {
+  let idx = []; try { idx = JSON.parse(safeStorageGet('outreach_config_bak_index') || '[]'); } catch {}
+  return idx.map(k => { try { const e = JSON.parse(safeStorageGet(k)); return e ? { key: k, at: e.at, tag: e.tag, clients: e.clients, config: e.config } : null; } catch { return null; } }).filter(Boolean).reverse();
+}
+const cfgClients = c => (c && Array.isArray(c.clients)) ? c.clients.length : -1;
+
+// Version-aware load: never let an OLDER server config clobber NEWER local data, and vice
+// versa. Compare _rev (a save timestamp); on a tie, the config with more clients wins.
+// The discarded copy is always backed up first. needsServerResave flags a self-heal push.
+let needsServerResave = false;
 async function loadConfig() {
-  const local = safeStorageGet('outreach_config_v2');
+  needsServerResave = false;
+  let local = null; const localRaw = safeStorageGet('outreach_config_v2');
+  if (localRaw) { try { local = JSON.parse(localRaw); } catch {} }
+  let server = null;
   if (adminKey) {
     try {
       const data = await api({ action: 'get_config' });
-      if (data.config && Array.isArray(data.config.frameworks) && data.config.frameworks.length) {
-        config = data.config; configSource = 'server';
-        safeStorageSet('outreach_config_v2', JSON.stringify(config));
-        return;
-      }
+      if (data.config && Array.isArray(data.config.frameworks)) server = data.config;
     } catch (e) { console.warn('server config load failed:', e.message); }
   }
-  if (local) {
-    try { config = JSON.parse(local); configSource = 'local'; return; } catch {}
+  const localOk = local && Array.isArray(local.frameworks) && local.frameworks.length;
+  const serverOk = server && Array.isArray(server.frameworks) && server.frameworks.length;
+
+  if (localOk && serverOk) {
+    const lrev = Number(local._rev || 0), srev = Number(server._rev || 0);
+    const useLocal = (lrev !== srev) ? (lrev > srev) : (cfgClients(local) > cfgClients(server));
+    if (useLocal) {
+      backupConfig(server, 'server-copy-at-load');     // keep the server copy in case
+      config = local; configSource = 'local';
+      needsServerResave = true;                         // local is newer/richer → heal the server
+    } else {
+      backupConfig(local, 'local-copy-at-load');        // keep prior local before overwriting
+      config = server; configSource = 'server';
+      safeStorageSet('outreach_config_v2', JSON.stringify(config));
+    }
+    return;
   }
+  if (serverOk) { config = server; configSource = 'server'; safeStorageSet('outreach_config_v2', JSON.stringify(config)); return; }
+  if (localOk) { config = local; configSource = 'local'; needsServerResave = !!adminKey; return; }
   config = structuredClone(DEFAULT_CONFIG); configSource = 'defaults';
 }
 
-let saveTimer = null;
+let saveTimer = null, saveWarned = false;
 function persistConfig() {
+  config._rev = Date.now();                                  // version every change for safe load-merge
   safeStorageSet('outreach_config_v2', JSON.stringify(config));
   setConfigPill('saving');
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
-    if (!adminKey) { setConfigPill('local'); return; }
-    try { await api({ action: 'save_config', config }); configSource = 'server'; setConfigPill('server'); }
-    catch (e) { console.warn('server save failed:', e.message); setConfigPill('local'); }
-  }, 600);
+  saveTimer = setTimeout(() => serverSaveWithRetry(0), 600);
+}
+async function serverSaveWithRetry(attempt) {
+  if (!adminKey) { setConfigPill('local'); return; }
+  try {
+    await api({ action: 'save_config', config });
+    configSource = 'server'; saveWarned = false; setConfigPill('server');
+  } catch (e) {
+    if (attempt < 2) { setTimeout(() => serverSaveWithRetry(attempt + 1), 1500 * (attempt + 1)); return; }
+    console.warn('server save failed:', e.message);
+    setConfigPill('error');
+    if (!saveWarned) { saveWarned = true; showNotif('⚠️ Couldn’t save to the server — your changes are on THIS device only. Check your connection/admin key, then re-save. Don’t clear your browser.', true); }
+  }
+}
+
+// ── Backup / restore: download, restore-from-file, restore-from-snapshot ──
+function exportConfig() {
+  try {
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'script-bot-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showNotif('Backup downloaded (' + cfgClients(config) + ' clients)');
+  } catch (e) { showNotif('Export failed: ' + e.message, true); }
+}
+function applyRestoredConfig(cfg, label) {
+  backupConfig(config, 'before-restore');
+  config = cfg; migrateConfig(config); persistConfig();
+  try { initSelections(); } catch {}
+  renderEverything();
+  showNotif('✅ Restored ' + cfgClients(cfg) + ' clients ' + (label || ''));
+}
+function importConfigFile(input) {
+  const f = input && input.files && input.files[0]; if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const cfg = JSON.parse(reader.result);
+      if (!cfg || !Array.isArray(cfg.frameworks)) { showNotif('That file isn’t a valid backup.', true); input.value = ''; return; }
+      if (confirm('Restore this backup? It has ' + cfgClients(cfg) + ' client(s) and replaces what’s loaded now (a snapshot of the current data is kept first).')) applyRestoredConfig(cfg, 'from file');
+    } catch (e) { showNotif('Import failed: ' + e.message, true); }
+    input.value = '';
+  };
+  reader.readAsText(f);
+}
+function restoreBackup(key) {
+  let e; try { e = JSON.parse(safeStorageGet(key)); } catch {}
+  if (!e || !e.config) { showNotif('Snapshot not found', true); return; }
+  if (confirm('Restore the snapshot from ' + (e.at || '').replace('T', ' ').slice(0, 16) + ' (' + cfgClients(e.config) + ' clients)? Current data is backed up first.')) applyRestoredConfig(e.config, 'from snapshot');
 }
 
 function setConfigPill(mode) {
@@ -1673,6 +1759,7 @@ function setConfigPill(mode) {
   const label = document.getElementById('configLabel');
   if (mode === 'server')      { dot.className = 'dot';      label.textContent = 'Saved to server'; }
   else if (mode === 'saving') { dot.className = 'dot warn'; label.textContent = 'Saving…'; }
+  else if (mode === 'error')  { dot.className = 'dot err';  label.textContent = '⚠️ NOT saved to server'; }
   else                        { dot.className = 'dot warn'; label.textContent = 'Saved locally only'; }
 }
 
@@ -4454,7 +4541,19 @@ function saveClient(isNew) {
 // — Settings tab —
 function adminSettings() {
   const me = (() => { try { return JSON.parse(safeStorageGet('outreach_user') || 'null'); } catch { return null; } })();
+  const baks = listBackups();
   return `
+    <div class="info-block">
+      <div class="info-title">💾 Backup &amp; restore (your clients + all data)</div>
+      <div class="hint" style="margin-bottom:8px">Download a full backup any time, or restore from a file or an automatic local snapshot. The bot keeps the last few local snapshots and auto-heals the server, so a failed sync can't silently wipe your work.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="mini-btn" onclick="exportConfig()"><i class="ti ti-download"></i> Download backup</button>
+        <label class="mini-btn" style="cursor:pointer"><i class="ti ti-upload"></i> Restore from file<input type="file" accept="application/json,.json" onchange="importConfigFile(this)" style="display:none"></label>
+        <span class="hint" id="es-backup-status">${cfgClients(config)} client${cfgClients(config) === 1 ? '' : 's'} loaded now</span>
+      </div>
+      ${baks.length ? `<div class="hint" style="margin-top:10px">Automatic local snapshots:</div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">${baks.map(b => `<div class="v9-rowi" style="display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);border-radius:8px;padding:8px"><span>${esc((b.at || '').replace('T', ' ').slice(0, 16))} · <b>${b.clients}</b> client${b.clients === 1 ? '' : 's'} <span class="hint">${esc(b.tag || '')}</span></span><button class="mini-btn" onclick="restoreBackup('${b.key}')">Restore</button></div>`).join('')}</div>` : '<div class="hint" style="margin-top:8px">No local snapshots yet — they appear after the next load/save.</div>'}
+    </div>
     <div class="info-block">
       <div class="info-title">👥 Team logins</div>
       <div class="hint" style="margin-bottom:8px">Everyone signs in with their email and password — the admin key is applied automatically behind the scenes, so it never needs sharing. ${me ? `Signed in as <b>${esc(me.name || me.email)}</b>.` : ''} <a onclick="signOut()" style="color:var(--accent2);cursor:pointer">Sign out</a></div>
@@ -6743,6 +6842,8 @@ async function loadConfigAndRender() {
   await loadConfig();
   migrateConfig(config);
   setConfigPill(configSource === 'server' ? 'server' : 'local');
+  // If local was newer/richer than the server (a prior save had failed), push it back up now.
+  if (needsServerResave && adminKey) { needsServerResave = false; persistConfig(); }
   initSelections();
   renderEverything();
   // Restore the page from the URL (refresh / shared link / new tab); else default + stamp URL.
