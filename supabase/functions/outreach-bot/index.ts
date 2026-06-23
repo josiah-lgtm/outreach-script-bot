@@ -36,34 +36,71 @@ function modelKey(m: unknown): string {
   const s = String(m ?? "").toLowerCase();
   return s.includes("opus") ? "opus" : s.includes("haiku") ? "haiku" : "sonnet";
 }
-interface UsageAccum { input: number; output: number; cost: number; lens?: string }
+interface UsageAccum { input: number; output: number; cost: number; lens?: string; cacheRead?: number; cacheWrite?: number }
 // Per-request accumulator, concurrency-safe via AsyncLocalStorage.
 const usageCtx = new AsyncLocalStorage<UsageAccum>();
-// Wrapper around the Claude client: loads the key, folds the house lens in as a CACHED prefix
-// (so it's billed once and ~90% cheaper on repeats), then meters tokens + cost.
+
+// Minimum cacheable prefix per model, in approximate characters (~4 chars/token).
+// Anthropic silently refuses to cache a prefix below the model's minimum, so a
+// cache_control marker on a too-short prefix is a no-op (you pay full price and the
+// dashboard can't tell). Sonnet 4.6 = 2048 tokens; Opus 4.6 / Haiku 4.5 = 4096 tokens.
+function cacheMinChars(model: unknown): number {
+  const m = String(model ?? "").toLowerCase();
+  if (m.includes("opus") || m.includes("haiku")) return 16500;  // 4096 tok
+  return 8300;                                                   // sonnet-4-6: 2048 tok
+}
+
+// Wrapper around the Claude client: loads the key, folds the house lens in as the first
+// system block, marks the longest STABLE prefix as a cached breakpoint (only when it
+// actually clears the model's minimum), then meters tokens + cost (incl. cache reads/writes).
+//
+// Caching convention: pass `system` as a single string for a fully-stable prompt, or as a
+// multi-block array [stable…, volatile] when the LAST block varies per call (e.g. the
+// per-framework block in generate). The cache breakpoint lands on the last stable block,
+// so [lens + stable…] is cached and the volatile tail stays uncached.
 // deno-lint-ignore no-explicit-any
 async function claudeMessages(opts: any): Promise<any> {
   await ensureAnthropicKey();
   const s = usageCtx.getStore();
   const lens = s && s.lens;
-  let sys = opts?.system;
-  if (lens && lens.length) {
-    // deno-lint-ignore no-explicit-any
-    const lensBlock: any = { type: "text", text: lens };
-    if (lens.length >= 4000) lensBlock.cache_control = { type: "ephemeral" };  // only cache when big enough to qualify
-    sys = typeof sys === "string" ? (sys ? [lensBlock, { type: "text", text: sys }] : [lensBlock]) : Array.isArray(sys) ? [lensBlock, ...sys] : [lensBlock];
-    opts = { ...opts, system: sys };
-  } else if (typeof sys === "string" && sys.length >= 4096) {
-    // No lens, but a big stable system prompt → cache it (helps repeated generate/research).
-    opts = { ...opts, system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }] };
+
+  // deno-lint-ignore no-explicit-any
+  const rawSys: any = opts?.system;
+  const multiBlock = Array.isArray(rawSys) && rawSys.length > 1;  // caller flagged a volatile tail
+  // deno-lint-ignore no-explicit-any
+  const sysBlocks: any[] = typeof rawSys === "string"
+    ? (rawSys ? [{ type: "text", text: rawSys }] : [])
+    : Array.isArray(rawSys)
+      ? rawSys.map((b) => ({ type: "text", text: String((b && b.text) ?? "") }))  // strip any pre-set cache_control; we decide below
+      : [];
+  // deno-lint-ignore no-explicit-any
+  const blocks: any[] = [];
+  if (lens && lens.length) blocks.push({ type: "text", text: lens });
+  for (const b of sysBlocks) blocks.push(b);
+  if (blocks.length) {
+    // Last stable block: everything except the final block when the caller passed a
+    // multi-block (volatile-tail) system; otherwise the whole thing is stable.
+    const lastStable = multiBlock ? blocks.length - 2 : blocks.length - 1;
+    if (lastStable >= 0) {
+      let prefixChars = 0;
+      for (let i = 0; i <= lastStable; i++) prefixChars += (blocks[i]?.text?.length ?? 0);
+      if (prefixChars >= cacheMinChars(opts?.model)) blocks[lastStable] = { ...blocks[lastStable], cache_control: { type: "ephemeral" } };
+    }
+    opts = { ...opts, system: blocks };
   }
+
   const res = await rawClaudeMessages(opts);
-  const u = (res as { usage?: { input_tokens?: number; output_tokens?: number } })?.usage;
+  const u = (res as { usage?: { input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } })?.usage;
   if (s && u) {
     const r = RATES[modelKey(opts?.model)] || RATES.sonnet;
-    s.input += u.input_tokens ?? 0;
-    s.output += u.output_tokens ?? 0;
-    s.cost += ((u.input_tokens ?? 0) / 1e6) * r.in + ((u.output_tokens ?? 0) / 1e6) * r.out;
+    const inp = u.input_tokens ?? 0, out = u.output_tokens ?? 0;
+    const cw = u.cache_creation_input_tokens ?? 0, cr = u.cache_read_input_tokens ?? 0;
+    s.input += inp;
+    s.output += out;
+    s.cacheWrite = (s.cacheWrite ?? 0) + cw;
+    s.cacheRead = (s.cacheRead ?? 0) + cr;
+    // input_tokens from the API is the UNCACHED remainder; cache writes bill ~1.25× and reads ~0.1× of input rate.
+    s.cost += (inp / 1e6) * r.in + (out / 1e6) * r.out + (cw / 1e6) * r.in * 1.25 + (cr / 1e6) * r.in * 0.1;
   }
   return res;
 }
@@ -312,15 +349,19 @@ async function recordActionUsage(action: string, s: UsageAccum | undefined): Pro
   const d = await usageLoad();
   const rec = dayRec(d, todayUTC());
   rec.input += s.input; rec.output += s.output; rec.cost += s.cost;
+  rec.cacheRead = (rec.cacheRead ?? 0) + (s.cacheRead ?? 0);
+  rec.cacheWrite = (rec.cacheWrite ?? 0) + (s.cacheWrite ?? 0);
   const a = rec.actions[action] = rec.actions[action] || { requests: 0, input: 0, output: 0, cost: 0 };
   a.input += s.input; a.output += s.output; a.cost += s.cost;
+  a.cacheRead = (a.cacheRead ?? 0) + (s.cacheRead ?? 0);
+  a.cacheWrite = (a.cacheWrite ?? 0) + (s.cacheWrite ?? 0);
   await usageSave(d);
 }
 
 // Actions that call Claude (and therefore cost money) — the daily cap applies to these only.
 const AI_ACTIONS = new Set([
   "generate", "suggest_angles", "build_icp", "suggest_offers", "fuse_angle", "ai_edit_text",
-  "refine_script", "refine_selection", "extract_transcript", "extract_framework",
+  "refine_script", "refine_selection", "refine_batch", "ai_edit_batch", "extract_transcript", "extract_framework",
   "research", "research_client_site", "research_niche", "research_competitors",
   "compose_growth_plan", "compose_client_brief", "compose_sales_plan",
   "find_icp_example", "generate_followups",
@@ -415,7 +456,7 @@ async function researchClientSite(rawUrl: string) {
     system:
       `You onboard clients for a lead generation agency. ` +
       (sparse
-        ? `The client's website could not be read directly, so research them via web search (up to 6 searches): their domain, company name, LinkedIn, reviews, case studies, testimonials. `
+        ? `The client's website could not be read directly, so research them via web search (up to 4 searches): their domain, company name, LinkedIn, reviews, case studies, testimonials. `
         : `The client's website text is provided. Use up to 3 web searches to find their case studies, testimonials, reviews, or named results if the homepage lacks numbers. `) +
       `Extract the raw material for cold outreach offers. Be accurate — never invent numbers; if a field is unknown leave it as an empty string/array.\n` +
       `Return valid JSON only, no markdown fences:\n` +
@@ -431,7 +472,7 @@ async function researchClientSite(rawUrl: string) {
       `"objections":["objections their copy preempts"],` +
       `"summary":"2-3 sentence overview of the client"}`,
     messages: [{ role: "user", content: userContent }],
-    tools: [webSearchTool(sparse ? 6 : 3)],
+    tools: [webSearchTool(sparse ? 4 : 3)],
   });
   const parsed = parseJson(textOf(res.content), null as Record<string, unknown> | null);
   if (!parsed) return { ok: false as const, error: "Could not parse research output — try again" };
@@ -477,7 +518,7 @@ async function researchCompetitors(clientName: string, clientUrl: string, nicheN
     max_tokens: 2600,
     system:
       `You are a lead generation strategist doing competitor intel. ` +
-      `Use web search (up to 6 searches) to find 3-5 direct competitors of the client below — companies selling a similar service to the same niche. ` +
+      `Use web search (up to 4 searches) to find 3-5 direct competitors of the client below — companies selling a similar service to the same niche. ` +
       `For each, pull what is publicly visible: their offer/packages, their mechanism (how they claim to get results), named results/case studies, and any guarantee. ` +
       `Never invent data; leave unknown fields as empty strings.\n` +
       `Return valid JSON only, no markdown fences:\n` +
@@ -487,7 +528,7 @@ async function researchCompetitors(clientName: string, clientUrl: string, nicheN
       role: "user",
       content: `Client: ${clientName}${clientUrl ? ` (${clientUrl})` : ""}\nNiche they sell into: ${nicheName || "unknown"}`,
     }],
-    tools: [webSearchTool(6)],
+    tools: [webSearchTool(4)],
   });
   const parsed = parseJson(textOf(res.content), null as Record<string, unknown> | null);
   if (!parsed) return { ok: false as const, error: "Could not parse competitor research — try again" };
@@ -524,7 +565,7 @@ interface GenerateBody {
   research?: { summary?: string; pains?: string[]; hooks?: string[] };
 }
 
-function buildSystemPrompt(body: GenerateBody, fw: Framework): string {
+function buildSystemPrompt(body: GenerateBody, fw: Framework): { shared: string; framework: string } {
   const cs = body.client.caseStudy ?? {};
   const csLines = Object.entries(cs)
     .filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== "")
@@ -572,14 +613,10 @@ function buildSystemPrompt(body: GenerateBody, fw: Framework): string {
     ? `\nEMPHASIS — the user hand-picked these as the focus. Build the scripts around them:\n${emphasisParts.join("\n")}\n`
     : "";
 
-  return `You are a world-class cold email copywriter. You write short, punchy, conversational scripts that get replies, never marketing copy.
-
-FRAMEWORK: ${fw.name} (category: ${fw.category})
-TEMPLATE — every {{variable}} must be filled; the final script follows this structure exactly:
-${fw.template}
-
-FRAMEWORK RULES:
-${fw.rules || "(none)"}
+  // SHARED prefix — identical for every framework in this generate run (same client, niche,
+  // ICP, research, emphasis…). It's sent as a CACHED prefix so it's billed once and read at
+  // ~0.1× on the rest of the fan-out. Must stay byte-stable across frameworks → no fw.* here.
+  const shared = `You are a world-class cold email copywriter. You write short, punchy, conversational scripts that get replies, never marketing copy.
 
 GLOBAL STYLE RULES:
 ${body.globalRules || "(none)"}
@@ -595,6 +632,18 @@ OUTPUT FORMAT — return valid JSON only, no markdown, no preamble:
   "framework_fill": { "<variable_name>": "<value used in the first script>", ... },
   "variants": [ { "angle": "<the angle>", "label": "<3-6 word label>", "script": "<complete send-ready script>" } ]
 }`;
+
+  // FRAMEWORK tail — varies per call, so it comes AFTER the cached prefix (uncached).
+  const framework = `FRAMEWORK FOR THIS BATCH: ${fw.name} (category: ${fw.category})
+TEMPLATE — every {{variable}} must be filled; the final script follows this structure exactly:
+${fw.template}
+
+FRAMEWORK RULES:
+${fw.rules || "(none)"}
+
+Write every variant using THIS framework, following the OUTPUT FORMAT defined above.`;
+
+  return { shared, framework };
 }
 
 function buildUserPrompt(body: GenerateBody): string {
@@ -617,16 +666,18 @@ interface VariantOut { angle: string; label: string; script: string }
 
 async function generateForFramework(body: GenerateBody, fw: Framework) {
   const count = body.angles.length * body.variantsPerAngle;
-  const system = buildSystemPrompt(body, fw);
+  const { shared, framework } = buildSystemPrompt(body, fw);
   const user = buildUserPrompt(body);
-  if (system.length + user.length > MAX_PROMPT_CHARS) {
+  if (shared.length + framework.length + user.length > MAX_PROMPT_CHARS) {
     return { frameworkId: fw.id, framework: fw.name, category: fw.category, error: "prompt too long" };
   }
   try {
     const res = await claudeMessages({
       model: CLAUDE_MODEL,
       max_tokens: Math.min(800 + 260 * count, 7000),
-      system,
+      // [shared (cached prefix), framework (volatile tail)] — claudeMessages caches the prefix
+      // so the shared client context is billed once per run instead of once per framework.
+      system: [{ type: "text", text: shared }, { type: "text", text: framework }],
       messages: [{ role: "user", content: user }],
     });
     const raw = textOf(res.content);
@@ -834,6 +885,57 @@ Deno.serve(async (req) => {
         return json({ ok: true, script: textOf(res.content).trim() });
       }
 
+      case "refine_batch": {
+        // Rewrite an ARRAY of short lines in ONE call (replaces N per-item refine_script calls
+        // in the System Filter "run through lens" feature). Returns an array aligned to the input.
+        const items = Array.isArray(body.items) ? (body.items as unknown[]).map((x) => String(x ?? "")) : [];
+        const prompt = String(body.prompt ?? "").trim();
+        if (!items.length || !prompt) return json({ ok: false, error: "items and prompt required" }, 400);
+        if (items.length > 40) return json({ ok: false, error: "too many items in one batch (max 40)" }, 400);
+        const res = await claudeMessages({
+          model: pickModel(body.model),   // defaults to sonnet — same quality the per-item path used
+          max_tokens: Math.min(500 + 160 * items.length, 8000),
+          system:
+            `You are a cold email editor. You are given a JSON array of short text items and ONE instruction. ` +
+            `Apply the instruction to EACH item independently — keep what works, change only what the instruction asks. ` +
+            `Preserve any {{merge_tags}} exactly. Return ONLY valid JSON (no markdown fences): ` +
+            `{"items":["<rewrite of item 0>","<rewrite of item 1>", …]} with EXACTLY ${items.length} strings, in the SAME ORDER as the input. No commentary.`,
+          messages: [{ role: "user", content: `INSTRUCTION: ${prompt}\n\nITEMS (JSON array):\n${JSON.stringify(items)}` }],
+        });
+        const parsed = parseJson(textOf(res.content), null as { items?: unknown[] } | null);
+        const arr = parsed && Array.isArray(parsed.items) ? parsed.items.map((x) => String(x ?? "")) : [];
+        // Always return an array aligned to the input; fall back to the original where the model dropped/blanked one.
+        const out = items.map((orig, i) => { const v = (arr[i] ?? "").trim(); return v || orig; });
+        return json({ ok: true, items: out });
+      }
+
+      case "ai_edit_batch": {
+        // Restyle an ARRAY of growth-plan passages in ONE call (replaces N per-block ai_edit_text calls).
+        const items = Array.isArray(body.items) ? (body.items as unknown[]).map((x) => String(x ?? "")) : [];
+        const instruction = String(body.instruction ?? "").trim();
+        if (!items.length || !instruction) return json({ ok: false, error: "items and instruction required" }, 400);
+        if (items.length > 30) return json({ ok: false, error: "too many items in one batch (max 30)" }, 400);
+        const ctx = String(body.context ?? "").slice(0, 6000);
+        const rules = String(body.rules ?? "").trim();
+        const res = await claudeMessages({
+          model: CLAUDE_HAIKU,   // light restyle — Haiku is plenty and ~10x cheaper
+          max_tokens: Math.min(600 + 220 * items.length, 8000),
+          system:
+            `You restyle passages of a client-facing growth-plan document to match a house style. ` +
+            `You are given the document context, a JSON array of passages, and ONE instruction. Apply it to EACH passage. ` +
+            `Keep every number, name and fact exact.\n` +
+            `Each result is a minimal HTML fragment using ONLY these tags: <p>, <ul>, <li>, <b>, <i>, <br>, <h3>. ` +
+            `Never include style attributes, classes, font tags, markdown, or commentary. If a passage is a short inline phrase, return plain text with no tags.\n` +
+            (rules ? `HOUSE LANGUAGE RULES (always obey):\n${rules}\n` : "") +
+            `Return ONLY valid JSON (no fences): {"items":["<fragment 0>","<fragment 1>", …]} with EXACTLY ${items.length} strings, in the SAME ORDER as the input.`,
+          messages: [{ role: "user", content: `INSTRUCTION: ${instruction}\n\nDOCUMENT CONTEXT:\n${ctx}\n\nPASSAGES (JSON array):\n${JSON.stringify(items)}` }],
+        });
+        const parsed = parseJson(textOf(res.content), null as { items?: unknown[] } | null);
+        const arr = parsed && Array.isArray(parsed.items) ? parsed.items.map((x) => String(x ?? "")) : [];
+        const out = items.map((orig, i) => { const v = (arr[i] ?? "").trim(); return v || orig; });
+        return json({ ok: true, items: out });
+      }
+
       case "refine_selection": {
         const script = String(body.script ?? "").trim();
         const selection = String(body.selection ?? "").trim();
@@ -881,7 +983,7 @@ Deno.serve(async (req) => {
         const userPrompt = String(body.prompt ?? "").trim();
         if (!nicheName) return json({ ok: false, error: "niche required" }, 400);
         const res = await claudeMessages({
-          model: CLAUDE_MODEL,
+          model: CLAUDE_HAIKU,   // short constrained angle hooks — Haiku is plenty and ~3.75x cheaper
           max_tokens: 600,
           system:
             `You generate testable cold email angle hooks for a specific niche. Each angle is a 5-14 word specific hook — a problem, trigger event, or curiosity gap. Make them distinct, concrete, and sendable as email openers.\n` +
@@ -916,7 +1018,7 @@ Deno.serve(async (req) => {
             `- Specific job titles that actually hold the budget/pain (not generic "decision makers").\n` +
             `- A market that is ACCESSIBLE via outbound (findable on LinkedIn/Apollo/email databases). The sweet spot is roughly 10,000-100,000 reachable prospects — big enough to scale sequences, small enough to specialize messaging. Around 30-40K is ideal. Flag anything under ~5K (too thin) or over ~500K (unfocused).\n` +
             `- The client's existing proof must transfer: pick ICPs where their case studies and mechanism are believable.\n` +
-            `- Use web search (up to 6 searches) to ESTIMATE market size: LinkedIn title counts, industry association stats, census/firmographic data ("number of X companies in Y"). State numbers with their basis; never present a guess as fact — if it is a reasoned estimate, say so.\n` +
+            `- Use web search (up to 4 searches) to ESTIMATE market size: LinkedIn title counts, industry association stats, census/firmographic data ("number of X companies in Y"). State numbers with their basis; never present a guess as fact — if it is a reasoned estimate, say so.\n` +
             `Return valid JSON only, no markdown fences:\n` +
             `{"icps":[{` +
             `"title":"short memorable ICP label",` +
@@ -933,7 +1035,7 @@ Deno.serve(async (req) => {
             `Order icps best-first. score is outbound-fit 1-10.\n` +
             `IMPORTANT: do all web searching FIRST, then write NOTHING except the single JSON object as your final answer — no commentary before or after it.`,
           messages: [{ role: "user", content: `CLIENT DOSSIER:\n${context}` }],
-          tools: [webSearchTool(6)],
+          tools: [webSearchTool(4)],
         });
         const parsed = parseJson(textOf(res.content), null as Record<string, unknown> | null);
         if (!parsed) return json({ ok: false, error: "could not parse ICP output — try again" }, 422);
@@ -944,7 +1046,7 @@ Deno.serve(async (req) => {
         const ingredients = Array.isArray(body.ingredients) ? body.ingredients as Array<{ kind: string; text: string }> : [];
         if (!ingredients.length) return json({ ok: false, error: "ingredients required" }, 400);
         const res = await claudeMessages({
-          model: CLAUDE_MODEL,
+          model: CLAUDE_HAIKU,   // one short fused angle line — Haiku is plenty and ~3.75x cheaper
           max_tokens: 300,
           system:
             `You fuse hand-picked ingredients (pains, desired outcomes, guarantees, offers) into ONE cold-email angle hook. ` +
@@ -1354,7 +1456,7 @@ Deno.serve(async (req) => {
         const context = String(body.context ?? "").slice(0, 6_000);
         if (!context.trim()) return json({ ok: false, error: "context required" }, 400);
         const res = await claudeMessages({
-          model: CLAUDE_MODEL,
+          model: CLAUDE_HAIKU,   // short list of offer names/descriptions — Haiku is plenty and ~3.75x cheaper
           max_tokens: 800,
           system:
             `You are a cold outreach strategist. Given a client's case study data, suggest 4-6 distinct offer packages they could sell — each with a name and one-line description. Make them concrete, risk-reversed, and outcome-focused.\n` +
@@ -1380,7 +1482,17 @@ Deno.serve(async (req) => {
         if (total > MAX_TOTAL_SCRIPTS) {
           return json({ ok: false, error: `matrix too large: ${total} scripts (max ${MAX_TOTAL_SCRIPTS}) — deselect some frameworks/angles` }, 400);
         }
-        const results = await Promise.all(g.frameworks.map((fw) => generateForFramework(g, fw)));
+        // Warm the shared cached prefix with the first framework, then fan out the rest so they
+        // READ that prefix (~0.1×) instead of all racing the cache write in parallel. A single
+        // framework has no shared prefix to reuse, so skip the stagger.
+        let results: Awaited<ReturnType<typeof generateForFramework>>[];
+        if (g.frameworks.length > 1) {
+          const first = await generateForFramework(g, g.frameworks[0]);
+          const rest = await Promise.all(g.frameworks.slice(1).map((fw) => generateForFramework(g, fw)));
+          results = [first, ...rest];
+        } else {
+          results = [await generateForFramework(g, g.frameworks[0])];
+        }
         const usage = results.reduce(
           (acc, r) => "usage" in r && r.usage
             ? { input_tokens: acc.input_tokens + r.usage.input_tokens, output_tokens: acc.output_tokens + r.usage.output_tokens }

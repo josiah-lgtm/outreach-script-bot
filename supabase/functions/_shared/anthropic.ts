@@ -54,7 +54,9 @@ export interface MessagesResponse {
   role: "assistant";
   content: ContentBlock[];
   stop_reason: "end_turn" | "tool_use" | "max_tokens" | "stop_sequence";
-  usage: { input_tokens: number; output_tokens: number };
+  // cache_* fields are present when prompt caching engages — used by the Usage dashboard
+  // to show whether the cached prefix is actually being hit (read) vs written.
+  usage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number };
 }
 
 // Optional runtime override (set from the admin console). Falls back to the env secret.

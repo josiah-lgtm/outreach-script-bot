@@ -1033,7 +1033,7 @@ let keyFromLink = false;
 // ─── SYSTEM FILTER (house lens) ─────────────────────────────────────────────────
 // One configurable knowledge + filter layer (Admin → System Filter) that gets fed
 // into every AI action so the bot picks, judges and phrases things through our lens.
-const LENS_ACTIONS = { generate:1, suggest_angles:1, suggest_offers:1, fuse_angle:1, ai_edit_text:1, build_icp:1, research_niche:1, research:1, research_client_site:1, refine_script:1, extract_transcript:1, compose_growth_plan:1, compose_client_brief:1 };
+const LENS_ACTIONS = { generate:1, suggest_angles:1, suggest_offers:1, fuse_angle:1, ai_edit_text:1, ai_edit_batch:1, build_icp:1, research_niche:1, research:1, research_client_site:1, refine_script:1, refine_batch:1, extract_transcript:1, compose_growth_plan:1, compose_client_brief:1 };
 
 // ─── FIRST-LINER ENGINE (baked-in methodology) ───────────────────────────────────
 // How we find pains/angles — fed into angle, pain, ICP and offer generation.
@@ -1086,6 +1086,26 @@ async function filterIdea(text) {
     out = String(out).replace(/\n*\(mock refinement applied\)\s*$/, '').trim();
     return out ? { text: out, filtered: out !== raw } : { text: raw, filtered: false };
   } catch (e) { return { text: raw, filtered: false }; }
+}
+// Rewrite many short lines through the house lens in ONE backend call per chunk (instead of one
+// Claude call per line). Returns { items: array aligned to input, ok: per-item success flags }.
+// On any failure it keeps the original text for that item — it never loses or misaligns data.
+async function refineBatch(items, prompt, extra) {
+  const out = items.slice();
+  const ok = items.map(function () { return false; });
+  const CHUNK = 25;
+  for (let i = 0; i < items.length; i += CHUNK) {
+    const chunk = items.slice(i, i + CHUNK);
+    try {
+      const r = await api(Object.assign({ action: 'refine_batch', items: chunk, prompt: prompt }, extra || {}));
+      const got = (r && Array.isArray(r.items)) ? r.items : [];
+      for (let j = 0; j < chunk.length; j++) {
+        const v = String(got[j] == null ? '' : got[j]).replace(/\n*\(mock refinement applied\)\s*$/, '').trim();
+        if (v) { out[i + j] = v; ok[i + j] = true; }
+      }
+    } catch (e) { /* whole chunk failed → keep originals, ok stays false */ }
+  }
+  return { items: out, ok: ok };
 }
 // Visible confirmation that an AI action just ran through the house filter.
 function notifyFiltered() { try { if (composeLens()) showNotif('✨ Run through your system filter'); } catch (e) {} }
@@ -1983,14 +2003,23 @@ async function generate() {
 
   try {
     if (doResearch) {
-      document.getElementById('researchDot').classList.add('searching');
-      try {
-        state.research = await api({ action: 'research', url, classification });
-      } catch (e) {
-        state.research = { ok: false, error: e.message };
-        showNotif('Research failed: ' + e.message + ' — generating without it', true);
+      const researchKey = url + '|' + classification;
+      if (state.research && state.research.ok && state._researchKey === researchKey) {
+        // Same prospect URL as the last Generate — reuse the saved research instead of paying for
+        // a fresh research call every time you tweak frameworks/angles and click Generate again.
+        const s1 = document.getElementById('gstep1'); if (s1) s1.textContent = '🌐 Using saved research for ' + esc(url);
+      } else {
+        document.getElementById('researchDot').classList.add('searching');
+        try {
+          state.research = await api({ action: 'research', url, classification });
+          state._researchKey = researchKey;
+        } catch (e) {
+          state.research = { ok: false, error: e.message };
+          state._researchKey = '';
+          showNotif('Research failed: ' + e.message + ' — generating without it', true);
+        }
+        document.getElementById('researchDot').classList.remove('searching');
       }
-      document.getElementById('researchDot').classList.remove('searching');
     }
     setStep(2);
 
@@ -3154,9 +3183,10 @@ function renderUsageDashboard(usage, cap) {
   const today = new Date().toISOString().slice(0, 10);
 
   // window totals + per-task aggregation
-  let tReq = 0, tIn = 0, tOut = 0, tCost = 0; const byTask = {};
+  let tReq = 0, tIn = 0, tOut = 0, tCost = 0, tCacheRead = 0, tCacheWrite = 0; const byTask = {};
   win.forEach(d => {
     const r = days[d] || {}; tReq += r.requests || 0; tIn += r.input || 0; tOut += r.output || 0; tCost += r.cost || 0;
+    tCacheRead += r.cacheRead || 0; tCacheWrite += r.cacheWrite || 0;
     Object.keys(r.actions || {}).forEach(a => {
       const x = r.actions[a]; const t = byTask[a] = byTask[a] || { requests: 0, input: 0, output: 0, cost: 0 };
       t.requests += x.requests || 0; t.input += x.input || 0; t.output += x.output || 0; t.cost += x.cost || 0;
@@ -3188,6 +3218,7 @@ function renderUsageDashboard(usage, cap) {
     ${card('Today', money(todayCost), num(todayReq) + ' req' + (cap ? ' · cap ' + num(cap) : ''))}
     ${card('Last 30 days', money(tCost), num(tReq) + ' requests')}
     ${card('Tokens (30d)', num(tIn + tOut), num(tIn) + ' in · ' + num(tOut) + ' out')}
+    ${card('Cache (30d)', num(tCacheRead) + ' read', (tCacheRead || tCacheWrite) ? (num(tCacheWrite) + ' written · cached reads cost ~10%') : 'not engaging yet')}
   </div>`;
 
   // daily receipts (newest first)
@@ -3277,25 +3308,37 @@ async function runFilterAcrossAll() {
   const btn = document.getElementById('cf-run'); if (btn) btn.disabled = true;
   const status = document.getElementById('cf-status');
   let changed = 0, same = 0, failed = 0, firstErr = '', completed = 0;
-  const CONCURRENCY = 3;   // run 3 at once ≈ 3× faster than one-at-a-time
-  async function runOne(job) {
-    const prompt = job.short
-      ? 'Rewrite this single short line to match our house lens and messaging. Keep it short. Return only the rewritten line — no quotes, no extra text.'
-      : 'Rewrite this script to match our house messaging and lens. Keep every {{merge_tag}} exactly and keep about the same length. Return only the rewritten script.';
+  const total = jobs.length;
+  const tick = () => { if (status) status.textContent = `Filtering ${completed} / ${total}…`; };
+  // Short single-line items (pains/desires/offers/sizes) → ONE batched call per ~25 (instead of
+  // one Claude call each). Full scripts stay per-item below (too long to batch safely).
+  const shortJobs = jobs.filter(j => j.short);
+  const scriptJobs = jobs.filter(j => !j.short);
+  if (shortJobs.length) {
+    const rb = await refineBatch(shortJobs.map(j => j.text), 'Rewrite each short line to match our house lens and messaging. Keep each short — each stays a single line.');
+    rb.items.forEach((t, i) => {
+      completed++;
+      if (!rb.ok[i]) { failed++; if (!firstErr) firstErr = 'couldn’t reach the rewriter'; return; }
+      const orig = String(shortJobs[i].text).trim();
+      if (t && t !== orig) { shortJobs[i].apply(t); changed++; } else same++;
+    });
+    tick();
+  }
+  const CONCURRENCY = 3;   // scripts: run 3 at once ≈ 3× faster than one-at-a-time
+  async function runScript(job) {
     try {
-      const r = await api({ action: 'refine_script', script: job.text, prompt });
+      const r = await api({ action: 'refine_script', script: job.text, prompt: 'Rewrite this script to match our house messaging and lens. Keep every {{merge_tag}} exactly and keep about the same length. Return only the rewritten script.' });
       let out = (r && (r.script || r.text || r.result || r.refined || r.output || r.content || r.rewrite)) || (typeof r === 'string' ? r : '');
       out = String(out).replace(/\n*\(mock refinement applied\)\s*$/, '').trim();
       if (out && out !== String(job.text).trim()) { job.apply(out); changed++; }   // only count + write real changes
       else if (out) { same++; }                                                     // came back identical
       else { failed++; if (!firstErr) firstErr = 'empty response (' + JSON.stringify(Object.keys(r || {})) + ')'; }
     } catch (e) { failed++; if (!firstErr) firstErr = e.message || ('' + e); }
-    completed++;
-    if (status) status.textContent = `Filtering ${completed} / ${jobs.length}…`;
+    completed++; tick();
   }
   let next = 0;
-  async function worker() { while (next < jobs.length) { await runOne(jobs[next++]); } }
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, worker));
+  async function worker() { while (next < scriptJobs.length) { await runScript(scriptJobs[next++]); } }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, scriptJobs.length) }, worker));
   persistConfig();
   const tail = `${changed} changed${same ? `, ${same} already on-brand` : ''}${failed ? `, ${failed} skipped` : ''}` + (failed && firstErr ? ` — first issue: ${firstErr}` : '');
   if (status) status.textContent = `Done — ${tail}`;
@@ -3399,7 +3442,7 @@ function saveSalesDoc() {
     return { heading: (heading || '').trim(), body: (body || '').split('/').map(p => p.trim()).filter(Boolean).join('\n') };
   }).filter(cs => cs.heading || cs.body);
   persistConfig();
-  if (state.growth) { state.growth._narratedSig = null; }  // re-narrate with the new prompt next time
+  if (state.growth) { state.growth.narrative = null; }  // clear so it re-drafts once with the new prompt (auto-narrate fires only when there's no narrative yet)
   showNotif('Sales document defaults saved');
 }
 
@@ -5992,26 +6035,37 @@ async function gpApplyHouseRules() {
   if (!nodes.length) return showNotif('Nothing to restyle', true);
   const btn = document.getElementById('gp-rules-btn');
   const ctx = doc.innerText.slice(0, 4000);
-  let done = 0;
-  const run = async (el) => {
-    const text = el.innerText.trim(); if (!text) return;
-    const kind = /^H[23]$/.test(el.tagName) ? 'heading' : (el.tagName === 'UL' ? 'list' : 'paragraph');
-    try {
-      const r = await api({ action: 'ai_edit_text', text, instruction: `Apply the house style to this ${kind}. Keep every number, name and fact exact.`, context: ctx, rules });
-      const raw = r.html ?? r.text ?? '';
-      if (/^H[23]$/.test(el.tagName)) {
-        const tmp = document.createElement('div'); tmp.innerHTML = raw;
-        el.textContent = (tmp.innerText || text).trim();   // headings stay headings
-      } else {
-        const clean = sanitizeAiHtml(raw);
-        if (clean) { const w = document.createElement('div'); w.innerHTML = clean; el.replaceWith(...w.childNodes); }
-      }
-    } catch {}
-    done++;
-    if (btn) btn.textContent = `🧹 ${done}/${nodes.length}…`;
-  };
   if (btn) { btn.disabled = true; btn.textContent = '🧹 0/' + nodes.length + '…'; }
-  await Promise.all(nodes.map(run));
+  // Restyle the whole doc in batched calls (one call per ~12 blocks) instead of one call per
+  // block — the doc context was being re-sent on every single block before. Outputs are aligned
+  // to nodes; anything the model drops/blanks keeps its original text (never lost).
+  const texts = nodes.map(el => el.innerText.trim());
+  const outs = texts.slice();
+  const CHUNK = 12;
+  let done = 0;
+  for (let i = 0; i < nodes.length; i += CHUNK) {
+    const idxs = [];
+    for (let k = i; k < Math.min(i + CHUNK, nodes.length); k++) if (texts[k]) idxs.push(k);
+    if (idxs.length) {
+      try {
+        const r = await api({ action: 'ai_edit_batch', items: idxs.map(k => texts[k]), instruction: 'Apply the house style to each passage. Headings stay short heading text; paragraphs and lists stay minimal HTML. Keep every number, name and fact exact.', context: ctx, rules });
+        const got = (r && Array.isArray(r.items)) ? r.items : [];
+        idxs.forEach((k, j) => { const v = String(got[j] == null ? '' : got[j]).trim(); if (v) outs[k] = v; });
+      } catch {}
+    }
+    done = Math.min(i + CHUNK, nodes.length);
+    if (btn) btn.textContent = `🧹 ${done}/${nodes.length}…`;
+  }
+  nodes.forEach((el, i) => {
+    const raw = String(outs[i] == null ? '' : outs[i]).trim(); if (!raw) return;
+    if (/^H[23]$/.test(el.tagName)) {
+      const tmp = document.createElement('div'); tmp.innerHTML = raw;
+      el.textContent = (tmp.innerText || texts[i]).trim();   // headings stay headings
+    } else {
+      const clean = sanitizeAiHtml(raw);
+      if (clean) { const w = document.createElement('div'); w.innerHTML = clean; el.replaceWith(...w.childNodes); }
+    }
+  });
   state.growth.docHtml = doc.innerHTML;
   renderGrowthPreview();
   if (btn) { btn.disabled = false; btn.textContent = '🧹 Apply house rules to whole doc'; }
@@ -6025,9 +6079,10 @@ function gpMaybeAutoNarrate() {
   if (!g || !adminKey || g.docHtml) return;
   const hasContent = g.mode === 'strategy' ? g.targets.length : !!g.winningScript;
   if (!hasContent) return;
-  const sig = JSON.stringify({ m: g.mode, ch: g.channels, t: g.targets.map(t => t.icpId + '|' + t.angles.join(',') + '|' + t.scripts.length), w: g.winningScript?.text || '', tb: g.targetBookings, pw: g.prospectWebsite || '' });
-  if (g._narratedSig === sig || g._narrating) return;
-  g._narratedSig = sig;
+  // Auto-draft only the FIRST time the plan has content. After that, editing the plan no longer
+  // silently re-bills a full narrative on every change — use the "↻ Redraft narrative" button to
+  // refresh it when you're ready. (Previously every structural tweak fired a paid compose call.)
+  if (g.narrative || g._narrating) return;
   clearTimeout(g._narrTimer);
   g._narrTimer = setTimeout(() => gpComposeNarrative(true), 1100);
 }
@@ -6437,9 +6492,13 @@ function psRender() { renderSales(); psApplyBusy(); }
 async function tryStep(label, fn) {
   try { return await fn(); }
   catch (e1) {
+    // Only auto-retry on clearly-transient errors (network blip / server 5xx / overload). Don't
+    // re-call Claude on a 4xx, a parse error, or the daily cap — that just double-bills the step.
+    const msg = (e1 && e1.message) || String(e1);
+    if (!/network|blocked|too large|overload|timeout|HTTP 5|503|529/i.test(msg)) throw new Error(label + ' failed: ' + msg);
     psSay(_psLastSay + ' (retrying…)');
     try { return await fn(); }
-    catch (e2) { throw new Error(label + ' failed: ' + e2.message); }
+    catch (e2) { throw new Error(label + ' failed: ' + ((e2 && e2.message) || String(e2))); }
   }
 }
 
@@ -7281,12 +7340,12 @@ loadConfigAndRender();
   window.osWizOffer=function(o){var A=V9.wiz.offers,i=A.indexOf(o);if(i>-1)A.splice(i,1);else A.push(o);renderV9();};
   window.osWizIcp=function(id){var w=V9.wiz,c=client(V9.client);w.icpId=(w.icpId===id?null:id);if(w.icpId){var ic=(c.icps||[]).find(function(x){return x.id===id;});if(ic&&ic.niche){var match=config.niches.find(function(n){return (c.nicheIds||[]).indexOf(n.id)>-1&&n.name.toLowerCase()===String(ic.niche).toLowerCase();})||config.niches.find(function(n){return n.name.toLowerCase()===String(ic.niche).toLowerCase();});if(match)w.niche=match.id;}}renderV9();};
   window.osWizDesire=function(o){var w=V9.wiz;w.desires=w.desires||[];var i=w.desires.indexOf(o);if(i>-1)w.desires.splice(i,1);else w.desires.push(o);renderV9();};
-  window.osWizAddDesire=async function(){var el=document.getElementById('v9-adddesire');var v0=el?el.value.trim():'';if(!v0)return;var f=await filterIdea(v0);var v=f.text;var c=client(V9.client);c.caseStudy=c.caseStudy||{};c.caseStudy.desires=c.caseStudy.desires||[];if(c.caseStudy.desires.indexOf(v)<0)c.caseStudy.desires.push(v);var nb=nicheBucket(c,V9.wiz.niche);if(nb.desires.indexOf(v)<0)nb.desires.push(v);wizRebucket(c);persistConfig();V9.wiz.desires=V9.wiz.desires||[];if(V9.wiz.desires.indexOf(v)<0)V9.wiz.desires.push(v);showNotif(f.filtered?'✨ Desire added & filtered through your lens':'Desire added');renderV9();};
+  window.osWizAddDesire=async function(){var el=document.getElementById('v9-adddesire');var v0=el?el.value.trim():'';if(!v0)return;var v=v0;var c=client(V9.client);c.caseStudy=c.caseStudy||{};c.caseStudy.desires=c.caseStudy.desires||[];if(c.caseStudy.desires.indexOf(v)<0)c.caseStudy.desires.push(v);var nb=nicheBucket(c,V9.wiz.niche);if(nb.desires.indexOf(v)<0)nb.desires.push(v);wizRebucket(c);persistConfig();V9.wiz.desires=V9.wiz.desires||[];if(V9.wiz.desires.indexOf(v)<0)V9.wiz.desires.push(v);showNotif('Desire added');renderV9();};
   window.osWizGuarantee=function(g){var w=V9.wiz;w.guarantees=w.guarantees||[];var i=w.guarantees.indexOf(g);if(i>-1)w.guarantees.splice(i,1);else w.guarantees.push(g);renderV9();};
   window.osWizCase=function(cstudy){var w=V9.wiz;w.caseStudies=w.caseStudies||[];var i=w.caseStudies.indexOf(cstudy);if(i>-1)w.caseStudies.splice(i,1);else w.caseStudies.push(cstudy);renderV9();};
-  window.osWizAddPain=async function(){var el=document.getElementById('v9-addpain');var v0=el?el.value.trim():'';if(!v0)return;var f=await filterIdea(v0);var v=f.text;var c=client(V9.client);c.caseStudy=c.caseStudy||{};c.caseStudy.pains=c.caseStudy.pains||[];if(c.caseStudy.pains.indexOf(v)<0)c.caseStudy.pains.push(v);var nb=nicheBucket(c,V9.wiz.niche);if(nb.pains.indexOf(v)<0)nb.pains.push(v);wizRebucket(c);persistConfig();if(V9.wiz.angles.length<3)V9.wiz.angles.push(v);showNotif(f.filtered?'✨ Pain point added & filtered through your lens':'Pain point added');renderV9();};
+  window.osWizAddPain=async function(){var el=document.getElementById('v9-addpain');var v0=el?el.value.trim():'';if(!v0)return;var v=v0;var c=client(V9.client);c.caseStudy=c.caseStudy||{};c.caseStudy.pains=c.caseStudy.pains||[];if(c.caseStudy.pains.indexOf(v)<0)c.caseStudy.pains.push(v);var nb=nicheBucket(c,V9.wiz.niche);if(nb.pains.indexOf(v)<0)nb.pains.push(v);wizRebucket(c);persistConfig();if(V9.wiz.angles.length<3)V9.wiz.angles.push(v);showNotif('Pain point added');renderV9();};
   window.osWizMorePains=async function(){var w=V9.wiz,c=client(V9.client),n=niche(w.niche);var seed=(w.angles||[]);var prompt=seed.length?('More pain points closely related to these, going deeper or adjacent: '+seed.join('; ')):'';w.busy=true;renderV9();try{var r=await api({action:'suggest_angles',niche:(n||{}).name||'',clientContext:[c.name,c.caseStudy&&c.caseStudy.mechanism,c.caseStudy&&c.caseStudy.result].filter(Boolean).join(' — '),prompt:prompt});w.aiPains=(w.aiPains||[]).concat(r.angles||[]);var icp=(c.icps||[]).find(function(x){return x.id===w.icpId;});c.caseStudy=c.caseStudy||{};c.caseStudy.pains=c.caseStudy.pains||[];var nb=nicheBucket(c,w.niche);(r.angles||[]).forEach(function(t){t=String(t||'').trim();if(!t)return;if(c.caseStudy.pains.indexOf(t)<0)c.caseStudy.pains.push(t);if(nb.pains.indexOf(t)<0)nb.pains.push(t);if(icp){icp.pains=icp.pains||[];if(icp.pains.indexOf(t)<0)icp.pains.push(t);}});wizRebucket(c);persistConfig();notifyFiltered();}catch(e){showNotif('AI suggest failed',true);}w.busy=false;renderV9();};
-  window.osWizAddOffer=async function(){var el=document.getElementById('v9-addoffer');var v0=el?el.value.trim():'';if(!v0)return;var f=await filterIdea(v0);var v=f.text;var c=client(V9.client);c.caseStudy=c.caseStudy||{};c.caseStudy.offers=c.caseStudy.offers||[];if(c.caseStudy.offers.indexOf(v)<0)c.caseStudy.offers.push(v);var nb=nicheBucket(c,V9.wiz.niche);if(nb.offers.indexOf(v)<0)nb.offers.push(v);wizRebucket(c);persistConfig();if(V9.wiz.offers.indexOf(v)<0)V9.wiz.offers.push(v);showNotif(f.filtered?'✨ Offer added & filtered through your lens':'Offer added');renderV9();};
+  window.osWizAddOffer=async function(){var el=document.getElementById('v9-addoffer');var v0=el?el.value.trim():'';if(!v0)return;var v=v0;var c=client(V9.client);c.caseStudy=c.caseStudy||{};c.caseStudy.offers=c.caseStudy.offers||[];if(c.caseStudy.offers.indexOf(v)<0)c.caseStudy.offers.push(v);var nb=nicheBucket(c,V9.wiz.niche);if(nb.offers.indexOf(v)<0)nb.offers.push(v);wizRebucket(c);persistConfig();if(V9.wiz.offers.indexOf(v)<0)V9.wiz.offers.push(v);showNotif('Offer added');renderV9();};
   window.osWizMoreOffers=async function(){var w=V9.wiz,c=client(V9.client);w.busy=true;renderV9();try{var ctx=[c.name,(c.caseStudy||{}).mechanism,(c.caseStudy||{}).result,(c.caseStudy||{}).proofLine,(w.offers&&w.offers.length)?('Expand on / find offers related to: '+w.offers.join('; ')):''].filter(Boolean).join('\n');var r=await api({action:'suggest_offers',context:ctx});var offs=(r.offers||[]).map(function(o){return typeof o==='string'?o:((o.name&&o.description)?(o.name+' — '+o.description):(o.name||o.description||''));}).filter(Boolean);w.aiOffers=(w.aiOffers||[]).concat(offs);var icp=(c.icps||[]).find(function(x){return x.id===w.icpId;});c.caseStudy=c.caseStudy||{};c.caseStudy.offers=c.caseStudy.offers||[];var nb=nicheBucket(c,w.niche);offs.forEach(function(t){t=String(t||'').trim();if(!t)return;if(c.caseStudy.offers.indexOf(t)<0)c.caseStudy.offers.push(t);if(nb.offers.indexOf(t)<0)nb.offers.push(t);if(icp){icp.desires=icp.desires||[];if(icp.desires.indexOf(t)<0)icp.desires.push(t);}});wizRebucket(c);persistConfig();notifyFiltered();}catch(e){showNotif('AI suggest failed',true);}w.busy=false;renderV9();};
   window.osWizFw=function(id){V9.wiz.fws[id]=!V9.wiz.fws[id];renderV9();};
   window.osWizVar=function(v){V9.wiz.variants=v;renderV9();};
@@ -7311,9 +7370,22 @@ loadConfigAndRender();
     if(!jobs.length){showNotif('Nothing to filter on this step yet',true);return;}
     w.busy=true; renderV9();
     var stats={changed:0,unchanged:0,failed:0,lastErr:''};
-    async function refine(line,extra){try{var r=await api({action:'refine_script',script:line,prompt:'Reframe this line THROUGH our house lens — change the ANGLE and the WORDING so it clearly reflects the lens, not just a word swap. Rewrite it as a tighter, more specific single line (up to ~20 words). It MUST read noticeably different from the original — never return it unchanged.'+(extra||'')+' Return only the rewritten line — no quotes, no extra text.'});var t=(r&&(r.script||r.text||r.result||r.content))||'';t=String(t).replace(/\n*\(mock refinement applied\)\s*$/,'').trim();if(!t){stats.failed++;return line;}if(t===line){stats.unchanged++;}else{stats.changed++;}return t;}catch(e){stats.failed++;stats.lastErr=(e&&e.message)||String(e);return line;}}
-    var next=0; async function worker(){ while(next<jobs.length){ var j=jobs[next++]; var out=await refine(j.t,j.extra); j.apply(out); } }
-    await Promise.all(Array.from({length:Math.min(3,jobs.length)},worker));
+    // Group jobs by their per-item suffix, then rewrite each group in ONE batched call
+    // (instead of one Claude call per line — a client with many pains/desires/offers was
+    // firing dozens of calls per button press).
+    var groups={};
+    jobs.forEach(function(j){ var k=j.extra||''; (groups[k]=groups[k]||[]).push(j); });
+    for (var key in groups){
+      var gj=groups[key];
+      var prompt='Reframe each line THROUGH our house lens — change the ANGLE and the WORDING so each clearly reflects the lens, not just a word swap. Make each a tighter, more specific single line (up to ~20 words) that reads noticeably different from the original.'+(key||'');
+      var rb=await refineBatch(gj.map(function(j){return j.t;}), prompt);
+      gj.forEach(function(j,idx){
+        if(!rb.ok[idx]){ stats.failed++; if(!stats.lastErr) stats.lastErr='couldn’t reach the rewriter'; return; }
+        var t=String(rb.items[idx]||'').trim();
+        if(!t||t===j.t){ stats.unchanged++; return; }
+        stats.changed++; j.apply(t);
+      });
+    }
     wizRebucket(c); persistConfig(); w.busy=false;
     if(stats.changed){ notifyFiltered(); showNotif('Filtered '+stats.changed+' of '+jobs.length+' through your lens'+(stats.failed?(' · '+stats.failed+' couldn’t be reached'):(stats.unchanged?(' · '+stats.unchanged+' came back unchanged'):''))); }
     else if(stats.failed){ showNotif('Filter couldn’t reach the rewriter — '+stats.failed+' failed'+(stats.lastErr?(': '+stats.lastErr):'. Check your connection / admin key and try again.'),true); }
@@ -7381,7 +7453,7 @@ loadConfigAndRender();
   window.osWizNicheTranscript=async function(){var w=V9.wiz,el=document.getElementById('v9-niche-trans');var t=el?el.value.trim():'';if(!t){showNotif('Paste a transcript first',true);return;}w.busy=true;renderV9();try{var r=await api({action:'extract_transcript',text:t});var n=niche(w.niche);n.angles=n.angles||[];n.transcripts=n.transcripts||[];var added=0;[].concat(r.angles||[],r.pains||[]).forEach(function(a){if(n.angles.indexOf(a)<0){n.angles.push(a);added++;}});n.transcripts.push({id:uid('tr'),text:t,pains:r.pains||[],angles:r.angles||[],desires:r.desires||[],at:new Date().toISOString().slice(0,10)});persistConfig();w.transNote='Extracted '+added+' new angle(s)/pain(s) into '+(n.name||'the niche')+'.';}catch(e){showNotif('Extract failed',true);}w.busy=false;renderV9();};
   window.osWizFindAngles=async function(){var w=V9.wiz,c=client(V9.client),n=niche(w.niche);w.busy=true;renderV9();try{var r=await api({action:'suggest_angles',niche:(n||{}).name||'',clientContext:[c.name,(c.caseStudy||{}).mechanism,(c.caseStudy||{}).result].filter(Boolean).join(' — '),prompt:''});w.foundAngles=(r.angles||[]);notifyFiltered();}catch(e){showNotif('AI suggest failed',true);}w.busy=false;renderV9();};
   window.osWizFindRelated=async function(a){var w=V9.wiz,c=client(V9.client),n=niche(w.niche);w.busy=true;renderV9();try{var r=await api({action:'suggest_angles',niche:(n||{}).name||'',clientContext:[c.name,(c.caseStudy||{}).mechanism].filter(Boolean).join(' — '),prompt:'Find angles closely related to "'+a+'" — variations, sharper cuts, and adjacent angles.'});w.foundAngles=(r.angles||[]);notifyFiltered();}catch(e){showNotif('AI suggest failed',true);}w.busy=false;renderV9();};
-  window.osWizAddNicheAngle=async function(){var w=V9.wiz,n=niche(w.niche),el=document.getElementById('v9-addangle');var v0=el?el.value.trim():'';if(!v0||!n)return;var f=await filterIdea(v0);var v=f.text;n.angles=n.angles||[];if(n.angles.indexOf(v)<0)n.angles.push(v);persistConfig();showNotif(f.filtered?'✨ Angle added & filtered through your lens':'Added to niche');renderV9();};
+  window.osWizAddNicheAngle=async function(){var w=V9.wiz,n=niche(w.niche),el=document.getElementById('v9-addangle');var v0=el?el.value.trim():'';if(!v0||!n)return;var v=v0;n.angles=n.angles||[];if(n.angles.indexOf(v)<0)n.angles.push(v);persistConfig();showNotif('Added to niche');renderV9();};
   window.osWizAddAngleToNiche=function(i){var w=V9.wiz,n=niche(w.niche);if(!n)return;var a=(w.foundAngles||[])[i];if(!a)return;n.angles=n.angles||[];if(n.angles.indexOf(a)<0)n.angles.push(a);persistConfig();w.foundAngles.splice(i,1);showNotif('Angle added to niche');renderV9();};
   window.osWizFromWinning=async function(id){var c=client(V9.client),w=V9.wiz;var s=(c.scriptReservoir||[]).find(function(x){return x.id===id;});if(!s)return;var fw=config.frameworks.find(function(f){return f.name===s.framework;});state.clientId=c.id;state.nicheId=s.nicheId||primaryNicheId(c);var ang=s.angle||((niche(state.nicheId)||{}).angles||[])[0]||'Opener';state.angles=new Set([ang]);state.frameworks=new Set([fw?fw.id:config.frameworks[0].id]);state.variantsPer=3;w.generating=true;w.phase='steps';renderV9();try{await generate();notifyFiltered();}catch(e){}w.deck=(scriptIndex||[]).map(function(ss,idx){return {idx:idx,fw:ss.framework,angle:ss.angle};});w.i=0;w.kept=0;w.generating=false;w.phase='swipe';renderV9();};
   window.osWizFollowupBlank=function(){var cid=client(V9.client).id;V9.wiz=null;renderV9();if(typeof openFollowupsBlank==='function')openFollowupsBlank();};
@@ -7416,15 +7488,15 @@ loadConfigAndRender();
   window.osIcpBack=function(){V9.openIcp=null;renderV9();};
   window.osIcpSaveName=function(id){var ic=v9icp(id),el=document.getElementById('icp-name');if(ic&&el){var v=el.value.trim();if(v){ic.title=v;v9icpSave();showNotif('ICP name saved');renderV9();}}};
   window.osIcpSaveDesc=function(id){var ic=v9icp(id),el=document.getElementById('icp-desc');if(ic&&el){ic.description=el.value.trim();v9icpSave();showNotif('Description saved');renderV9();}};
-  window.osIcpAddDesire=async function(id){var ic=v9icp(id),el=document.getElementById('icp-desire');var v0=el?el.value.trim():'';if(ic&&v0){var f=await filterIdea(v0);var v=f.text;ic.desires=ic.desires||[];if(ic.desires.indexOf(v)<0)ic.desires.push(v);v9icpSave();showNotif(f.filtered?'✨ Desire added & filtered through your lens':'Desire added');renderV9();}};
+  window.osIcpAddDesire=async function(id){var ic=v9icp(id),el=document.getElementById('icp-desire');var v0=el?el.value.trim():'';if(ic&&v0){var v=v0;ic.desires=ic.desires||[];if(ic.desires.indexOf(v)<0)ic.desires.push(v);v9icpSave();showNotif('Desire added');renderV9();}};
   window.osIcpDesireDel=function(id,i){var ic=v9icp(id);if(ic&&ic.desires){ic.desires.splice(i,1);v9icpSave();renderV9();}};
-  window.osIcpAddObjection=async function(id){var ic=v9icp(id),el=document.getElementById('icp-objection');var v0=el?el.value.trim():'';if(ic&&v0){var f=await filterIdea(v0);var v=f.text;ic.objections=ic.objections||[];if(ic.objections.indexOf(v)<0)ic.objections.push(v);v9icpSave();showNotif(f.filtered?'✨ Objection added & filtered through your lens':'Objection added');renderV9();}};
+  window.osIcpAddObjection=async function(id){var ic=v9icp(id),el=document.getElementById('icp-objection');var v0=el?el.value.trim():'';if(ic&&v0){var v=v0;ic.objections=ic.objections||[];if(ic.objections.indexOf(v)<0)ic.objections.push(v);v9icpSave();showNotif('Objection added');renderV9();}};
   window.osIcpObjectionDel=function(id,i){var ic=v9icp(id);if(ic&&ic.objections){ic.objections.splice(i,1);v9icpSave();renderV9();}};
   window.osNDTag=function(id){var n=niche(id),el=document.getElementById('nd-tag');if(n&&el){n.tag=el.value.trim();persistConfig();showNotif('Niche tag saved');renderV9();}};
   window.osNDFindMore=async function(id){var n=niche(id),c=client(V9.client);V9.ndBusy=true;renderV9();try{var r=await api({action:'suggest_angles',niche:n.name,clientContext:[c.name,(c.caseStudy||{}).mechanism].filter(Boolean).join(' — '),prompt:''});V9.ndFound=r.angles||[];}catch(e){showNotif('AI failed',true);}V9.ndBusy=false;renderV9();};
   window.osNDRelated=async function(id,a){var n=niche(id),c=client(V9.client);V9.ndBusy=true;renderV9();try{var r=await api({action:'suggest_angles',niche:n.name,clientContext:c.name,prompt:'Find angles closely related to "'+a+'" — variations and adjacent angles.'});V9.ndFound=r.angles||[];}catch(e){showNotif('AI failed',true);}V9.ndBusy=false;renderV9();};
   window.osNDAdd=function(id,i){var n=niche(id),a=(V9.ndFound||[])[i];if(!a)return;n.angles=n.angles||[];if(n.angles.indexOf(a)<0)n.angles.push(a);persistConfig();V9.ndFound.splice(i,1);renderV9();};
-  window.osNDAddManual=async function(id){var n=niche(id),el=document.getElementById('nd-angle');var v0=el?el.value.trim():'';if(!v0)return;var f=await filterIdea(v0);var v=f.text;n.angles=n.angles||[];if(n.angles.indexOf(v)<0)n.angles.push(v);persistConfig();showNotif(f.filtered?'✨ Angle added & filtered through your lens':'Angle added');renderV9();};
+  window.osNDAddManual=async function(id){var n=niche(id),el=document.getElementById('nd-angle');var v0=el?el.value.trim():'';if(!v0)return;var v=v0;n.angles=n.angles||[];if(n.angles.indexOf(v)<0)n.angles.push(v);persistConfig();showNotif('Angle added');renderV9();};
   window.osNDTrig=function(id){var n=niche(id),el=document.getElementById('nd-trig');var v=el?el.value.trim():'';if(!v)return;n.triggerWords=n.triggerWords||[];if(n.triggerWords.indexOf(v)<0)n.triggerWords.push(v);persistConfig();renderV9();};
   window.osNDTranscript=async function(id){var n=niche(id),el=document.getElementById('nd-trans');var t=el?el.value.trim():'';if(!t){showNotif('Paste a transcript first',true);return;}V9.ndBusy=true;renderV9();try{var r=await api({action:'extract_transcript',text:t});n.angles=n.angles||[];n.transcripts=n.transcripts||[];[].concat(r.angles||[],r.pains||[]).forEach(function(a){if(n.angles.indexOf(a)<0)n.angles.push(a);});n.transcripts.push({at:new Date().toISOString().slice(0,10),angles:r.angles||[],pains:r.pains||[],text:t});persistConfig();showNotif('Extracted into niche');}catch(e){showNotif('Extract failed',true);}V9.ndBusy=false;renderV9();};
   async function v9CreateNiche(name,ctx){var r=await api({action:'research_niche',niche:name,clientContext:ctx});var c=client(V9.client);var obj=config.niches.find(function(n){return n.name.trim().toLowerCase()===name.toLowerCase();});if(obj){obj.angles=Array.from(new Set([].concat(obj.angles||[],r.angles||[])));obj.triggerWords=Array.from(new Set([].concat(obj.triggerWords||[],r.triggerWords||[])));}else{obj={id:uid('niche'),name:name,angles:r.angles||[],triggerWords:r.triggerWords||[]};config.niches.push(obj);}if(c.nicheIds.indexOf(obj.id)<0)c.nicheIds.push(obj.id);persistConfig();return obj;}
