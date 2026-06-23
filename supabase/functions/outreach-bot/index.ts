@@ -904,7 +904,11 @@ Deno.serve(async (req) => {
         });
         const parsed = parseJson(textOf(res.content), null as { items?: unknown[] } | null);
         const arr = parsed && Array.isArray(parsed.items) ? parsed.items.map((x) => String(x ?? "")) : [];
-        // Always return an array aligned to the input; fall back to the original where the model dropped/blanked one.
+        // The model must return EXACTLY one rewrite per item, in order. If the count differs
+        // (it dropped/merged an item, or the JSON was truncated), positionally remapping would
+        // shift every later rewrite onto the WRONG original and corrupt saved data — so reject
+        // the whole batch and fall every item back to its original instead.
+        if (arr.length !== items.length) return json({ ok: true, items });
         const out = items.map((orig, i) => { const v = (arr[i] ?? "").trim(); return v || orig; });
         return json({ ok: true, items: out });
       }
@@ -919,7 +923,7 @@ Deno.serve(async (req) => {
         const rules = String(body.rules ?? "").trim();
         const res = await claudeMessages({
           model: CLAUDE_HAIKU,   // light restyle — Haiku is plenty and ~10x cheaper
-          max_tokens: Math.min(600 + 220 * items.length, 8000),
+          max_tokens: Math.min(800 + 320 * items.length, 8000),   // HTML fragments are bigger than plain lines — headroom to avoid truncating the JSON array
           system:
             `You restyle passages of a client-facing growth-plan document to match a house style. ` +
             `You are given the document context, a JSON array of passages, and ONE instruction. Apply it to EACH passage. ` +
@@ -932,6 +936,11 @@ Deno.serve(async (req) => {
         });
         const parsed = parseJson(textOf(res.content), null as { items?: unknown[] } | null);
         const arr = parsed && Array.isArray(parsed.items) ? parsed.items.map((x) => String(x ?? "")) : [];
+        // The model must return EXACTLY one rewrite per item, in order. If the count differs
+        // (it dropped/merged an item, or the JSON was truncated), positionally remapping would
+        // shift every later rewrite onto the WRONG original and corrupt saved data — so reject
+        // the whole batch and fall every item back to its original instead.
+        if (arr.length !== items.length) return json({ ok: true, items });
         const out = items.map((orig, i) => { const v = (arr[i] ?? "").trim(); return v || orig; });
         return json({ ok: true, items: out });
       }

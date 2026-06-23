@@ -1100,6 +1100,7 @@ async function refineBatch(items, prompt, extra) {
     try {
       const r = await api(Object.assign({ action: 'refine_batch', items: chunk, prompt: prompt }, extra || {}));
       const got = (r && Array.isArray(r.items)) ? r.items : [];
+      if (got.length !== chunk.length) continue;  // mismatched count → keep originals for this chunk (ok stays false), never shift a rewrite onto the wrong item
       for (let j = 0; j < chunk.length; j++) {
         const v = String(got[j] == null ? '' : got[j]).replace(/\n*\(mock refinement applied\)\s*$/, '').trim();
         if (v) { out[i + j] = v; ok[i + j] = true; }
@@ -2044,7 +2045,7 @@ function updateMatrix() {
 
 function clearProspect() {
   ['fname', 'company', 'companyUrl', 'classification', 'customPain'].forEach(id => document.getElementById(id).value = '');
-  state.research = null; state.results = null;
+  state.research = null; state._researchKey = ''; state.results = null;
   renderOutput();
 }
 
@@ -3529,7 +3530,9 @@ function saveSalesDoc() {
     return { heading: (heading || '').trim(), body: (body || '').split('/').map(p => p.trim()).filter(Boolean).join('\n') };
   }).filter(cs => cs.heading || cs.body);
   persistConfig();
-  if (state.growth) { state.growth.narrative = null; }  // clear so it re-drafts once with the new prompt (auto-narrate fires only when there's no narrative yet)
+  // Only a SALES-mode plan uses these defaults — clear just that so it re-drafts once with the new
+  // prompt. Don't blank an unrelated strategy/growth plan's narrative (that would re-bill it for nothing).
+  if (state.growth && state.growth.mode === 'sales') { state.growth.narrative = null; }
   showNotif('Sales document defaults saved');
 }
 
@@ -6140,7 +6143,7 @@ async function gpApplyHouseRules() {
   // to nodes; anything the model drops/blanks keeps its original text (never lost).
   const texts = nodes.map(el => el.innerText.trim());
   const outs = texts.slice();
-  const CHUNK = 12;
+  const CHUNK = 8;   // smaller chunks for HTML restyle → less chance of truncating the JSON array
   let done = 0;
   for (let i = 0; i < nodes.length; i += CHUNK) {
     const idxs = [];
@@ -6149,7 +6152,7 @@ async function gpApplyHouseRules() {
       try {
         const r = await api({ action: 'ai_edit_batch', items: idxs.map(k => texts[k]), instruction: 'Apply the house style to each passage. Headings stay short heading text; paragraphs and lists stay minimal HTML. Keep every number, name and fact exact.', context: ctx, rules });
         const got = (r && Array.isArray(r.items)) ? r.items : [];
-        idxs.forEach((k, j) => { const v = String(got[j] == null ? '' : got[j]).trim(); if (v) outs[k] = v; });
+        if (got.length === idxs.length) idxs.forEach((k, j) => { const v = String(got[j] == null ? '' : got[j]).trim(); if (v) outs[k] = v; });  // mismatched count → keep originals for this chunk
       } catch {}
     }
     done = Math.min(i + CHUNK, nodes.length);
@@ -6171,8 +6174,9 @@ async function gpApplyHouseRules() {
   showNotif('✅ House rules applied across the doc');
 }
 
-// Auto-draft the narrative once the plan has content — no manual click needed.
-// Re-drafts when the plan's structure changes (targets/script/mode/channels).
+// Auto-draft the narrative ONCE, the first time the plan has content — no manual click needed.
+// After that, structural edits do NOT auto-redraft (that silently re-billed on every change);
+// use the "↻ Redraft narrative" button. A new plan / mode switch resets narrative, so it drafts again.
 function gpMaybeAutoNarrate() {
   const g = state.growth;
   if (!g || !adminKey || g.docHtml) return;
