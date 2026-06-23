@@ -29,8 +29,10 @@ function pickModel(alias: unknown): string {
 
 // ─── Usage metering (powers the admin Usage dashboard) ───────────────────────
 // Approx Anthropic prices, USD per 1M tokens (input/output). Adjust if pricing changes.
+// Keep in sync with the model IDs in _shared/anthropic.ts. Opus 4.x = $5/$25,
+// Sonnet 4.x = $3/$15, Haiku 4.5 = $1/$5 per 1M tokens (input/output).
 const RATES: Record<string, { in: number; out: number }> = {
-  sonnet: { in: 3, out: 15 }, opus: { in: 15, out: 75 }, haiku: { in: 0.8, out: 4 },
+  sonnet: { in: 3, out: 15 }, opus: { in: 5, out: 25 }, haiku: { in: 1, out: 5 },
 };
 function modelKey(m: unknown): string {
   const s = String(m ?? "").toLowerCase();
@@ -89,9 +91,11 @@ async function claudeMessages(opts: any): Promise<any> {
     opts = { ...opts, system: blocks };
   }
 
-  const res = await rawClaudeMessages(opts);
-  const u = (res as { usage?: { input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } })?.usage;
-  if (s && u) {
+  // Meter one response's tokens + cost into the per-request accumulator.
+  // deno-lint-ignore no-explicit-any
+  const meter = (res: any) => {
+    const u = res?.usage as { input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } | undefined;
+    if (!s || !u) return;
     const r = RATES[modelKey(opts?.model)] || RATES.sonnet;
     const inp = u.input_tokens ?? 0, out = u.output_tokens ?? 0;
     const cw = u.cache_creation_input_tokens ?? 0, cr = u.cache_read_input_tokens ?? 0;
@@ -101,6 +105,25 @@ async function claudeMessages(opts: any): Promise<any> {
     s.cacheRead = (s.cacheRead ?? 0) + cr;
     // input_tokens from the API is the UNCACHED remainder; cache writes bill ~1.25× and reads ~0.1× of input rate.
     s.cost += (inp / 1e6) * r.in + (out / 1e6) * r.out + (cw / 1e6) * r.in * 1.25 + (cr / 1e6) * r.in * 0.1;
+  };
+
+  let res = await rawClaudeMessages(opts);
+  meter(res);
+
+  // Server-side tools (web_search) run an internal sampling loop that stops with
+  // stop_reason "pause_turn" once it hits its iteration cap. To get the final answer
+  // we must resume: append the paused assistant content as an assistant message and
+  // call again (no extra user turn — the trailing server_tool_use is the resume signal).
+  // Without this, textOf()/parseJson see a partial turn with no final text and every
+  // web-search research action silently returns its parse-failure fallback.
+  const hasTools = Array.isArray(opts?.tools) && opts.tools.length > 0;
+  let continuations = 0;
+  while (hasTools && res?.stop_reason === "pause_turn" && continuations < 5) {
+    continuations++;
+    const msgs = [...(opts.messages ?? []), { role: "assistant", content: res.content }];
+    opts = { ...opts, messages: msgs };
+    res = await rawClaudeMessages(opts);
+    meter(res);
   }
   return res;
 }
@@ -227,7 +250,10 @@ function toNotionBlock(b: { t: string; text?: string; headers?: string[]; rows?:
       if (headers.length) tableRows.push({ type: "table_row", table_row: { cells: norm(headers) } });
       rows.forEach((r) => tableRows.push({ type: "table_row", table_row: { cells: norm(r) } }));
       if (!tableRows.length) tableRows.push({ type: "table_row", table_row: { cells: norm([""]) } });
-      return { object: "block", type: "table", table: { table_width: width, has_column_header: headers.length > 0, has_row_header: false, children: tableRows } };
+      // Notion caps a block's children at 100 per request, and table rows can only be
+      // supplied at creation (no append-rows API), so an oversized table would 422 the
+      // whole page. Cap to 100 rows to keep the export from failing/silently dropping.
+      return { object: "block", type: "table", table: { table_width: width, has_column_header: headers.length > 0, has_row_header: false, children: tableRows.slice(0, 100) } };
     }
     default: return { object: "block", type: "paragraph", paragraph: { rich_text: nRich(b.text ?? "") } };
   }
@@ -250,14 +276,48 @@ function storageEnv() {
   return { url, headers: { Authorization: `Bearer ${key}`, apikey: key } };
 }
 
-async function configLoad(): Promise<unknown | null> {
-  const { url, headers } = storageEnv();
-  const res = await fetch(`${url}/storage/v1/object/${BUCKET}/${OBJECT}`, { headers });
-  if (!res.ok) return null;
-  return await res.json();
+function cfgRev(c: unknown): number {
+  const r = (c && typeof c === "object") ? (c as { _rev?: unknown })._rev : undefined;
+  const n = Number(r);
+  return Number.isFinite(n) ? n : 0;
 }
 
-async function configSave(config: unknown): Promise<void> {
+// Returns {ok:true, config} (config may be null if none is stored yet), or
+// {ok:false, status} on a transient/error response. The caller MUST distinguish
+// these: a transient read failure must NOT be treated as "no config" (that path
+// lets a stale client overwrite a good server copy).
+async function configLoad(): Promise<{ ok: true; config: unknown | null } | { ok: false; status: number }> {
+  const { url, headers } = storageEnv();
+  const res = await fetch(`${url}/storage/v1/object/${BUCKET}/${OBJECT}`, { headers });
+  if (res.status === 404) return { ok: true, config: null };   // no config stored yet
+  if (!res.ok) return { ok: false, status: res.status };       // transient/error
+  return { ok: true, config: await res.json().catch(() => null) };
+}
+
+// Compare-and-swap save. `baseRev` is the _rev the client last loaded. If the stored
+// config has advanced past it, another writer won the race → return a conflict with the
+// current server copy so the client can merge instead of clobbering. On success we stamp
+// a server-authoritative monotonic _rev (immune to client wall-clock skew).
+// NOTE: this is read-then-write against Supabase Storage, which has no atomic CAS, so two
+// saves sharing the SAME baseRev can still race (mitigated, not eliminated — true atomicity
+// would need a Postgres row). It does reliably stop the dominant case: a stale client
+// (older baseRev) silently overwriting a newer server copy.
+async function configSave(
+  config: Record<string, unknown>,
+  baseRev: number | null,
+): Promise<{ ok: true; rev: number } | { ok: false; conflict: true; config: unknown; rev: number }> {
+  const cur = await configLoad();
+  if (!cur.ok) throw new Error(`config read failed: ${cur.status}`);  // never blind-overwrite when the current rev is unknown
+  const storedRev = cfgRev(cur.config);
+  // CAS: if the client sent a baseRev (CAS-aware client — always does, using 0 when it has
+  // never synced) and a server copy exists whose rev differs, another writer is ahead → return
+  // a conflict so the client merges instead of clobbering. baseRev === null means a legacy
+  // client that predates CAS: keep the old last-write-wins behaviour for backward compatibility.
+  if (baseRev !== null && cur.config && storedRev !== baseRev) {
+    return { ok: false, conflict: true, config: cur.config, rev: storedRev };
+  }
+  const newRev = storedRev + 1;
+  const toStore = { ...config, _rev: newRev };
   const { url, headers } = storageEnv();
   await fetch(`${url}/storage/v1/bucket`, {
     method: "POST",
@@ -267,9 +327,10 @@ async function configSave(config: unknown): Promise<void> {
   const res = await fetch(`${url}/storage/v1/object/${BUCKET}/${OBJECT}`, {
     method: "POST",
     headers: { ...headers, "Content-Type": "application/json", "x-upsert": "true" },
-    body: JSON.stringify(config),
+    body: JSON.stringify(toStore),
   });
   if (!res.ok) throw new Error(`config save failed: ${res.status} ${await res.text()}`);
+  return { ok: true, rev: newRev };
 }
 
 // ─── Team logins (email + password → the shared admin key) ───────────────────
@@ -292,6 +353,36 @@ async function usersSave(users: TeamUser[]): Promise<void> {
     body: JSON.stringify({ users }),
   });
   if (!res.ok) throw new Error(`users save failed: ${res.status}`);
+}
+
+// ─── Login brute-force throttle (per IP + per email) ─────────────────────────
+// The fixed 900ms sleep alone doesn't stop parallel password spraying (each request
+// is its own isolate). This adds a real attempt budget per IP and per email, so a
+// guessed weak password can't be found by a high-rate online spray.
+interface LoginAttempt { n: number; first: number }
+const LOGIN_WINDOW_MS = 15 * 60_000;   // rolling 15-minute window
+const LOGIN_MAX = 8;                    // failures per key per window before lockout
+async function loginAttemptsLoad(): Promise<Record<string, LoginAttempt>> {
+  try {
+    const { url, headers } = storageEnv();
+    const r = await fetch(`${url}/storage/v1/object/${BUCKET}/login-attempts.json`, { headers });
+    if (r.ok) { const d = await r.json().catch(() => null); if (d && typeof d === "object") return d as Record<string, LoginAttempt>; }
+  } catch { /* ignore */ }
+  return {};
+}
+async function loginAttemptsSave(d: Record<string, LoginAttempt>): Promise<void> {
+  try {
+    const { url, headers } = storageEnv();
+    await fetch(`${url}/storage/v1/object/${BUCKET}/login-attempts.json`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json", "x-upsert": "true" },
+      body: JSON.stringify(d),
+    });
+  } catch { /* best effort */ }
+}
+function loginClientIp(req: Request): string {
+  const xff = req.headers.get("x-forwarded-for") || "";
+  return (xff.split(",")[0] || "").trim() || req.headers.get("cf-connecting-ip") || "unknown";
 }
 
 // ─── Usage metering + daily spend cap ────────────────────────────────────────
@@ -327,18 +418,31 @@ function pruneDays(d: UsageDoc, keep = 60): void {
   const ks = Object.keys(d.days).sort();
   while (ks.length > keep) { delete d.days[ks.shift() as string]; }
 }
-// Pre-call: count one request for this action today + enforce the daily cap.
-async function usageBumpAndCheck(action: string): Promise<{ ok: boolean; calls: number; cap: number }> {
+// Serialize usage.json read-modify-write WITHIN this isolate so concurrent requests
+// don't clobber each other's increments. Cross-isolate races remain (true atomicity
+// would need a Postgres counter), but Deno reuses isolates so this removes the common case.
+let usageChain: Promise<unknown> = Promise.resolve();
+function withUsage<T>(fn: () => Promise<T>): Promise<T> {
+  const run = usageChain.then(fn, fn);
+  usageChain = run.then(() => {}, () => {});
+  return run;
+}
+// Pre-call: count `weight` requests for this action today + enforce the daily cap.
+// `weight` is the number of real Claude calls the action will make (e.g. one per
+// framework for generate), so the cap bounds actual model spend, not just POSTs.
+async function usageBumpAndCheck(action: string, weight = 1): Promise<{ ok: boolean; calls: number; cap: number }> {
   const cap = DAILY_AI_CALL_CAP;
   try {
-    const d = await usageLoad();
-    const rec = dayRec(d, todayUTC());
-    rec.requests += 1;
-    const a = rec.actions[action] = rec.actions[action] || { requests: 0, input: 0, output: 0, cost: 0 };
-    a.requests += 1;
-    pruneDays(d);
-    await usageSave(d);
-    return { ok: !cap || cap <= 0 || rec.requests <= cap, calls: rec.requests, cap };
+    return await withUsage(async () => {
+      const d = await usageLoad();
+      const rec = dayRec(d, todayUTC());
+      rec.requests += weight;
+      const a = rec.actions[action] = rec.actions[action] || { requests: 0, input: 0, output: 0, cost: 0 };
+      a.requests += weight;
+      pruneDays(d);
+      await usageSave(d);
+      return { ok: !cap || cap <= 0 || rec.requests <= cap, calls: rec.requests, cap };
+    });
   } catch {
     return { ok: true, calls: 0, cap };  // storage down → fail open, never block legit use
   }
@@ -346,16 +450,18 @@ async function usageBumpAndCheck(action: string): Promise<{ ok: boolean; calls: 
 // Post-call: add the tokens + cost this request actually consumed.
 async function recordActionUsage(action: string, s: UsageAccum | undefined): Promise<void> {
   if (!s || (!s.input && !s.output)) return;
-  const d = await usageLoad();
-  const rec = dayRec(d, todayUTC());
-  rec.input += s.input; rec.output += s.output; rec.cost += s.cost;
-  rec.cacheRead = (rec.cacheRead ?? 0) + (s.cacheRead ?? 0);
-  rec.cacheWrite = (rec.cacheWrite ?? 0) + (s.cacheWrite ?? 0);
-  const a = rec.actions[action] = rec.actions[action] || { requests: 0, input: 0, output: 0, cost: 0 };
-  a.input += s.input; a.output += s.output; a.cost += s.cost;
-  a.cacheRead = (a.cacheRead ?? 0) + (s.cacheRead ?? 0);
-  a.cacheWrite = (a.cacheWrite ?? 0) + (s.cacheWrite ?? 0);
-  await usageSave(d);
+  await withUsage(async () => {
+    const d = await usageLoad();
+    const rec = dayRec(d, todayUTC());
+    rec.input += s.input; rec.output += s.output; rec.cost += s.cost;
+    rec.cacheRead = (rec.cacheRead ?? 0) + (s.cacheRead ?? 0);
+    rec.cacheWrite = (rec.cacheWrite ?? 0) + (s.cacheWrite ?? 0);
+    const a = rec.actions[action] = rec.actions[action] || { requests: 0, input: 0, output: 0, cost: 0 };
+    a.input += s.input; a.output += s.output; a.cost += s.cost;
+    a.cacheRead = (a.cacheRead ?? 0) + (s.cacheRead ?? 0);
+    a.cacheWrite = (a.cacheWrite ?? 0) + (s.cacheWrite ?? 0);
+    await usageSave(d);
+  });
 }
 
 // Actions that call Claude (and therefore cost money) — the daily cap applies to these only.
@@ -376,14 +482,72 @@ async function hashPassword(password: string, saltHex: string): Promise<string> 
   return hexBytes(bits);
 }
 
+// ─── SSRF guard ──────────────────────────────────────────────────────────────
+// fetchSiteText pulls arbitrary user-supplied URLs server-side, so it must refuse to
+// reach loopback / link-local / private / cloud-metadata addresses, and must re-check
+// every redirect hop (an attacker page can 302 to an internal target).
+function ipIsPrivate(ip: string): boolean {
+  const s = ip.trim().toLowerCase();
+  if (s.includes(":")) { // IPv6
+    if (s === "::1" || s === "::") return true;
+    if (s.startsWith("fe80") || s.startsWith("fc") || s.startsWith("fd")) return true; // link-local + unique-local
+    const m = s.match(/(\d+\.\d+\.\d+\.\d+)$/); // IPv4-mapped (::ffff:a.b.c.d)
+    return m ? ipIsPrivate(m[1]) : false;
+  }
+  const p = s.split(".").map(Number);
+  if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  const [a, b] = p;
+  if (a === 0 || a === 10 || a === 127) return true;                // this-network, private, loopback
+  if (a === 169 && b === 254) return true;                          // link-local incl. 169.254.169.254 metadata
+  if (a === 172 && b >= 16 && b <= 31) return true;                 // private
+  if (a === 192 && b === 168) return true;                          // private
+  if (a === 100 && b >= 64 && b <= 127) return true;                // CGNAT
+  return false;
+}
+function hostIsBlocked(hostname: string): boolean {
+  const h = hostname.replace(/^\[|\]$/g, "").toLowerCase(); // strip IPv6 brackets
+  if (!h) return true;
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) return true;
+  if (/^[0-9.]+$/.test(h) || h.includes(":")) return ipIsPrivate(h); // literal IP
+  return false;
+}
+// Best-effort DNS-rebinding defense: reject if a hostname resolves to a private IP.
+// If Deno.resolveDns is unavailable/blocked, fall back to the literal-host check only.
+async function hostResolvesPrivate(hostname: string): Promise<boolean> {
+  const h = hostname.replace(/^\[|\]$/g, "");
+  if (/^[0-9.]+$/.test(h) || h.includes(":")) return false; // literal IP already checked
+  try {
+    const a4 = await Deno.resolveDns(h, "A").catch(() => [] as string[]);
+    const a6 = await Deno.resolveDns(h, "AAAA").catch(() => [] as string[]);
+    const all = [...a4, ...a6];
+    return all.length > 0 && all.some(ipIsPrivate);
+  } catch { return false; }
+}
+async function assertPublicUrl(u: URL): Promise<void> {
+  if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error(`blocked scheme ${u.protocol}`);
+  if (hostIsBlocked(u.hostname)) throw new Error(`blocked host ${u.hostname}`);
+  if (await hostResolvesPrivate(u.hostname)) throw new Error(`host resolves to a private address: ${u.hostname}`);
+}
+// fetch that validates the initial URL and every redirect hop.
+async function safeFetch(target: string, init: RequestInit, maxHops = 5): Promise<Response> {
+  let url = new URL(target);
+  for (let hop = 0; hop <= maxHops; hop++) {
+    await assertPublicUrl(url);
+    const res = await fetch(url, { ...init, redirect: "manual" });
+    const loc = (res.status >= 300 && res.status < 400) ? res.headers.get("location") : null;
+    if (loc) { url = new URL(loc, url); continue; } // resolve relative redirects, re-validate next loop
+    return res;
+  }
+  throw new Error("too many redirects");
+}
+
 // ─── Site fetching ─────────────────────────────────────────────────────────────
 async function fetchSiteText(rawUrl: string): Promise<{ ok: true; target: string; text: string } | { ok: false; error: string }> {
   let target = rawUrl.trim();
   if (!/^https?:\/\//i.test(target)) target = "https://" + target;
   try {
-    const res = await fetch(target, {
+    const res = await safeFetch(target, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; OutreachBot/3.0)" },
-      redirect: "follow",
       signal: AbortSignal.timeout(12_000),
     });
     const html = await res.text();
@@ -685,6 +849,12 @@ async function generateForFramework(body: GenerateBody, fw: Framework) {
       raw,
       { variants: [{ angle: body.angles[0] ?? "", label: "Unparsed output", script: raw }] },
     );
+    const usedFallback = parsed.variants?.length === 1 && parsed.variants[0]?.label === "Unparsed output";
+    // If the model was cut off mid-JSON, say so instead of returning one giant unusable
+    // "Unparsed output" variant that looks like a content failure.
+    if (res.stop_reason === "max_tokens" && usedFallback) {
+      return { frameworkId: fw.id, framework: fw.name, category: fw.category, error: "response was truncated (hit the output limit) — try fewer angles/variants or a shorter framework", usage: res.usage };
+    }
     return {
       frameworkId: fw.id,
       framework: fw.name,
@@ -738,14 +908,28 @@ Deno.serve(async (req) => {
     const email = String(body.email ?? "").trim().toLowerCase();
     const password = String(body.password ?? "");
     if (!email || !password) return json({ ok: false, error: "email and password required" }, 400);
+    // Brute-force throttle: lock out an IP or email after too many recent failures.
+    const ip = loginClientIp(req);
+    const now = Date.now();
+    const keyIp = "ip:" + ip, keyEmail = "em:" + email;
+    const attempts = await loginAttemptsLoad();
+    for (const k of Object.keys(attempts)) { if (now - attempts[k].first > LOGIN_WINDOW_MS) delete attempts[k]; } // prune expired
+    const blocked = [keyIp, keyEmail].some((k) => attempts[k] && attempts[k].n >= LOGIN_MAX && (now - attempts[k].first) <= LOGIN_WINDOW_MS);
+    if (blocked) {
+      await new Promise((r) => setTimeout(r, 900));
+      return json({ ok: false, error: "Too many login attempts. Wait a few minutes and try again." }, 429);
+    }
     const users = await usersLoad();
     const u = users.find((x) => x.email.toLowerCase() === email);
     const okPw = u ? (await hashPassword(password, u.salt)) === u.hash : false;
     if (!u || !okPw) {
+      for (const k of [keyIp, keyEmail]) { const a = attempts[k] = attempts[k] || { n: 0, first: now }; a.n += 1; }
+      await loginAttemptsSave(attempts);
       await new Promise((r) => setTimeout(r, 900)); // slow brute force
       return json({ ok: false, error: "wrong email or password" }, 401);
     }
     if (!adminKey) return json({ ok: false, error: "server has no ADMIN_KEY set" }, 500);
+    if (attempts[keyIp] || attempts[keyEmail]) { delete attempts[keyIp]; delete attempts[keyEmail]; await loginAttemptsSave(attempts); } // clear on success
     return json({ ok: true, adminKey, name: u.name, email: u.email });
   }
 
@@ -757,8 +941,12 @@ Deno.serve(async (req) => {
   const isAi = AI_ACTIONS.has(action);
 
   // Daily spend safety cap: block AI actions once the day's call budget is exhausted.
+  // generate fans out one Claude call per framework, so it counts that many toward the cap.
   if (isAi) {
-    const u = await usageBumpAndCheck(action);
+    const weight = action === "generate" && Array.isArray(body.frameworks)
+      ? Math.max(1, Math.min((body.frameworks as unknown[]).length, MAX_FRAMEWORKS))
+      : 1;
+    const u = await usageBumpAndCheck(action, weight);
     if (!u.ok) {
       return json({ ok: false, error: `Daily AI limit reached (${u.cap} calls/day). This is a safety cap to control spend; it resets at UTC midnight. Raise it by setting the DAILY_AI_CALL_CAP secret.` }, 429);
     }
@@ -809,8 +997,12 @@ Deno.serve(async (req) => {
       }
 
       case "get_config": {
-        const config = await configLoad();
-        return json({ ok: true, config });
+        const r = await configLoad();
+        // Surface a transient read error as ok:false so the client treats it as
+        // "could not verify" rather than "server is empty" (which would trigger a
+        // stale-local self-heal overwrite). 404/empty still returns config:null.
+        if (!r.ok) return json({ ok: false, error: `config read failed: ${r.status}` }, 502);
+        return json({ ok: true, config: r.config });
       }
 
       case "save_config": {
@@ -820,8 +1012,12 @@ Deno.serve(async (req) => {
         if (JSON.stringify(body.config).length > 1_000_000) {
           return json({ ok: false, error: "config too large (1MB max)" }, 400);
         }
-        await configSave(body.config);
-        return json({ ok: true });
+        const baseRev = (typeof body.baseRev === "number" && Number.isFinite(body.baseRev)) ? body.baseRev : null;
+        const r = await configSave(body.config as Record<string, unknown>, baseRev);
+        // Conflict is returned as ok:true (so the client's api() doesn't throw) with a
+        // conflict flag + the current server copy; the client merges and re-saves.
+        if (!r.ok) return json({ ok: true, conflict: true, config: r.config, rev: r.rev });
+        return json({ ok: true, rev: r.rev });
       }
 
       case "research": {
@@ -1047,7 +1243,12 @@ Deno.serve(async (req) => {
           tools: [webSearchTool(4)],
         });
         const parsed = parseJson(textOf(res.content), null as Record<string, unknown> | null);
-        if (!parsed) return json({ ok: false, error: "could not parse ICP output — try again" }, 422);
+        if (!parsed) {
+          const why = res.stop_reason === "max_tokens"
+            ? "the response was truncated (hit the output limit) — try a shorter client dossier"
+            : "could not parse ICP output — try again";
+          return json({ ok: false, error: why }, 422);
+        }
         return json({ ok: true, ...parsed });
       }
 
@@ -1308,13 +1509,18 @@ Deno.serve(async (req) => {
         if (!createRes.ok) return json({ ok: false, error: `Notion ${createRes.status}: ${(await createRes.text()).slice(0, 300)}` }, 422);
         const page = await createRes.json();
         let rest = blocks.slice(100);
+        let appended = Math.min(blocks.length, 100);
+        let warning = "";
         while (rest.length) {
           const chunk = rest.slice(0, 100);
           rest = rest.slice(100);
           const ap = await fetch(`https://api.notion.com/v1/blocks/${page.id}/children`, { method: "PATCH", headers, body: JSON.stringify({ children: chunk }) });
-          if (!ap.ok) break;
+          // Don't claim full success when an append chunk fails — surface a warning so
+          // the caller knows the page is truncated (rate limit / rejected block / 5xx).
+          if (!ap.ok) { warning = `Exported ${appended} of ${blocks.length} blocks — Notion ${ap.status}: ${(await ap.text()).slice(0, 200)}`; break; }
+          appended += chunk.length;
         }
-        return json({ ok: true, url: page.url });
+        return json({ ok: true, url: page.url, ...(warning ? { warning } : {}) });
       }
 
       // Export selected scripts as ONE row in a Notion database (the "clients script testing board").
@@ -1353,8 +1559,15 @@ Deno.serve(async (req) => {
         // deno-lint-ignore no-explicit-any
         const props: Record<string, any> = db.properties || {};
         const names = Object.keys(props);
+        // Columns we must never write to (computed / read-only): writing them no-ops
+        // silently, so picking one as a match would drop the value into a black hole.
+        const READONLY_TYPES = new Set(["formula", "rollup", "created_time", "last_edited_time", "created_by", "last_edited_by", "unique_id", "button", "verification"]);
+        const writable = (nm: string) => !READONLY_TYPES.has(props[nm]?.type);
+        // Prefer an EXACT (case-insensitive) name match across all aliases before falling
+        // back to substring — avoids 'date'→'Last edited date', 'state'→'Real estate', etc.
         const findProp = (aliases: string[]) => {
-          for (const a of aliases) { const n = names.find((nm) => nm.toLowerCase().includes(a)); if (n) return n; }
+          for (const a of aliases) { const n = names.find((nm) => writable(nm) && nm.toLowerCase() === a); if (n) return n; }
+          for (const a of aliases) { const n = names.find((nm) => writable(nm) && nm.toLowerCase().includes(a)); if (n) return n; }
           return null;
         };
         // deno-lint-ignore no-explicit-any
@@ -1367,13 +1580,18 @@ Deno.serve(async (req) => {
           const opts = (options || []).map((o) => o.name || "").filter(Boolean);
           if (!opts.length) return null;
           const v = value.toLowerCase().trim();
-          let hit = opts.find((o) => o.toLowerCase() === v); // exact
-          if (hit) return hit;
-          hit = opts.find((o) => o.toLowerCase().includes(v) || v.includes(o.toLowerCase())); // substring either way
-          if (hit) return hit;
-          const pre = v.slice(0, 4); // prefix (winner≈winning, testing≈test)
-          hit = opts.find((o) => o.toLowerCase().slice(0, 4) === pre);
-          return hit || null;
+          const exact = opts.find((o) => o.toLowerCase() === v); // exact, case-insensitive
+          if (exact) return exact;
+          // Containment only when the shorter side is non-trivial (>=4 chars) so we don't
+          // map e.g. 'on' onto 'Winner'. The collision-prone first-4-chars prefix rule
+          // ('Test won'→'Testing') was removed — for select/multi_select the caller falls
+          // back to creating the literal value; for status it leaves the field unset.
+          const sub = opts.find((o) => {
+            const lo = o.toLowerCase();
+            const short = lo.length < v.length ? lo : v;
+            return short.length >= 4 && (lo.includes(v) || v.includes(lo));
+          });
+          return sub || null;
         };
         const setProp = (aliases: string[], value: unknown) => {
           if (value === undefined || value === null || value === "") return;
@@ -1417,13 +1635,18 @@ Deno.serve(async (req) => {
         if (!createRes.ok) return json({ ok: false, error: `Notion ${createRes.status}: ${(await createRes.text()).slice(0, 300)}` }, 422);
         const page = await createRes.json();
         let rest = blocks.slice(100);
+        let appended = Math.min(blocks.length, 100);
+        let warning = "";
         while (rest.length) {
           const chunk = rest.slice(0, 100);
           rest = rest.slice(100);
           const ap = await fetch(`https://api.notion.com/v1/blocks/${page.id}/children`, { method: "PATCH", headers, body: JSON.stringify({ children: chunk }) });
-          if (!ap.ok) break;
+          // Don't claim full success when an append chunk fails — surface a warning so
+          // the caller knows the page is truncated (rate limit / rejected block / 5xx).
+          if (!ap.ok) { warning = `Exported ${appended} of ${blocks.length} blocks — Notion ${ap.status}: ${(await ap.text()).slice(0, 200)}`; break; }
+          appended += chunk.length;
         }
-        return json({ ok: true, url: page.url });
+        return json({ ok: true, url: page.url, ...(warning ? { warning } : {}) });
       }
 
       // Create the "clients script testing board" database under a given Notion page,

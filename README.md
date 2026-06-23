@@ -59,5 +59,6 @@ site and the Supabase-hosted copy stay interchangeable.
 
 ```bash
 deno run --allow-net --allow-read --allow-env dev-server.ts
-# open http://localhost:8788/ — all server actions are mocked
+# open http://localhost:8788/ — every server action the UI calls is mocked
+# (any unmocked action logs "[dev-server] unmocked action: …" to the console)
 ```

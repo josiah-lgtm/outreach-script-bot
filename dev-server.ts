@@ -1,6 +1,8 @@
 // Local dev server for the Outreach Script Bot (v2).
-// Serves index.html and mocks the Edge Function (generate / research /
-// get_config / save_config) so the full app works without deploying.
+// Serves index.html and mocks every Edge Function action the UI calls (generate,
+// research, config get/save with compare-and-swap, refine/ai-edit batches, key
+// management, usage, Notion export) so the full app works without deploying.
+// Any action without a mock branch logs "[dev-server] unmocked action: …".
 //
 // Run:
 //   ~/.deno/bin/deno run --allow-net --allow-read --allow-env dev-server.ts
@@ -43,9 +45,17 @@ async function handle(req: Request): Promise<Response> {
       return json({ ok: true, config: savedConfig }, cors);
     }
     if (body.action === "save_config") {
-      savedConfig = body.config;
+      // Mirror the real compare-and-swap save: monotonic server _rev + conflict on stale baseRev.
+      const baseRev = (typeof body.baseRev === "number" && Number.isFinite(body.baseRev)) ? body.baseRev : null;
+      // deno-lint-ignore no-explicit-any
+      const storedRev = (savedConfig && typeof savedConfig === "object") ? Number((savedConfig as any)._rev) || 0 : 0;
+      if (baseRev !== null && savedConfig && storedRev !== baseRev) {
+        return json({ ok: true, conflict: true, config: savedConfig, rev: storedRev }, cors);
+      }
+      const newRev = storedRev + 1;
+      savedConfig = Object.assign({}, body.config, { _rev: newRev });
       await new Promise((r) => setTimeout(r, 200));
-      return json({ ok: true }, cors);
+      return json({ ok: true, rev: newRev }, cors);
     }
     if (body.action === "research_client_site") {
       await new Promise((r) => setTimeout(r, 1200));
@@ -324,7 +334,50 @@ async function handle(req: Request): Promise<Response> {
       }));
       return json({ ok: true, results, usage: { input_tokens: 100, output_tokens: 200 } }, cors);
     }
-    return json({ ok: false, error: "unknown action (mock)" }, cors, 400);
+    if (body.action === "refine_batch") {
+      await new Promise((r) => setTimeout(r, 600));
+      const items = Array.isArray(body.items) ? (body.items as unknown[]).map((x) => String(x ?? "")) : [];
+      // Must return EXACTLY one rewrite per item, in order, or the app keeps originals.
+      return json({ ok: true, items: items.map((s) => s ? s + " (mock filtered)" : s) }, cors);
+    }
+    if (body.action === "ai_edit_batch") {
+      await new Promise((r) => setTimeout(r, 600));
+      const items = Array.isArray(body.items) ? (body.items as unknown[]).map((x) => String(x ?? "")) : [];
+      return json({ ok: true, items: items.map((s) => `<p>${s} <i>(mock restyled)</i></p>`) }, cors);
+    }
+    if (body.action === "get_key_status") {
+      return json({ ok: true, status: { set: true, source: "env", last4: "dev1" } }, cors);
+    }
+    if (body.action === "test_anthropic_key") {
+      await new Promise((r) => setTimeout(r, 300));
+      return json({ ok: true, result: { ok: true, model: "claude-haiku-4-5" } }, cors);
+    }
+    if (body.action === "set_anthropic_key") {
+      await new Promise((r) => setTimeout(r, 300));
+      return json({ ok: true, status: { set: true, source: "stored", last4: "dev2" } }, cors);
+    }
+    if (body.action === "clear_anthropic_key") {
+      return json({ ok: true, status: { set: true, source: "env", last4: "dev1" } }, cors);
+    }
+    if (body.action === "get_usage") {
+      const today = new Date().toISOString().slice(0, 10);
+      return json({
+        ok: true,
+        usage: { days: { [today]: { requests: 3, input: 12000, output: 4000, cost: 0.12, cacheRead: 8000, cacheWrite: 2000, actions: { generate: { requests: 1, input: 8000, output: 3000, cost: 0.09 } } } } },
+        cap: 1000,
+        rates: { sonnet: { in: 3, out: 15 }, opus: { in: 5, out: 25 }, haiku: { in: 1, out: 5 } },
+      }, cors);
+    }
+    if (body.action === "create_notion_db") {
+      await new Promise((r) => setTimeout(r, 500));
+      return json({ ok: true, id: "mockdb" + Math.random().toString(36).slice(2, 10), url: "https://notion.so/mock-script-board" }, cors);
+    }
+    if (body.action === "export_notion_db") {
+      await new Promise((r) => setTimeout(r, 700));
+      return json({ ok: true, url: "https://notion.so/mock-board-row-" + Math.random().toString(36).slice(2, 8) }, cors);
+    }
+    console.warn("[dev-server] unmocked action:", body.action);
+    return json({ ok: false, error: `unknown action (mock): ${body.action}` }, cors, 400);
   }
 
   // Serve index.html

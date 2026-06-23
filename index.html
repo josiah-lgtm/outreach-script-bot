@@ -1006,7 +1006,7 @@
 const OUTREACH_BOT_URL = 'https://pturxqgrhywyhylxovun.supabase.co/functions/v1/outreach-bot';
 
 function safeStorageGet(key) { try { return localStorage.getItem(key) || ''; } catch { return ''; } }
-function safeStorageSet(key, value) { try { localStorage.setItem(key, value); } catch {} }
+function safeStorageSet(key, value) { try { localStorage.setItem(key, value); return true; } catch { return false; } }
 
 // Strip everything that sneaks in via copy-paste: quotes, whitespace,
 // zero-width characters, an accidental "ADMIN_KEY=" prefix.
@@ -1680,9 +1680,52 @@ function listBackups() {
 }
 const cfgClients = c => (c && Array.isArray(c.clients)) ? c.clients.length : -1;
 
-// Version-aware load: never let an OLDER server config clobber NEWER local data, and vice
-// versa. Compare _rev (a save timestamp); on a tie, the config with more clients wins.
-// The discarded copy is always backed up first. needsServerResave flags a self-heal push.
+// Persist the live config to localStorage with quota handling. On a failed write (quota
+// exceeded) we drop the local backup ring (which stores full copies) and retry; if it still
+// fails we warn once so the user knows their edits live on the server / in memory only — not
+// silently lost on the next reload.
+let localSaveWarned = false;
+function saveLocalConfig() {
+  const json = JSON.stringify(config);
+  if (safeStorageSet('outreach_config_v2', json)) return true;
+  try {
+    const idx = JSON.parse(safeStorageGet('outreach_config_bak_index') || '[]');
+    (idx || []).forEach(k => { try { localStorage.removeItem(k); } catch {} });
+    localStorage.removeItem('outreach_config_bak_index');
+  } catch {}
+  if (safeStorageSet('outreach_config_v2', json)) return true;
+  if (!localSaveWarned) { localSaveWarned = true; showNotif('⚠️ Browser storage is full — changes are saved to the server but NOT on this device. Free up space or export a backup.', true); }
+  return false;
+}
+
+// Deep-merge two configs without losing data, preferring `a` (the locally-edited copy) on
+// scalar conflicts. Object arrays that carry an `id` are unioned by id (so neither side's
+// additions are dropped); other arrays prefer the longer/local one. Used to reconcile a save
+// conflict where another device advanced the server copy under us.
+function mergeConfigVal(a, b) {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    const ided = arr => arr.length && arr.every(x => x && typeof x === 'object' && 'id' in x);
+    if (ided(a) && ided(b)) {
+      const byId = new Map();
+      b.forEach(x => byId.set(x.id, x));
+      a.forEach(x => byId.set(x.id, byId.has(x.id) ? mergeConfigVal(x, byId.get(x.id)) : x));
+      return [...byId.values()];
+    }
+    return a.length >= b.length ? a : b;
+  }
+  if (a && b && typeof a === 'object' && typeof b === 'object' && !Array.isArray(a) && !Array.isArray(b)) {
+    const out = Object.assign({}, b);
+    for (const k of Object.keys(a)) out[k] = (k in b) ? mergeConfigVal(a[k], b[k]) : a[k];
+    return out;
+  }
+  return a === undefined ? b : a;
+}
+function mergeConfigs(local, server) { return mergeConfigVal(local, server); }
+
+// Version-aware load. _rev is now a server-assigned MONOTONIC counter (not a wall clock), so
+// it can't be skewed across devices. _dirty marks unsynced local edits, so a device with real
+// unsaved work always keeps it. The discarded copy is always backed up first. needsServerResave
+// flags a self-heal push, which goes through the compare-and-swap save and so cannot clobber.
 let needsServerResave = false;
 async function loadConfig() {
   needsServerResave = false;
@@ -1693,45 +1736,83 @@ async function loadConfig() {
     try {
       const data = await api({ action: 'get_config' });
       if (data.config && Array.isArray(data.config.frameworks)) server = data.config;
-    } catch (e) { console.warn('server config load failed:', e.message); }
+    } catch (e) { console.warn('server config load failed:', e.message); }   // transient: keep local; the CAS save guards against clobber
   }
   const localOk = local && Array.isArray(local.frameworks) && local.frameworks.length;
   const serverOk = server && Array.isArray(server.frameworks) && server.frameworks.length;
 
   if (localOk && serverOk) {
     const lrev = Number(local._rev || 0), srev = Number(server._rev || 0);
-    const useLocal = (lrev !== srev) ? (lrev > srev) : (cfgClients(local) > cfgClients(server));
+    const localDirty = !!local._dirty;
+    // Unsynced local edits win this device; otherwise the higher server-rev wins; a true tie
+    // (same rev, no unsaved edits — the copies should be identical) falls to the richer copy.
+    const useLocal = localDirty ? true : (lrev !== srev ? lrev > srev : cfgClients(local) > cfgClients(server));
     if (useLocal) {
-      backupConfig(server, 'server-copy-at-load');     // keep the server copy in case
+      backupConfig(server, 'server-copy-at-load');
       config = local; configSource = 'local';
-      needsServerResave = true;                         // local is newer/richer → heal the server
+      needsServerResave = true;                         // push local up; CAS merges if the server moved
     } else {
-      backupConfig(local, 'local-copy-at-load');        // keep prior local before overwriting
+      backupConfig(local, 'local-copy-at-load');
       config = server; configSource = 'server';
-      safeStorageSet('outreach_config_v2', JSON.stringify(config));
+      saveLocalConfig();
     }
     return;
   }
-  if (serverOk) { config = server; configSource = 'server'; safeStorageSet('outreach_config_v2', JSON.stringify(config)); return; }
+  if (serverOk) { config = server; configSource = 'server'; saveLocalConfig(); return; }
   if (localOk) { config = local; configSource = 'local'; needsServerResave = !!adminKey; return; }
   config = structuredClone(DEFAULT_CONFIG); configSource = 'defaults';
 }
 
 let saveTimer = null, saveWarned = false;
 function persistConfig() {
-  config._rev = Date.now();                                  // version every change for safe load-merge
-  safeStorageSet('outreach_config_v2', JSON.stringify(config));
+  config._dirty = true;            // mark unsynced edits; cleared once the server accepts the save
+  saveLocalConfig();
   setConfigPill('saving');
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => serverSaveWithRetry(0), 600);
+  saveTimer = setTimeout(() => serverSaveWithRetry(0, 0), 600);
 }
-async function serverSaveWithRetry(attempt) {
+// Self-heal push that does NOT mark the config dirty (preserves whatever _dirty already is),
+// used when loadConfig decided local should be re-pushed to the server.
+function scheduleServerResave() {
+  if (!adminKey) return;
+  saveLocalConfig();
+  setConfigPill('saving');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => serverSaveWithRetry(0, 0), 600);
+}
+async function serverSaveWithRetry(attempt, conflictDepth) {
+  conflictDepth = conflictDepth || 0;
   if (!adminKey) { setConfigPill('local'); return; }
+  const baseRev = Number(config._rev) || 0;   // always send a numeric base so the server runs CAS (0 = never synced)
+  const payload = Object.assign({}, config); delete payload._dirty;   // _dirty is a client-only flag, never stored on the server
   try {
-    await api({ action: 'save_config', config });
+    const r = await api({ action: 'save_config', config: payload, baseRev });
+    if (r && r.conflict) {
+      // Another device advanced the server copy. Reconcile without losing data.
+      if (config._dirty && conflictDepth < 4 && r.config && Array.isArray(r.config.frameworks)) {
+        backupConfig(r.config, 'server-copy-at-conflict');
+        backupConfig(config, 'local-copy-at-conflict');
+        config = mergeConfigs(config, r.config);
+        config._rev = r.rev;          // re-base onto the server's current rev
+        config._dirty = true;         // still unsynced until the re-save lands
+        try { migrateConfig(config); initSelections(); renderEverything(); } catch (e) {}
+        saveLocalConfig();
+        showNotif('🔀 Merged changes from another device');
+        return serverSaveWithRetry(0, conflictDepth + 1);   // re-save the merged result
+      }
+      // No local edits (a self-heal push) or merge exhausted → adopt the server copy.
+      backupConfig(config, 'local-before-adopt-server');
+      config = r.config; config._dirty = false; config._rev = r.rev;
+      configSource = 'server'; saveWarned = false;
+      try { migrateConfig(config); initSelections(); renderEverything(); } catch (e) {}
+      saveLocalConfig(); setConfigPill('server');
+      return;
+    }
+    if (r && Number.isFinite(Number(r.rev))) config._rev = Number(r.rev);
+    config._dirty = false; saveLocalConfig();
     configSource = 'server'; saveWarned = false; setConfigPill('server');
   } catch (e) {
-    if (attempt < 2) { setTimeout(() => serverSaveWithRetry(attempt + 1), 1500 * (attempt + 1)); return; }
+    if (attempt < 2) { setTimeout(() => serverSaveWithRetry(attempt + 1, conflictDepth), 1500 * (attempt + 1)); return; }
     console.warn('server save failed:', e.message);
     setConfigPill('error');
     if (!saveWarned) { saveWarned = true; showNotif('⚠️ Couldn’t save to the server — your changes are on THIS device only. Check your connection/admin key, then re-save. Don’t clear your browser.', true); }
@@ -2155,11 +2236,16 @@ async function generate() {
     });
 
     setStep(3);
-    state.results = data.results;
+    // Trust the advertised matrix: the backend may return up to 2 extra variants per framework
+    // (parser slack), which would otherwise inflate the rendered/exported/counted totals beyond
+    // what the user asked for. Clamp each framework to angles × variantsPer.
+    const perFwMax = angles.length * variantsPer;
+    state.results = (data.results || []).map(r =>
+      (r && Array.isArray(r.variants)) ? Object.assign({}, r, { variants: r.variants.slice(0, perFwMax) }) : r);
     state.openAngles = new Set();
     state.editingScriptIdx = -1;
     switchTab('scripts');
-    const scriptCount = data.results.reduce((s, r) => s + (r.variants?.length || 0), 0);
+    const scriptCount = state.results.reduce((s, r) => s + (r.variants?.length || 0), 0);
     showNotif(`${scriptCount} scripts generated`);
   } catch (err) {
     const hint = /401|unauthorized|admin/i.test(err.message)
@@ -2300,7 +2386,14 @@ function copyAll() {
 function exportCsv() {
   const all = flatScripts();
   if (!all.length) return showNotif('Nothing to export yet', true);
-  const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+  // Quote-double per RFC4180, AND defang spreadsheet formula injection: a cell starting
+  // with = + - @ (or tab/CR) is executed as a formula by Excel/Sheets, so prefix it with
+  // a single quote. Affects AI-generated labels/angles and script lines (bullets start '-').
+  const q = v => {
+    let s = String(v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return '"' + s.replace(/"/g, '""') + '"';
+  };
   const csv = ['framework,category,angle,label,variant,script',
     ...all.map(s => [s.framework, s.category, s.angle, s.label, s.n, s.script].map(q).join(','))].join('\n');
   const a = document.createElement('a');
@@ -3005,8 +3098,9 @@ async function boardDoExport() {
       fields: { client: clientName, niche: nicheName, status: statusLabel, target, tests, date },
       blocks,
     });
-    if (msg) msg.innerHTML = `✅ Added to Notion — <a href="${esc(r.url || '#')}" target="_blank" style="color:var(--accent2)">open ↗</a>`;
-    showNotif('✅ Exported to Notion board');
+    const note = r.warning ? ` &nbsp;⚠️ ${esc(r.warning)}` : '';
+    if (msg) msg.innerHTML = `✅ Added to Notion — <a href="${esc(r.url || '#')}" target="_blank" style="color:var(--accent2)">open ↗</a>${note}`;
+    showNotif(r.warning ? ('⚠️ Exported, but truncated: ' + r.warning) : '✅ Exported to Notion board', !!r.warning);
     boardClearSel();
   } catch (e) {
     if (msg) msg.innerHTML = '❌ ' + esc(e.message);
@@ -6343,7 +6437,7 @@ async function gpExportNotion() {
     const c2 = gpClient(); const p = (c2.growthPlans || []).find(x => x.id === state.growth.planId);
     if (p) { p.notionUrl = r.url || ''; persistConfig(); }
     renderGrowthForm();
-    showNotif('✅ Exported to Notion');
+    showNotif(r.warning ? ('⚠️ Exported, but truncated: ' + r.warning) : '✅ Exported to Notion', !!r.warning);
     if (r.url) window.open(r.url, '_blank');
   } catch (e) { showNotif('Notion export failed: ' + e.message, true); }
 }
@@ -6788,7 +6882,7 @@ async function prospectExportNotion() {
     });
     p.notionUrl = r.url || '';
     persistConfig(); renderSalesForm();
-    showNotif('✅ Exported to Notion');
+    showNotif(r.warning ? ('⚠️ Exported, but truncated: ' + r.warning) : '✅ Exported to Notion', !!r.warning);
     if (r.url) window.open(r.url, '_blank');
   } catch (e) { showNotif('Notion export failed: ' + e.message, true); }
 }
@@ -6906,7 +7000,8 @@ async function loadConfigAndRender() {
   migrateConfig(config);
   setConfigPill(configSource === 'server' ? 'server' : 'local');
   // If local was newer/richer than the server (a prior save had failed), push it back up now.
-  if (needsServerResave && adminKey) { needsServerResave = false; persistConfig(); }
+  // Uses the self-heal path (no dirty flip) so the CAS save reconciles instead of clobbering.
+  if (needsServerResave && adminKey) { needsServerResave = false; scheduleServerResave(); }
   initSelections();
   renderEverything();
   // Restore the page from the URL (refresh / shared link / new tab); else default + stamp URL.
