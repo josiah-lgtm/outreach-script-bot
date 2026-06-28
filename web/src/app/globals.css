@@ -1,0 +1,135 @@
+@import "tailwindcss";
+
+/* ── Design system ────────────────────────────────────────────────────────────
+   The legacy app's light theme, mapped into Tailwind v4 @theme tokens. The 12-color
+   palette keeps its exact hex values for parity (see legacy/index.html :root). Tokens
+   here generate utilities (bg-bg2, text-muted, border-border, font-mono, …); the
+   plain :root aliases below keep any ported markup using var(--accent) working too. */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Courier Prime", ui-monospace, "SFMono-Regular", monospace;
+
+  /* surfaces */
+  --color-bg: #fbfbf9;        /* page */
+  --color-bg2: #ffffff;       /* cards / surfaces */
+  --color-bg3: #f3f2ed;       /* secondary surface / hover */
+  --color-border: #e5e3db;
+
+  /* accents */
+  --color-accent: #2563eb;
+  --color-accent2: #1d4ed8;
+
+  /* status */
+  --color-green: #0f9d6b;
+  --color-amber: #b45309;
+  --color-red: #dc2626;
+
+  /* text */
+  --color-text: #1f1e1c;      /* primary */
+  --color-subtle: #45443f;    /* secondary */
+  --color-muted: #79776f;     /* tertiary */
+
+  /* semantic tint bases — the brighter hues the legacy used for rgba() fills/rings.
+     Exposed so tints stay consistent: e.g. bg-[--tint-accent] / text-accent. */
+  --tint-accent: rgba(37, 99, 235, 0.12);
+  --tint-accent-ring: rgba(37, 99, 235, 0.35);
+  --tint-green: rgba(16, 185, 129, 0.12);
+  --tint-green-ring: rgba(16, 185, 129, 0.4);
+  --tint-amber: rgba(245, 158, 11, 0.12);
+  --tint-amber-ring: rgba(245, 158, 11, 0.4);
+  --tint-red: rgba(239, 68, 68, 0.12);
+  --tint-red-ring: rgba(239, 68, 68, 0.4);
+
+  /* focus ring used by interactive primitives */
+  --accent-ring: rgba(37, 99, 235, 0.45);
+
+  /* light-theme shadow scale (the legacy was near-flat; keep it subtle) */
+  --shadow-xs: 0 1px 2px rgba(16, 15, 14, 0.04);
+  --shadow-sm: 0 1px 3px rgba(16, 15, 14, 0.06), 0 1px 2px rgba(16, 15, 14, 0.04);
+  --shadow-md: 0 4px 16px rgba(16, 15, 14, 0.08);
+  --shadow-lg: 0 12px 36px rgba(16, 15, 14, 0.12);
+  --shadow-modal: 0 24px 90px rgba(16, 15, 14, 0.22);
+}
+
+/* Legacy CSS-variable aliases (same names/values as legacy/index.html :root) so any
+   markup ported verbatim that references var(--accent) etc. renders identically. */
+:root {
+  --bg: #fbfbf9;
+  --bg2: #ffffff;
+  --bg3: #f3f2ed;
+  --border: #e5e3db;
+  --accent: #2563eb;
+  --accent2: #1d4ed8;
+  --green: #0f9d6b;
+  --amber: #b45309;
+  --red: #dc2626;
+  --text: #1f1e1c;
+  --muted: #79776f;
+  --subtle: #45443f;
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Keyboard focus only — never on mouse click. Primitives opt in via .ring-focus. */
+  :where(button, a, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--accent-ring);
+    outline-offset: 1px;
+    border-radius: 4px;
+  }
+
+  /* Thin, themed scrollbars matching the legacy panels. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer utilities {
+  /* Shared keyframes the primitives reference. */
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
+  }
+  .animate-pulse-dot {
+    animation: pulse 1s infinite;
+  }
+}

@@ -1,8 +1,10 @@
 name: Deploy outreach-bot
 
 # Auto-deploys the Edge Function (and the bundled UI) to Supabase on every push to
-# main that touches the app or the function. The Supabase token lives ONLY as an
-# encrypted GitHub secret — it is never in the repo and never pasted into chat.
+# main that touches the old app or the function. The old app now lives in legacy/
+# (the new Next.js front-end lives in web/ and deploys separately via Docker).
+# The Supabase token lives ONLY as an encrypted GitHub secret — it is never in the
+# repo and never pasted into chat.
 #
 # One-time setup: add a repository secret named SUPABASE_ACCESS_TOKEN
 #   GitHub → Settings → Secrets and variables → Actions → New repository secret
@@ -12,8 +14,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'index.html'
-      - 'supabase/functions/**'
+      - 'legacy/index.html'
+      - 'legacy/supabase/functions/**'
       - '.github/workflows/deploy.yml'
   workflow_dispatch: {}
 
@@ -24,6 +26,12 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # The old app was relocated under legacy/. Run every shell step from there so
+    # bundle.ts (reads ./index.html) and the supabase CLI (finds ./supabase/functions)
+    # resolve exactly as they did when the app lived at the repo root.
+    defaults:
+      run:
+        working-directory: legacy
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       PROJECT_REF: pturxqgrhywyhylxovun
