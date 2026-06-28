@@ -26,6 +26,7 @@ import { notify } from "@/lib/notify";
 import type { Client } from "@/lib/sync/types";
 import { ScriptEditModal, type ScriptVersion } from "@/components/ScriptEditModal";
 import { CreateScriptWizard } from "@/components/wizard/CreateScriptWizard";
+import { FollowupBuilder } from "@/components/FollowupBuilder";
 import { BoardExportModal } from "./BoardExportModal";
 import type { BoardScript } from "./types";
 
@@ -59,6 +60,7 @@ export function KanbanBoard({ client, clientId }: { client: Client; clientId: st
   const [editId, setEditId] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [wizOpen, setWizOpen] = useState(false);
+  const [fuFor, setFuFor] = useState<{ parentLabel: string; parentText: string } | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -118,6 +120,16 @@ export function KanbanBoard({ client, clientId }: { client: Client; clientId: st
       }
     });
     notify("Reservoir script updated");
+  }
+
+  // Legacy openFollowupsFromReservoir (index.html:6450): write outbound follow-ups to a script.
+  function openFollowups(scriptId: string) {
+    const s = reservoir.find((x) => x.id === scriptId);
+    if (!s) return;
+    setFuFor({
+      parentLabel: s.label || `${s.framework || ""} · ${s.angle || ""}`,
+      parentText: String(s.script || ""),
+    });
   }
 
   function onDragEnd(e: DragEndEvent) {
@@ -195,6 +207,7 @@ export function KanbanBoard({ client, clientId }: { client: Client; clientId: st
                     selected={!!sel[s.id]}
                     onToggleSel={() => toggleBoardSel(clientId, s.id as string)}
                     onEdit={() => setEditId(s.id as string)}
+                    onFollowups={() => openFollowups(s.id as string)}
                   />
                 ))
               )}
@@ -229,7 +242,24 @@ export function KanbanBoard({ client, clientId }: { client: Client; clientId: st
         onExported={() => clearBoardSel(clientId)}
       />
 
-      {wizOpen && <CreateScriptWizard open onClose={() => setWizOpen(false)} clientId={clientId} />}
+      {wizOpen && (
+        <CreateScriptWizard
+          open
+          onClose={() => setWizOpen(false)}
+          clientId={clientId}
+          onStartFollowups={(parent) => setFuFor(parent)}
+        />
+      )}
+
+      {fuFor && (
+        <FollowupBuilder
+          open
+          onClose={() => setFuFor(null)}
+          clientId={clientId}
+          parentLabel={fuFor.parentLabel}
+          parentText={fuFor.parentText}
+        />
+      )}
     </div>
   );
 }
@@ -285,12 +315,14 @@ function ScriptCard({
   selected,
   onToggleSel,
   onEdit,
+  onFollowups,
 }: {
   script: Script;
   fuCount: number;
   selected: boolean;
   onToggleSel: () => void;
   onEdit: () => void;
+  onFollowups: () => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: script.id });
   const sub = [script.framework, script.angle].filter(Boolean).join(" · ");
@@ -327,11 +359,27 @@ function ScriptCard({
       <div className="text-[13px] font-semibold pr-5 truncate">{script.name || "Script"}</div>
       {sub && <div className="text-[11px] text-muted truncate">{sub}</div>}
       <div className="text-[11px] text-subtle mt-1 line-clamp-2 leading-snug">{snipShort}</div>
-      {fuCount > 0 && (
-        <div className="text-[10px] text-accent2 mt-1.5 inline-flex items-center gap-1">
-          <Icon name="arrow-forward-up" size={12} /> {fuCount} follow-up{fuCount > 1 ? "s" : ""}
-        </div>
-      )}
+      <div className="mt-1.5 flex items-center justify-between gap-2">
+        {fuCount > 0 ? (
+          <span className="text-[10px] text-accent2 inline-flex items-center gap-1">
+            <Icon name="arrow-forward-up" size={12} /> {fuCount} follow-up{fuCount > 1 ? "s" : ""}
+          </span>
+        ) : (
+          <span />
+        )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onFollowups();
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          title="Write outbound follow-ups to this script"
+          className="text-[10px] text-muted hover:text-accent2 inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <Icon name="arrow-forward-up" size={12} /> Follow-ups
+        </button>
+      </div>
     </div>
   );
 }

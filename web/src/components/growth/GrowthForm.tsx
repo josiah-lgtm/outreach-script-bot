@@ -808,7 +808,7 @@ export function GrowthForm({ client: c }: GrowthFormProps) {
             );
           })
         ) : (
-          <div className="text-[12px] text-muted">No follow-up sequences saved yet. Build them from a script (Reservoir → ↪ Follow-ups).</div>
+          <div className="text-[12px] text-muted">No follow-up sequences saved yet. Build them on the client&apos;s Overview board (a script card → ↪ Follow-ups, or “Create new script” → Follow-up sequence).</div>
         )}
       </Accordion>
     );

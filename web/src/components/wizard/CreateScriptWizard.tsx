@@ -94,7 +94,18 @@ function initWiz(c: Client | undefined, config: Config): WizState {
   };
 }
 
-export function CreateScriptWizard({ open, onClose, clientId }: { open: boolean; onClose: () => void; clientId: string }) {
+export function CreateScriptWizard({
+  open,
+  onClose,
+  clientId,
+  onStartFollowups,
+}: {
+  open: boolean;
+  onClose: () => void;
+  clientId: string;
+  /** The "Follow-up sequence" flow closes the wizard and hands the chosen parent up to the board's FollowupBuilder. */
+  onStartFollowups?: (parent: { parentLabel: string; parentText: string }) => void;
+}) {
   const client = useConfigStore((s) => (s.config.clients || []).find((c: Client) => c.id === clientId)) as Client | undefined;
   const config = useConfigStore((s) => s.config) as Config;
   const niches = (config.niches as Niche[]) || [];
@@ -514,7 +525,11 @@ export function CreateScriptWizard({ open, onClose, clientId }: { open: boolean;
           onAdd={(a) => { addAngleToNiche(w.niche, a); patch((d) => { d.foundAngles = d.foundAngles.filter((x) => x !== a); }); notify("Angle added to niche"); }}
         />
       ) : (
-        <FollowupNotice onBack={() => patch((d) => { d.menu = true; d.flow = null; })} />
+        <FollowupFlow
+          client={client}
+          onBack={() => patch((d) => { d.menu = true; d.flow = null; })}
+          onStart={(parent) => { onClose(); onStartFollowups?.(parent); }}
+        />
       )}
 
       {editOpen && curCard && (
@@ -1002,16 +1017,64 @@ function AnglesScreen({
   );
 }
 
-function FollowupNotice({ onBack }: { onBack: () => void }) {
+// Follow-up flow — pick a board script to follow up on, or start a standalone sequence.
+// Selecting either closes the wizard and opens the board's FollowupBuilder (legacy
+// osWizFollowupBlank :7659 / osWizFollowupFrom :7660 both closed the wizard first).
+function FollowupFlow({
+  client,
+  onBack,
+  onStart,
+}: {
+  client: Client;
+  onBack: () => void;
+  onStart: (parent: { parentLabel: string; parentText: string }) => void;
+}) {
+  const reservoir =
+    (client.scriptReservoir as Array<{ id: string; label?: string; framework?: string; angle?: string; script?: string }>) ||
+    [];
   return (
-    <div className="text-center py-6">
-      <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-bg3 text-muted mb-3">
-        <Icon name="arrow-forward-up" size={22} />
+    <div>
+      <div className="text-[15px] font-semibold mb-1">Follow-up sequence</div>
+      <div className="text-[13px] text-muted mb-4">
+        Write outbound follow-ups that build on a first script — or a standalone sequence.
       </div>
-      <div className="text-[15px] font-semibold">Follow-up sequences</div>
-      <div className="text-[13px] text-muted mt-1 max-w-[360px] mx-auto">
-        Follow-up sequences are built in the dedicated follow-up builder, which is coming next. For now, create scripts and add follow-ups there once it lands.
+
+      <button
+        onClick={() => onStart({ parentLabel: "Standalone sequence", parentText: "" })}
+        className="w-full text-left rounded-xl border border-border bg-bg2 hover:border-accent2 hover:bg-bg3 transition-colors p-3.5 mb-4"
+      >
+        <div className="font-semibold text-[13px] flex items-center gap-2">
+          <Icon name="arrow-forward-up" size={16} className="text-accent2" /> Standalone sequence
+        </div>
+        <div className="text-[12px] text-muted mt-1">No first script needed — the follow-ups stand alone.</div>
+      </button>
+
+      <div className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-2">
+        Or follow up on a board script
       </div>
+      {reservoir.length ? (
+        <div className="flex flex-col gap-1.5 max-h-[280px] overflow-auto">
+          {reservoir.map((s) => {
+            const label = s.label || `${s.framework || ""} · ${s.angle || ""}`;
+            const snip = String(s.script || "").replace(/\s+/g, " ").trim().slice(0, 80);
+            return (
+              <button
+                key={s.id}
+                onClick={() => onStart({ parentLabel: label, parentText: String(s.script || "") })}
+                className="text-left rounded-lg border border-border bg-bg2 hover:border-accent2 transition-colors p-2.5"
+              >
+                <div className="text-[12px] font-semibold truncate">{label}</div>
+                <div className="text-[11px] text-muted truncate">{snip || "(no text)"}</div>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="text-[12px] text-muted">
+          No board scripts yet — create scripts first, or build a standalone sequence.
+        </div>
+      )}
+
       <div className="mt-5">
         <Button variant="secondary" size="sm" onClick={onBack}>
           ← Back
