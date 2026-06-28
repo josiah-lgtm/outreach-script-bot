@@ -14,6 +14,12 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    # Postgres is NOT published to the host by default — `web` reaches it over the
+    # internal compose network (db:5432), so it never conflicts and isn't exposed.
+    # Only uncomment if you want to connect from the host (psql/DBeaver/pgAdmin).
+    # Fixed high port bound to 127.0.0.1; override with DB_PORT in .env.
+    # ports:
+    #   - "127.0.0.1:${DB_PORT:-29315}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
@@ -30,7 +36,12 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      # App sits behind nginx, so it listens on a fixed high port (not 3000, to
+      # avoid clashes with other stacks). Bound to 127.0.0.1 — nginx is the only
+      # public entrypoint; the app port itself isn't exposed. Override with
+      # WEB_PORT in .env. If nginx runs in a container or on another host, change
+      # 127.0.0.1 to 0.0.0.0 (or the right interface).
+      - "127.0.0.1:${WEB_PORT:-29314}:3000"
     env_file:
       - .env
     environment:
