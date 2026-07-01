@@ -33,6 +33,11 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# legacy-migration artifacts (contain live business data — never commit)
+/scripts/seed-config.sql
+/scripts/*.local.json
+live-config.json
+
 # vercel
 .vercel
 
