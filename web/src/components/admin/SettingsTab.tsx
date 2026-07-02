@@ -9,7 +9,8 @@
 //    niches AND clients all present — STRICTER than configClient.importConfigText (which
 //    only checks `frameworks`). We replicate the legacy guard here.
 //  • After restore/import we set a brand-new config object, so we run migrateConfig from
-//    configClient BEFORE handing it to replaceConfig(cfg,"local") + scheduleResave().
+//    configClient BEFORE handing it to restoreConfig(cfg,"local") — which marks it _dirty and
+//    aligns _rev so the CAS save REPLACES the server copy (never silently adopts the server).
 //  • users_* response shapes (server/auth.ts): list → {users:[{email,name,createdAt}]},
 //    add → {ok,updated:boolean}, remove → {ok:true}.
 
@@ -172,8 +173,11 @@ export function SettingsTab() {
     const live = useConfigStore.getState().config;
     backupConfig(live, tag);
     try { migrateConfig(cfg); } catch { /* ignore */ }
-    useConfigStore.getState().replaceConfig(cfg, "local");
-    useConfigStore.getState().scheduleResave();
+    // restoreConfig (NOT replaceConfig + scheduleResave): marks the restore as a winning local
+    // edit and aligns _rev so it cleanly REPLACES the server copy. The old pair did a non-dirty
+    // resave, which on a server-rev conflict silently ADOPTED the server copy and discarded the
+    // just-restored clients — the reason a restore never reached the server.
+    useConfigStore.getState().restoreConfig(cfg, "local");
     refreshBackups();
   }
 
@@ -230,8 +234,7 @@ export function SettingsTab() {
     const fresh = migrateConfig(structuredClone(DEFAULT_CONFIG));
     const live = useConfigStore.getState().config;
     backupConfig(live, "before-reset");
-    useConfigStore.getState().replaceConfig(fresh, "local");
-    useConfigStore.getState().scheduleResave();
+    useConfigStore.getState().restoreConfig(fresh, "local");
     refreshBackups();
     notify("Reset to defaults");
   }

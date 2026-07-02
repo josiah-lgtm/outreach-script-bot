@@ -19,6 +19,13 @@
 //   using DATABASE_URL (guarded: refuses to clobber an existing non-empty config
 //   unless --force).
 //
+//   Push straight onto a DEPLOYED new-app server (no DB/SSH access needed — just the
+//   app's URL + its admin key). This is the remote path: it reads the server's current
+//   rev and overwrites in one shot (a clean REPLACE, not the app's union-merge), so the
+//   demo/sample data is gone. Add --merge to union instead, --yes to confirm a replace.
+//     OUTREACH_ADMIN_KEY=<new server key> node scripts/import-legacy.mjs \
+//       --file "./outreach-config.json" --push https://YOUR-APP/api/outreach --yes --no-sql
+//
 //   Flags:
 //     --pull                 fetch config via get_config (OUTREACH_ADMIN_KEY env)
 //     --file <path>          read config from an exported JSON file instead
@@ -27,7 +34,10 @@
 //     --out <path>           SQL output path (default: scripts/seed-config.sql)
 //     --direct               also upsert into Postgres via DATABASE_URL
 //     --force                allow --direct to overwrite an existing config row
-//     --no-sql               skip writing the .sql file (use with --direct)
+//     --push <endpoint>      push onto a deployed server's /api/outreach (OUTREACH_ADMIN_KEY)
+//     --merge                with --push: union with the server copy instead of replacing
+//     --yes                  with --push: confirm replacing existing server clients
+//     --no-sql               skip writing the .sql file (use with --direct or --push)
 
 import { writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -46,11 +56,14 @@ function parseArgs(argv) {
     if (t === "--pull") a.pull = true;
     else if (t === "--direct") a.direct = true;
     else if (t === "--force") a.force = true;
+    else if (t === "--merge") a.merge = true;
+    else if (t === "--yes") a.yes = true;
     else if (t === "--no-sql") a.noSql = true;
     else if (t === "--file") a.file = argv[++i];
     else if (t === "--url") a.url = argv[++i];
+    else if (t === "--push") a.push = argv[++i];
     else if (t === "--rev") a.rev = Number(argv[++i]);
-    else if (t === "--out") a.out = resolve(process.cwd(), argv[++i]);
+    else if (t === "--out") { a.out = resolve(process.cwd(), argv[++i]); a.outExplicit = true; }
     else die(`unknown argument: ${t}`);
   }
   return a;
@@ -177,6 +190,102 @@ async function directUpsert(data, rev, force) {
   }
 }
 
+// ─── merge helper (only used by --push --merge) ────────────────────────────────────
+// Port of the app's mergeConfigVal: union id'd arrays (neither side's rows dropped),
+// prefer `a` (the incoming file) on scalar conflicts, longer array otherwise.
+function mergeConfigVal(a, b) {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    const ided = (arr) => arr.length && arr.every((x) => x && typeof x === "object" && "id" in x);
+    if (ided(a) && ided(b)) {
+      const byId = new Map();
+      b.forEach((x) => byId.set(x.id, x));
+      a.forEach((x) => byId.set(x.id, byId.has(x.id) ? mergeConfigVal(x, byId.get(x.id)) : x));
+      return [...byId.values()];
+    }
+    return a.length >= b.length ? a : b;
+  }
+  if (a && b && typeof a === "object" && typeof b === "object" && !Array.isArray(a) && !Array.isArray(b)) {
+    const out = { ...b };
+    for (const k of Object.keys(a)) out[k] = k in b ? mergeConfigVal(a[k], b[k]) : a[k];
+    return out;
+  }
+  return a === undefined ? b : a;
+}
+
+// ─── push straight onto a DEPLOYED server via its /api/outreach (clean CAS replace) ─────
+async function pushConfig(endpoint, data, opts) {
+  const key = process.env.OUTREACH_ADMIN_KEY;
+  if (!key)
+    die(
+      "OUTREACH_ADMIN_KEY (the NEW server's admin key) is not set. Export it in your shell:\n" +
+        "  export OUTREACH_ADMIN_KEY='<the new app's admin key>'",
+    );
+  const call = async (body) => {
+    let res;
+    try {
+      res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-key": key },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      die(`could not reach the server (${endpoint}): ${e?.message || e}`);
+    }
+    const j = await res.json().catch(() => ({ ok: false, error: `bad response (HTTP ${res.status})` }));
+    if (!res.ok || j.ok === false) {
+      const err = j.error || "HTTP " + res.status;
+      const hint = /too large/i.test(err)
+        ? "\n  → exceeds the server's size cap. Use the SQL seed instead (no cap):\n" +
+          '    docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < seed-config.sql'
+        : /unauthorized/i.test(err)
+          ? "\n  → OUTREACH_ADMIN_KEY doesn't match the server's ADMIN_KEY."
+          : "";
+      die(`${body.action} failed: ${err}${hint}`);
+    }
+    return j;
+  };
+
+  const cur = await call({ action: "get_config" });
+  const serverCfg = cur.config || null;
+  const serverRev = Number(serverCfg?._rev) || 0;
+  const serverClients = Array.isArray(serverCfg?.clients) ? serverCfg.clients.length : 0;
+  console.log(`\nTarget server: ${endpoint}`);
+  console.log(`  before: rev ${serverRev}, ${serverClients} client(s)`);
+
+  let payload = { ...data };
+  delete payload._dirty;
+  if (opts.merge) {
+    if (!serverCfg) console.log("  (--merge: server is empty — nothing to merge)");
+    else payload = mergeConfigVal(payload, serverCfg);
+  }
+  const newClients = Array.isArray(payload.clients) ? payload.clients.length : 0;
+  const bytes = JSON.stringify(payload).length;
+
+  if (!opts.merge && !opts.yes && serverClients > 0) {
+    die(
+      `refusing to REPLACE ${serverClients} server client(s) with ${newClients} without confirmation.\n` +
+        `  Re-run with --yes to replace, or --merge to keep both.`,
+    );
+  }
+
+  // baseRev === serverRev → the CAS matches → the UPDATE overwrites the whole row (a true
+  // replace, not the app's union-merge). Retry a few times if a concurrent writer races us.
+  let r = await call({ action: "save_config", config: payload, baseRev: serverRev });
+  let guard = 0;
+  while (r.conflict && guard++ < 3) {
+    const nrev = Number(r.rev) || 0;
+    console.log(`  (server advanced to rev ${nrev} mid-push; retrying…)`);
+    r = await call({ action: "save_config", config: payload, baseRev: nrev });
+  }
+  if (r.conflict) die("the server kept changing under us — retry once writes settle.");
+
+  const after = await call({ action: "get_config" });
+  const n = Array.isArray(after.config?.clients) ? after.config.clients.length : 0;
+  console.log(`  after:  rev ${after.config?._rev}, ${n} client(s)  (${bytes} bytes sent)`);
+  if (n === newClients) console.log(`  ✓ pushed — the server now holds ${n} client(s).`);
+  else console.log(`  ⚠️ expected ${newClients} but the server reports ${n} — verify manually.`);
+}
+
 // ─── main ─────────────────────────────────────────────────────────────────────────
 async function main() {
   const a = parseArgs(process.argv.slice(2));
@@ -191,7 +300,10 @@ async function main() {
   for (const [k, v] of Object.entries(counts)) console.log(`  ${String(v).padStart(4)}  ${k}`);
   console.log(`  rev to stamp: ${rev} (legacy _rev was ${Number(cfg._rev) || 0})`);
 
-  if (!a.noSql) {
+  // Pushing to a live server is the remote path; don't also drop a stray SQL file unless the
+  // caller explicitly asked for one (--out) or is writing to Postgres directly (--direct).
+  const wantSql = !a.noSql && (!a.push || a.outExplicit);
+  if (wantSql) {
     emitSql(data, rev, a.out);
     console.log(`\n✓ wrote ${a.out}`);
     console.log(`  apply on the server with:`);
@@ -200,6 +312,9 @@ async function main() {
   if (a.direct) {
     console.log(`\nWriting directly to Postgres (DATABASE_URL)…`);
     await directUpsert(data, rev, a.force);
+  }
+  if (a.push) {
+    await pushConfig(a.push, data, { merge: a.merge, yes: a.yes });
   }
   console.log(`\nDone. Boot the app with a fresh browser (clear localStorage 'outreach_config_v2') and verify counts.\n`);
 }

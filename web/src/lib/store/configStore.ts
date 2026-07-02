@@ -36,6 +36,7 @@ interface ConfigState {
   afterLogin: () => Promise<void>;
   update: (recipe: (draft: Config) => void) => void;
   replaceConfig: (cfg: Config, source: ConfigSource) => void;
+  restoreConfig: (cfg: Config, source: ConfigSource) => void;
   scheduleResave: () => void;
   setActiveClientForLens: (clientId: string | null) => void;
   _flush: (attempt: number, conflictDepth: number) => Promise<void>;
@@ -86,6 +87,31 @@ export const useConfigStore = create<ConfigState>()(immer((set, get) => ({
   replaceConfig: (cfg, source) => {
     set((s) => { s.config = cfg; s.source = source; });
     refreshLens(cfg);
+  },
+
+  // Adopt a brand-new config as a REAL, winning local edit: file/snapshot restore and
+  // reset-to-defaults. Unlike scheduleResave (a NON-dirty self-heal that ADOPTS the server
+  // copy on a rev conflict — which would silently discard the data the user just restored),
+  // this marks the config _dirty so the restore always wins. Before the debounced save it
+  // aligns _rev to the server's current rev so the CAS does a clean REPLACE (exact overwrite)
+  // rather than a union-merge that would resurrect the very rows the user replaced. Mirrors the
+  // legacy applyRestoredConfig → persistConfig(dirty) path. The config swaps in immediately
+  // (optimistic); the server round-trip happens inside the debounced save task.
+  restoreConfig: (cfg, source) => {
+    set((s) => { s.config = cfg; (s.config as Config)._dirty = true; s.source = source; s.pill = "saving"; });
+    const c = get().config;
+    saveLocalConfig(c);
+    refreshLens(c);
+    scheduleSave(async () => {
+      if (getAdminKey()) {
+        try {
+          const r = await api({ action: "get_config" });
+          const sRev = Number(r?.config?._rev);
+          if (Number.isFinite(sRev)) set((s) => { (s.config as Config)._rev = sRev; });
+        } catch { /* server unreachable: fall back to the dirty-merge conflict path in _flush */ }
+      }
+      await get()._flush(0, 0);
+    });
   },
 
   // Self-heal push that does NOT flip _dirty (mirrors scheduleServerResave).

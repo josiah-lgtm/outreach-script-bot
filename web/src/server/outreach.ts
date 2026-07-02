@@ -58,8 +58,12 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       if (!body.config || typeof body.config !== "object") {
         return json({ ok: false, error: "config object required" }, 400);
       }
-      if (JSON.stringify(body.config).length > 1_000_000) {
-        return json({ ok: false, error: "config too large (1MB max)" }, 400);
+      // Guard against a runaway document, but leave real headroom: a self-hosted Node server
+      // (no serverless body limit) + Postgres jsonb handle multi-MB fine, and real accounts with
+      // many clients/scripts already sit near the old 1MB line. The legacy Supabase function
+      // capped at 1MB; raised here so an active account's next edit doesn't start bouncing.
+      if (JSON.stringify(body.config).length > 16_000_000) {
+        return json({ ok: false, error: "config too large (16MB max)" }, 400);
       }
       const baseRev = (typeof body.baseRev === "number" && Number.isFinite(body.baseRev)) ? body.baseRev : null;
       const r = await casSaveConfig(body.config as Record<string, unknown>, baseRev);
