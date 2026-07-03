@@ -289,7 +289,7 @@ function ClientCard({ client: c, niches, selectMode, selected, onToggle }: {
 
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {tags.map((t) => (<Badge key={t} tone="accent">{t}</Badge>))}
+          {tags.map((t) => (<Badge key={t} tone="accent" title={t}>{t}</Badge>))}
         </div>
       )}
 

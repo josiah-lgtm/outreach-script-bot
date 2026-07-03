@@ -101,7 +101,7 @@ export function ClientsTab() {
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         {names.length ? (
                           names.map((n, i) => (
-                            <Badge key={n + i} tone="accent">
+                            <Badge key={n + i} tone="accent" title={n}>
                               {n}
                             </Badge>
                           ))

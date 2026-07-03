@@ -22,19 +22,21 @@ const TONE: Record<BadgeTone, string> = {
 export interface BadgeProps {
   tone?: BadgeTone;
   className?: string;
+  title?: string;
   children?: ReactNode;
 }
 
-export function Badge({ tone = "neutral", className, children }: BadgeProps) {
+export function Badge({ tone = "neutral", className, title, children }: BadgeProps) {
   return (
     <span
+      title={title}
       className={cn(
-        "inline-flex items-center gap-1 text-[10px] font-medium px-2.5 py-0.5 rounded-full border whitespace-nowrap",
+        "inline-flex max-w-full items-center gap-1 text-[10px] font-medium px-2.5 py-0.5 rounded-full border",
         TONE[tone],
         className,
       )}
     >
-      {children}
+      <span className="truncate">{children}</span>
     </span>
   );
 }

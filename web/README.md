@@ -2,7 +2,7 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 
 ## Server 4
-cd /opt/outreach-script-bot && git pull && docker compose up -d --build
+cd /opt/outreach-script-bot/web && git pull && docker compose up -d --build
 
 
 ## Getting Started
