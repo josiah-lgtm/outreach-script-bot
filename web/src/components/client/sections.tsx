@@ -135,6 +135,9 @@ export function HistorySection({ client }: { client: Client }) {
   ((client.growthPlans as Array<{ createdAt?: string }> | undefined) || []).forEach((p, i) => {
     hist.push({ d: p.createdAt || "", t: "Growth plan " + (i + 1) });
   });
+  ((client.followups as Array<{ createdAt?: string; parentLabel?: string; items?: unknown[] }> | undefined) || []).forEach((f) => {
+    hist.push({ d: f.createdAt || "", t: `Follow-up sequence (${(f.items || []).length} steps) · ` + (f.parentLabel || "") });
+  });
   hist.sort((a, b) => (b.d || "").localeCompare(a.d || ""));
   return (
     <div className="flex flex-col gap-3">

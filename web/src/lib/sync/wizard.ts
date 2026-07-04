@@ -176,13 +176,22 @@ export function wizCount(w: WizState, c: any) {
 }
 
 // Feed the client's kept/winning/edited scripts in as style exemplars (legacy 7402).
-function learnExamples(c: any): string {
+// Priority: this client's board winners → testing → hand-edited, then the admin-curated
+// winning scripts scoped to this client's niches. As the team promotes more scripts to
+// Winning, every subsequent generation (deck, variations, follow-ups) learns from them.
+// Keep the output deterministic within a run — it lands in the cached prompt prefix.
+export function learnExamples(c: any): string {
   const R = c.scriptReservoir || [];
   const pool: any[] = [];
   R.forEach((s: any) => { if (s.status === "winning") pool.push(s); });
   R.forEach((s: any) => { if (s.status === "testing") pool.push(s); });
   R.forEach((s: any) => { if (s.versions && s.versions.length > 1 && pool.indexOf(s) < 0) pool.push(s); });
-  (cfg().winningScripts || []).forEach((s: any) => pool.push({ script: (s && (s.script || s.text)) || s }));
+  const clientNicheIds: string[] = c.nicheIds || [];
+  (cfg().winningScripts || []).forEach((s: any) => {
+    const nids: string[] = (s && s.nicheIds) || [];
+    const relevant = !nids.length || !clientNicheIds.length || nids.some((id) => clientNicheIds.includes(id));
+    if (relevant) pool.push({ script: (s && (s.script || s.text)) || s });
+  });
   const exs: string[] = [];
   const seen: Record<string, number> = {};
   for (let i = 0; i < pool.length && exs.length < 4; i++) {
@@ -599,17 +608,22 @@ export async function generateDeck(clientId: string, w: WizState): Promise<{ dec
   let deck: DeckCard[] = [];
   let genError = "";
   try {
-    for (let di = 0; di < desires.length; di++) {
-      for (let mi = 0; mi < mechs.length; mi++) {
-        const results = await genOnce(c, n, fws, pains, desires[di], mechs[mi], w.variants || 1, w);
-        (results || []).forEach((r: any) => {
-          if (r && r.error) return;
-          ((r && r.variants) || []).forEach((v: any) => {
-            deck.push({ text: v.script || "", fw: r.framework || "", angle: v.angle || "", _desire: desires[di] || "", _mech: mechs[mi] ? String(mechs[mi]).split(" — ")[0] : "" });
-          });
+    // All desire × mechanism combos fan out in parallel (each is an independent generate
+    // call; the server staggers its own per-framework calls for prompt-cache warming).
+    // Results are appended in combo order so the deck stays deterministic.
+    const combos: Array<{ desire: string | null; mech: string | null }> = [];
+    desires.forEach((desire) => mechs.forEach((mech) => combos.push({ desire, mech })));
+    const perCombo = await Promise.all(
+      combos.map(({ desire, mech }) => genOnce(c, n, fws, pains, desire, mech, w.variants || 1, w)),
+    );
+    combos.forEach(({ desire, mech }, ci) => {
+      (perCombo[ci] || []).forEach((r: any) => {
+        if (r && r.error) return;
+        ((r && r.variants) || []).forEach((v: any) => {
+          deck.push({ text: v.script || "", fw: r.framework || "", angle: v.angle || "", _desire: desire || "", _mech: mech ? String(mech).split(" — ")[0] : "" });
         });
-      }
-    }
+      });
+    });
     notifyFiltered();
   } catch (e: any) {
     genError = (e && e.message) || String(e);
@@ -628,15 +642,17 @@ export async function variateScript(baseText: string, fw: string, angle: string)
     "Rewrite with a different angle on the same offer.",
     "Expand the same angle deeper and more specific.",
   ];
-  const deck: DeckCard[] = [];
-  for (let i = 0; i < prompts.length; i++) {
-    try {
-      const r: any = await api({ action: "refine_script", script: baseText, prompt: prompts[i] });
-      deck.push({ text: (r && r.script) || baseText, fw: fw || "Variation", angle: angle || "" });
-    } catch {
-      deck.push({ text: baseText, fw: fw || "Variation", angle: angle || "" });
-    }
-  }
+  // The three rewrites are independent — run them concurrently (order preserved).
+  const deck: DeckCard[] = await Promise.all(
+    prompts.map(async (prompt) => {
+      try {
+        const r: any = await api({ action: "refine_script", script: baseText, prompt });
+        return { text: (r && r.script) || baseText, fw: fw || "Variation", angle: angle || "" };
+      } catch {
+        return { text: baseText, fw: fw || "Variation", angle: angle || "" };
+      }
+    }),
+  );
   notifyFiltered();
   return deck;
 }

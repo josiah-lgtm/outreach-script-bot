@@ -12,7 +12,7 @@ import { useConfigStore } from "@/lib/store/configStore";
 import { useUiStore, STAGES } from "@/lib/store/uiStore";
 import { primaryNicheId } from "@/lib/sync/wizard";
 import type { Client, Niche } from "@/lib/sync/types";
-import { Avatar, Badge, Button, Card, Chip, Icon, Input, StageBadge, EmptyState, cn } from "@/components/ui";
+import { Avatar, Badge, Button, Card, Chip, Icon, Input, Select, StageBadge, EmptyState, cn } from "@/components/ui";
 import { ClientEditor } from "@/components/ClientEditor";
 import { notify } from "@/lib/notify";
 
@@ -56,9 +56,7 @@ export default function ClientsPage() {
   const filterCsm = useUiStore((s) => s.filterCsm);
   const filterTag = useUiStore((s) => s.filterTag);
   const filterStage = useUiStore((s) => s.filterStage);
-  const filterOpen = useUiStore((s) => s.filterOpen);
   const setFilter = useUiStore((s) => s.setFilter);
-  const toggleFilterOpen = useUiStore((s) => s.toggleFilterOpen);
   const resetFilters = useUiStore((s) => s.resetFilters);
   const selectMode = useUiStore((s) => s.selectMode);
   const selected = useUiStore((s) => s.selected);
@@ -124,12 +122,9 @@ export default function ClientsPage() {
         <div className="flex items-start justify-between mb-4 gap-3">
           <div>
             <h1 className="text-lg font-semibold">Clients</h1>
-            <p className="text-[13px] text-muted">All clients · filter by stage or tag below</p>
+            <p className="text-[13px] text-muted">All clients · search or narrow with the dropdowns</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm" icon="adjustments-horizontal" onClick={toggleFilterOpen}>
-              Filter{fcount ? ` (${fcount})` : ""}
-            </Button>
             <Button variant="secondary" size="sm" icon="checkbox" onClick={toggleSelectMode}>
               {selectMode ? "Done" : "Select"}
             </Button>
@@ -139,52 +134,49 @@ export default function ClientsPage() {
 
         {editorFor && <ClientEditor clientId={editorFor} onClose={() => setEditorFor(null)} />}
 
-        {/* Search */}
-        <div className="flex items-center gap-2 bg-bg2 border border-border rounded-[9px] px-3 py-2.5 mb-3 max-w-[480px]">
-          <Icon name="search" size={16} className="text-muted" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search clients by name or contact…"
-            className="flex-1 bg-transparent outline-none text-[14px] text-text placeholder:text-muted"
-            autoComplete="off"
-          />
-          {search && (
-            <button onClick={() => setSearch("")} className="text-muted hover:text-text cursor-pointer" aria-label="Clear search">
-              <Icon name="x" size={16} />
-            </button>
+        {/* Search + filter dropdowns — one clean bar (replaces the old chip clouds) */}
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <div className="flex items-center gap-2 bg-bg2 border border-border rounded-[9px] px-3 py-2 min-w-[220px] flex-1 max-w-[360px]">
+            <Icon name="search" size={16} className="text-muted" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search clients by name or contact…"
+              className="flex-1 bg-transparent outline-none text-[14px] text-text placeholder:text-muted"
+              autoComplete="off"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="text-muted hover:text-text cursor-pointer" aria-label="Clear search">
+                <Icon name="x" size={16} />
+              </button>
+            )}
+          </div>
+          <Select value={filterStage} onChange={(e) => setFilter("filterStage", e.target.value)} className="w-auto" aria-label="Filter by stage">
+            <option value="All">All stages</option>
+            {allStages.map((s) => (<option key={s} value={s}>{s}</option>))}
+          </Select>
+          <Select value={filterNiche} onChange={(e) => setFilter("filterNiche", e.target.value)} className="w-auto" aria-label="Filter by niche">
+            <option value="All">All niches</option>
+            {niches.map((n) => (<option key={n.id} value={n.id}>{n.name}</option>))}
+          </Select>
+          {csms.length > 0 && (
+            <Select value={filterCsm} onChange={(e) => setFilter("filterCsm", e.target.value)} className="w-auto" aria-label="Filter by CSM">
+              <option value="All">All CSMs</option>
+              {csms.map((c) => (<option key={c} value={c}>{c}</option>))}
+            </Select>
+          )}
+          {tags.length > 0 && (
+            <Select value={filterTag} onChange={(e) => setFilter("filterTag", e.target.value)} className="w-auto" aria-label="Filter by tag">
+              <option value="All">All tags</option>
+              {tags.map((t) => (<option key={t} value={t}>{t}</option>))}
+            </Select>
+          )}
+          {(!allClear || search) && (
+            <Button variant="ghost" size="sm" icon="x" onClick={quickAll}>
+              Clear{fcount ? ` (${fcount})` : ""}
+            </Button>
           )}
         </div>
-
-        {/* Quick-filter bar: All + stages + tag chips (legacy v9-quickbar :7204) */}
-        <div className="flex flex-wrap items-center gap-1.5 mb-3">
-          <Chip selected={allClear} onClick={quickAll}>All</Chip>
-          {STAGES.map((s) => (
-            <Chip key={s} selected={filterStage === s} onClick={() => setFilter("filterStage", filterStage === s ? "All" : s)}>{s}</Chip>
-          ))}
-          {tags.length > 0 && <span className="w-px h-5 bg-border mx-1" />}
-          {tags.map((t) => (
-            <Chip key={t} selected={filterTag === t} tone="accent" onClick={() => setFilter("filterTag", filterTag === t ? "All" : t)}>{t}</Chip>
-          ))}
-        </div>
-
-        {/* Expandable filter panel */}
-        {filterOpen && (
-          <Card className="p-3.5 mb-4 flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div className="text-[13px] font-semibold">Filters</div>
-              <Button variant="ghost" size="sm" onClick={quickAll}>Clear all</Button>
-            </div>
-            <FilterRow label="Niche" value={filterNiche} onPick={(v) => setFilter("filterNiche", v)}
-              options={niches.map((n) => ({ value: n.id, label: n.name }))} />
-            <FilterRow label="CSM" value={filterCsm} onPick={(v) => setFilter("filterCsm", v)}
-              options={csms.map((c) => ({ value: c, label: c }))} />
-            <FilterRow label="Tag" value={filterTag} onPick={(v) => setFilter("filterTag", v)}
-              options={tags.map((t) => ({ value: t, label: t }))} />
-            <FilterRow label="Stage" value={filterStage} onPick={(v) => setFilter("filterStage", v)}
-              options={allStages.map((s) => ({ value: s, label: s }))} />
-          </Card>
-        )}
 
         {/* Bulk bar */}
         {selectMode && (
@@ -241,22 +233,6 @@ export default function ClientsPage() {
             ))}
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function FilterRow({ label, value, options, onPick }: {
-  label: string; value: string; options: { value: string; label: string }[]; onPick: (v: string) => void;
-}) {
-  return (
-    <div className="flex items-start gap-2">
-      <span className="text-xs text-muted w-14 pt-1.5 shrink-0">{label}</span>
-      <div className="flex flex-wrap gap-1.5">
-        <Chip selected={value === "All"} onClick={() => onPick("All")}>All</Chip>
-        {options.map((o) => (
-          <Chip key={o.value} selected={value === o.value} onClick={() => onPick(value === o.value ? "All" : o.value)}>{o.label}</Chip>
-        ))}
       </div>
     </div>
   );

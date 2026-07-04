@@ -27,6 +27,7 @@ import type { Client } from "@/lib/sync/types";
 import { ScriptEditModal, type ScriptVersion } from "@/components/ScriptEditModal";
 import { CreateScriptWizard } from "@/components/wizard/CreateScriptWizard";
 import { FollowupBuilder } from "@/components/FollowupBuilder";
+import { FollowupHistoryModal, type FollowupHistorySeq } from "@/components/FollowupHistoryModal";
 import { BoardExportModal } from "./BoardExportModal";
 import type { BoardScript } from "./types";
 
@@ -61,11 +62,12 @@ export function KanbanBoard({ client, clientId }: { client: Client; clientId: st
   const [exportOpen, setExportOpen] = useState(false);
   const [wizOpen, setWizOpen] = useState(false);
   const [fuFor, setFuFor] = useState<{ parentLabel: string; parentText: string } | null>(null);
+  const [fuHistoryFor, setFuHistoryFor] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const reservoir = useMemo(() => (client.scriptReservoir as Script[]) || [], [client.scriptReservoir]);
-  const followups = (client.followups as Array<{ parentLabel?: string }>) || [];
+  const followups = (client.followups as FollowupHistorySeq[]) || [];
 
   const grouped = useMemo(() => {
     const g: Record<string, Script[]> = { idea: [], testing: [], winning: [] };
@@ -208,6 +210,7 @@ export function KanbanBoard({ client, clientId }: { client: Client; clientId: st
                     onToggleSel={() => toggleBoardSel(clientId, s.id as string)}
                     onEdit={() => setEditId(s.id as string)}
                     onFollowups={() => openFollowups(s.id as string)}
+                    onFuHistory={() => setFuHistoryFor(s.label || `${s.framework || ""} · ${s.angle || ""}`)}
                   />
                 ))
               )}
@@ -258,6 +261,16 @@ export function KanbanBoard({ client, clientId }: { client: Client; clientId: st
           clientId={clientId}
           parentLabel={fuFor.parentLabel}
           parentText={fuFor.parentText}
+        />
+      )}
+
+      {fuHistoryFor !== null && (
+        <FollowupHistoryModal
+          open
+          onClose={() => setFuHistoryFor(null)}
+          sequences={followups.filter((f) => f.parentLabel === fuHistoryFor)}
+          title="Follow-up history"
+          sub={fuHistoryFor}
         />
       )}
     </div>
@@ -316,6 +329,7 @@ function ScriptCard({
   onToggleSel,
   onEdit,
   onFollowups,
+  onFuHistory,
 }: {
   script: Script;
   fuCount: number;
@@ -323,6 +337,7 @@ function ScriptCard({
   onToggleSel: () => void;
   onEdit: () => void;
   onFollowups: () => void;
+  onFuHistory: () => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: script.id });
   const sub = [script.framework, script.angle].filter(Boolean).join(" · ");
@@ -361,9 +376,18 @@ function ScriptCard({
       <div className="text-[11px] text-subtle mt-1 line-clamp-2 leading-snug">{snipShort}</div>
       <div className="mt-1.5 flex items-center justify-between gap-2">
         {fuCount > 0 ? (
-          <span className="text-[10px] text-accent2 inline-flex items-center gap-1">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onFuHistory();
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            title="View follow-up history for this script"
+            className="text-[10px] text-accent2 inline-flex items-center gap-1 hover:underline cursor-pointer"
+          >
             <Icon name="arrow-forward-up" size={12} /> {fuCount} follow-up{fuCount > 1 ? "s" : ""}
-          </span>
+          </button>
         ) : (
           <span />
         )}

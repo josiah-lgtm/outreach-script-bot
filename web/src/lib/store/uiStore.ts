@@ -15,13 +15,11 @@ interface UiState {
   filterCsm: string;
   filterTag: string;
   filterStage: string;
-  filterOpen: boolean;
   selectMode: boolean;
   selected: Record<string, boolean>;
 
   setSearch: (v: string) => void;
   setFilter: (key: "filterNiche" | "filterCsm" | "filterTag" | "filterStage", value: string) => void;
-  toggleFilterOpen: () => void;
   resetFilters: () => void;
   toggleSelectMode: () => void;
   toggleSelected: (id: string) => void;
@@ -43,13 +41,11 @@ export const useUiStore = create<UiState>((set) => ({
   filterCsm: "All",
   filterTag: "All",
   filterStage: "All",
-  filterOpen: false,
   selectMode: false,
   selected: {},
 
   setSearch: (v) => set({ search: v }),
   setFilter: (key, value) => set({ [key]: value } as Partial<UiState>),
-  toggleFilterOpen: () => set((s) => ({ filterOpen: !s.filterOpen })),
   resetFilters: () => set({ filterNiche: "All", filterCsm: "All", filterTag: "All", filterStage: "All", search: "" }),
   toggleSelectMode: () => set((s) => ({ selectMode: !s.selectMode, selected: {} })),
   toggleSelected: (id) => set((s) => {

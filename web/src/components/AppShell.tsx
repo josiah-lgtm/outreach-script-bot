@@ -27,7 +27,6 @@ const NAV: NavItem[] = [
   { href: "/growth", label: "Growth", icon: "trending-up" },
   { href: "/sales", label: "Sales", icon: "target" },
   { href: "/admin", label: "Admin", icon: "adjustments-horizontal" },
-  { href: "/build", label: "Build", icon: "flask", muted: true },
 ];
 
 function SavePill() {
@@ -56,6 +55,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void useConfigStore.getState().boot();
   }, []);
+
+  // Live sync: pull teammates' saves without a manual reload. Poll while the tab is
+  // visible + refresh immediately when it regains focus. refreshFromServer() is a no-op
+  // whenever this device has unsynced edits, so it can never step on local work.
+  useEffect(() => {
+    if (!booted || !loggedIn) return;
+    const pull = () => void useConfigStore.getState().refreshFromServer();
+    const onVisible = () => { if (document.visibilityState === "visible") pull(); };
+    const iv = setInterval(() => { if (document.visibilityState === "visible") pull(); }, 45000);
+    window.addEventListener("focus", pull);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(iv);
+      window.removeEventListener("focus", pull);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [booted, loggedIn]);
 
   const user = typeof window !== "undefined" ? storedUser() : null;
 

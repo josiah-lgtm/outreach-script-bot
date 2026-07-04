@@ -20,7 +20,7 @@ import { getAdminKey } from "@/lib/sync/adminKey";
 import { api } from "@/lib/sync/api";
 import { notify } from "@/lib/notify";
 import { uid } from "@/lib/text-utils";
-import { clientPains, clientDesires, dedupeStr } from "@/lib/sync/wizard";
+import { clientPains, clientDesires, dedupeStr, learnExamples } from "@/lib/sync/wizard";
 import type { Client, Niche } from "@/lib/sync/types";
 
 interface FuFramework {
@@ -117,7 +117,9 @@ export function FollowupBuilder({
         icp: icp ? { title: icp.title, jobTitles: icp.jobTitles || [], niche: icp.niche } : undefined,
         client: { name: client!.name, caseStudy: client!.caseStudy || {} },
         basis,
-        rules,
+        // Learn from previously approved scripts: winning/kept scripts ride along as
+        // style exemplars so follow-ups match the voice that's already converting.
+        rules: rules + learnExamples(client),
       });
       const items = ((r.followups as FuItem[]) || []).map((it) => ({
         day: it.day,

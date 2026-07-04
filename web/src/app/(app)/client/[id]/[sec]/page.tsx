@@ -8,12 +8,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import { useConfigStore } from "@/lib/store/configStore";
 import type { Client, Niche } from "@/lib/sync/types";
 import { Avatar, Icon, EmptyState, cn } from "@/components/ui";
 import { KanbanBoard } from "@/components/board/KanbanBoard";
+import { FollowupHistoryModal, type FollowupHistorySeq } from "@/components/FollowupHistoryModal";
 import { MechanismBlock } from "@/components/client/MechanismBlock";
 import { NicheSection } from "@/components/client/NicheSection";
 import { GrowthSection, ClientSection, HistorySection } from "@/components/client/sections";
@@ -110,8 +111,9 @@ function OverviewSection({ client, clientId }: { client: Client; clientId: strin
   const niches = useConfigStore((s) => s.config.niches) as Niche[] | undefined;
   const primaryNicheId = (client.nicheIds || [])[0];
   const niche = (niches || []).find((n) => n.id === primaryNicheId);
-  const followups = (client.followups as Array<{ parentLabel?: string; items?: unknown[] }>) || [];
+  const followups = (client.followups as FollowupHistorySeq[]) || [];
   const caseStudy = (client.caseStudy as { result?: string } | undefined) || {};
+  const [fuHistoryIdx, setFuHistoryIdx] = useState<number | null>(null);
 
   return (
     <div className="flex flex-col gap-5">
@@ -134,15 +136,21 @@ function OverviewSection({ client, clientId }: { client: Client; clientId: strin
         {followups.length ? (
           <div className="flex flex-col">
             {followups.map((s, i) => (
-              <div
+              <button
                 key={i}
-                className="flex items-center justify-between gap-3 py-2 border-b border-border last:border-0 text-[14px]"
+                type="button"
+                onClick={() => setFuHistoryIdx(i)}
+                title="View this sequence's history"
+                className="flex items-center justify-between gap-3 py-2 border-b border-border last:border-0 text-[14px] w-full text-left cursor-pointer hover:bg-bg3 rounded-md px-1 -mx-1 transition-colors"
               >
-                <span className="inline-flex items-center gap-1.5">
-                  <Icon name="arrow-forward-up" size={14} className="text-muted" /> {s.parentLabel || "sequence"}
+                <span className="inline-flex items-center gap-1.5 min-w-0">
+                  <Icon name="arrow-forward-up" size={14} className="text-muted shrink-0" />
+                  <span className="truncate">{s.parentLabel || "sequence"}</span>
                 </span>
-                <span className="text-xs text-muted">{s.items ? s.items.length : 0} steps</span>
-              </div>
+                <span className="text-xs text-muted shrink-0 inline-flex items-center gap-1.5">
+                  {s.items ? s.items.length : 0} steps <Icon name="chevron-right" size={13} />
+                </span>
+              </button>
             ))}
           </div>
         ) : (
@@ -159,6 +167,16 @@ function OverviewSection({ client, clientId }: { client: Client; clientId: strin
           {[client.meta, caseStudy.result, client.website].filter(Boolean).join(" · ") || "—"}
         </div>
       </Card>
+
+      {fuHistoryIdx !== null && followups[fuHistoryIdx] && (
+        <FollowupHistoryModal
+          open
+          onClose={() => setFuHistoryIdx(null)}
+          sequences={[followups[fuHistoryIdx]]}
+          title="Follow-up history"
+          sub={followups[fuHistoryIdx].parentLabel || client.name}
+        />
+      )}
     </div>
   );
 }

@@ -215,10 +215,6 @@ export const DEFAULT_TOOLS_KB: any[] = [
   { id: 'tool-replyagent', name: 'AI Reply Agent', category: 'reply-agent', channels: ['email', 'linkedin'], link: '', costModel: 'flat', cost: 250, why: 'Answers replies within minutes and books the call. The client signs up for this directly.' },
 ];
 
-// Frameworks visible for a niche: global ones (no scope) + ones scoped to it.
-export const frameworksForNiche = (nicheId: string, cfg: Config): any[] =>
-  (cfg.frameworks || []).filter((f: any) => !(f.nicheIds || []).length || (f.nicheIds || []).includes(nicheId));
-
 // ─── MIGRATION ───────────────────────────────────────────────────────────────
 // Migrate older configs: clients used a single nicheId; v3 clients target many.
 export function migrateConfig(cfg: Config): Config {

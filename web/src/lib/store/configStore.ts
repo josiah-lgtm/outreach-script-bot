@@ -34,6 +34,7 @@ interface ConfigState {
   loggedIn: boolean;
   boot: () => Promise<void>;
   afterLogin: () => Promise<void>;
+  refreshFromServer: () => Promise<void>;
   update: (recipe: (draft: Config) => void) => void;
   replaceConfig: (cfg: Config, source: ConfigSource) => void;
   restoreConfig: (cfg: Config, source: ConfigSource) => void;
@@ -73,6 +74,32 @@ export const useConfigStore = create<ConfigState>()(immer((set, get) => ({
     } catch {
       set((s) => { s.loggedIn = true; });
     }
+  },
+
+  // Live-sync pull: adopt the server copy when it moved past us and this device has no
+  // unsynced edits. Runs on an interval + tab focus (AppShell), so a teammate's save shows
+  // up without a manual reload. A dirty/saving device skips the pull entirely — its own
+  // CAS save (with conflict-merge) is the correct channel for reconciling in that state.
+  refreshFromServer: async () => {
+    if (!getAdminKey() || !get().booted) return;
+    const before = get();
+    if (before.config._dirty || before.pill === "saving") return;
+    try {
+      const r = await api({ action: "get_config" });
+      const server = r?.config as Config | undefined;
+      if (!server || !Array.isArray(server.frameworks) || !server.frameworks.length) return;
+      const sRev = Number(server._rev || 0);
+      const lRev = Number(get().config._rev || 0);
+      if (sRev <= lRev) return;
+      // Re-check after the network await: an edit may have landed while we fetched.
+      if (get().config._dirty || get().pill === "saving") return;
+      server._dirty = false;
+      try { migrateConfig(server); } catch { /* ignore */ }
+      set((s) => { s.config = server; s.source = "server"; s.pill = "server"; });
+      saveLocalConfig(server);
+      refreshLens(server);
+      notify("🔄 Synced latest changes from your team");
+    } catch { /* transient — next tick will retry */ }
   },
 
   // Optimistic local write + schedule the debounced server save (mirrors persistConfig).
