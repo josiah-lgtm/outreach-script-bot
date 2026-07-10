@@ -59,10 +59,16 @@ export function ScriptEditModal({
   useEffect(() => {
     if (open && !wasOpen.current) {
       const vs = seed(initialVersions, initialText);
-      const a = initialVersions && initialVersions.length ? vs.length - 1 : 0;
+      // initialText is the CURRENTLY SAVED script — it is the source of truth, so always
+      // display it. Highlight the rail version whose text matches it (latest match), and only
+      // fall back to the last version when none matches. Previously this forced the last
+      // version's text, so after the user reverted to (and saved) an older version, reopening
+      // showed a stale newer version — and re-saving silently clobbered the saved script.
+      const matchIdx = vs.map((v) => v.text).lastIndexOf(initialText);
+      const a = matchIdx >= 0 ? matchIdx : vs.length - 1;
       setVersions(vs);
       setActive(a);
-      setText(vs[a]?.text ?? initialText);
+      setText(initialText);
       setAiInput("");
       setSel(null);
       setTimeout(() => taRef.current?.focus(), 60);

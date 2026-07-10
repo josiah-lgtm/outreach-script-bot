@@ -53,6 +53,10 @@ interface UsersListResponse { users?: TeamUser[] }
 interface UsersAddResponse { updated?: boolean }
 // create_notion_db → {id, url}.
 interface NotionDbResponse { id?: string; url?: string }
+// get/set/clear_notion_key → {status}, test_notion_key → {result}.
+interface NotionKeyStatus { set: boolean; source: string; last4: string }
+interface NotionKeyStatusResponse { status?: NotionKeyStatus }
+interface NotionKeyTestResponse { result?: { ok: boolean; name?: string; error?: string } }
 
 // A backup-ring snapshot as returned by listBackups()/restoreBackup() in configClient.
 interface BackupEntry { key: string; at?: string; tag?: string; clients: number; config: Config }
@@ -320,6 +324,80 @@ export function SettingsTab() {
   const [notionBoardParentDraft, setNotionBoardParentDraft] = useState(notionBoardParent || "3444fd2a4cfe80fa9f77dddfab8ad806");
   const [boardStatus, setBoardStatus] = useState("");
 
+  // ── Shared Notion API key (stored on the server, overrides the env fallback) ──
+  const [notionKeyStat, setNotionKeyStat] = useState<NotionKeyStatus | null>(null);
+  const [notionKeyDraft, setNotionKeyDraft] = useState("");
+  const [notionKeyBusy, setNotionKeyBusy] = useState(false);
+  const [notionKeyMsg, setNotionKeyMsg] = useState("");
+
+  // Mount: load the current key status (set/source/last4). setState only runs after the await.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!getAdminKey()) return;
+      try {
+        const r = (await api({ action: "get_notion_key_status" })) as NotionKeyStatusResponse;
+        if (alive && r.status) setNotionKeyStat(r.status);
+      } catch { /* ignore — the card still works, status just shows unknown */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  async function saveNotionKey() {
+    const key = notionKeyDraft.trim();
+    if (!key) return notify("Paste a Notion integration token first", true);
+    setNotionKeyBusy(true);
+    setNotionKeyMsg("Validating with Notion…");
+    try {
+      const r = (await api({ action: "set_notion_key", key })) as NotionKeyStatusResponse;
+      if (r.status) setNotionKeyStat(r.status);
+      setNotionKeyDraft("");
+      setNotionKeyMsg("✅ Saved — shared for everyone. This overrides the NOTION_API_KEY env fallback.");
+      notify("Notion key saved for the whole team");
+    } catch (e) {
+      setNotionKeyMsg("❌ " + ((e as Error)?.message || "Could not save the key"));
+      notify("Could not save the Notion key: " + ((e as Error)?.message || ""), true);
+    } finally {
+      setNotionKeyBusy(false);
+    }
+  }
+
+  async function testNotionKeyNow() {
+    setNotionKeyBusy(true);
+    setNotionKeyMsg("Testing the current key…");
+    try {
+      const cand = notionKeyDraft.trim();
+      const r = (await api({ action: "test_notion_key", ...(cand ? { key: cand } : {}) })) as NotionKeyTestResponse;
+      const res = r.result;
+      setNotionKeyMsg(res?.ok ? `✅ Connected to “${res.name || "workspace"}”.` : "❌ " + (res?.error || "Key rejected"));
+    } catch (e) {
+      setNotionKeyMsg("❌ " + ((e as Error)?.message || "Test failed"));
+    } finally {
+      setNotionKeyBusy(false);
+    }
+  }
+
+  async function clearNotionKey() {
+    if (!window.confirm("Clear the shared Notion key? Exports will fall back to the NOTION_API_KEY env var (if set).")) return;
+    setNotionKeyBusy(true);
+    try {
+      const r = (await api({ action: "clear_notion_key" })) as NotionKeyStatusResponse;
+      if (r.status) setNotionKeyStat(r.status);
+      setNotionKeyMsg("Cleared — now using the env fallback.");
+      notify("Shared Notion key cleared");
+    } catch (e) {
+      notify("Could not clear the key: " + ((e as Error)?.message || ""), true);
+    } finally {
+      setNotionKeyBusy(false);
+    }
+  }
+
+  const notionKeyLabel =
+    !notionKeyStat ? ""
+      : notionKeyStat.source === "stored" ? `Shared key set · ends …${notionKeyStat.last4}`
+        : notionKeyStat.source === "env" ? `Using the NOTION_API_KEY env fallback · ends …${notionKeyStat.last4}`
+          : "No key set — Notion exports are disabled";
+
   // Plan-defaults drafts: rates held as % strings (legacy showed value*1000/10), counts as-is.
   const toPct = (v: number | undefined) => Math.round((Number(v) || 0) * 1000) / 10;
   const seedPd = () => ({
@@ -494,13 +572,59 @@ export function SettingsTab() {
       <Card>
         <CardBody>
           <div className="flex items-center gap-2 text-sm font-semibold text-text">
-            <Icon name="upload" />
-            Notion export (Growth Plan Builder)
+            <Icon name="brand-notion" />
+            Notion connection
+          </div>
+
+          {/* ── Shared Notion API key (one integration token for the whole team) ── */}
+          <div className="flex items-center gap-2 text-[13px] font-semibold text-text mt-2">
+            <Icon name="shield-check" size={15} />
+            Notion API key (shared for everyone)
           </div>
           <Hint className="mt-1.5 mb-2.5">
-            Growth plans export as a page under this Notion page. Create an internal integration at
-            notion.so/my-integrations, share the destination page with it, then deploy with{" "}
-            <b>NOTION_API_KEY</b> set. Paste the destination page ID or URL below.
+            Create an internal integration at <b>notion.so/my-integrations</b>, copy its token, and paste it
+            below. It&apos;s stored on the server and used by <b>everyone</b> — no per-person setup. This overrides
+            the <b>NOTION_API_KEY</b> env var, which stays as a fallback. Remember to share each destination page
+            or database with the integration (page → ••• → Connections).
+          </Hint>
+          {notionKeyStat ? (
+            <div className="mb-2 text-[13px] text-subtle">
+              <Badge tone={notionKeyStat.source === "none" ? "neutral" : "accent"}>
+                {notionKeyStat.source === "stored" ? "Shared key" : notionKeyStat.source === "env" ? "Env fallback" : "Not set"}
+              </Badge>{" "}
+              {notionKeyLabel}
+            </div>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              className="max-w-[420px]"
+              type="password"
+              value={notionKeyDraft}
+              onChange={(e) => setNotionKeyDraft(e.target.value)}
+              placeholder="Notion integration token (secret_… or ntn_…)"
+            />
+            <Button variant="mini" size="sm" icon="device-floppy" loading={notionKeyBusy} onClick={saveNotionKey}>
+              Save
+            </Button>
+            <Button variant="mini" size="sm" icon="plug" loading={notionKeyBusy} onClick={testNotionKeyNow}>
+              Test
+            </Button>
+            {notionKeyStat?.source === "stored" ? (
+              <Button variant="danger" size="sm" icon="trash" loading={notionKeyBusy} onClick={clearNotionKey}>
+                Clear
+              </Button>
+            ) : null}
+          </div>
+          {notionKeyMsg ? <Hint className="mt-2">{notionKeyMsg}</Hint> : null}
+
+          <hr className="border-0 border-t border-border my-3.5" />
+
+          <div className="flex items-center gap-2 text-[13px] font-semibold text-text">
+            <Icon name="upload" size={15} />
+            Growth plan export destination
+          </div>
+          <Hint className="mt-1.5 mb-2.5">
+            Growth plans export as a page under this Notion page. Paste the destination page ID or URL below.
           </Hint>
           <div className="flex flex-wrap items-center gap-2">
             <Input

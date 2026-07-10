@@ -50,3 +50,41 @@ export async function testAnthropicKey(candidate?: string): Promise<{ ok: boolea
     return { ok: false, error: `Anthropic ${res.status}: ${(await res.text()).slice(0, 160)}` };
   } catch (e) { return { ok: false, error: String((e as Error).message ?? e) }; }
 }
+
+// ─── Notion API key (shared, admin-set in Settings; falls back to env) ──────────
+// The three Notion export actions resolve the key through this instead of reading
+// process.env directly, so ONE key set in Admin → Settings is shared by everyone,
+// and the NOTION_API_KEY env var is only a fallback when no key is stored.
+
+/** The effective Notion key: an admin-set key in kv['secrets'] wins, else the env fallback. */
+export async function resolveNotionKey(): Promise<string> {
+  try { const s = await secretsLoad(); if (s.notionKey) return s.notionKey; } catch { /* fall through to env */ }
+  return process.env.NOTION_API_KEY || "";
+}
+
+export async function notionKeyStatus(): Promise<{ set: boolean; source: string; last4: string }> {
+  const stored = (await secretsLoad()).notionKey;
+  const env = process.env.NOTION_API_KEY;
+  const k = stored || env || "";
+  return { set: !!k, source: stored ? "stored" : (env ? "env" : "none"), last4: k ? k.slice(-4) : "" };
+}
+
+// Validate a Notion token with a cheap GET /v1/users/me. Tests the given key, or the
+// resolved (stored/env) one. A Notion integration token has no fixed prefix (secret_… for
+// internal integrations, ntn_… for newer ones), so we validate by calling the API, not by shape.
+export async function testNotionKey(candidate?: string): Promise<{ ok: boolean; name?: string; error?: string }> {
+  const key = (candidate && candidate.trim()) || (await resolveNotionKey());
+  if (!key) return { ok: false, error: "No key set" };
+  try {
+    const res = await fetch("https://api.notion.com/v1/users/me", {
+      headers: { "Authorization": `Bearer ${key}`, "Notion-Version": "2022-06-28" },
+    });
+    if (res.ok) {
+      const d = await res.json().catch(() => ({} as Record<string, unknown>));
+      const bot = (d as { bot?: { owner?: { workspace_name?: string } } })?.bot;
+      const name = bot?.owner?.workspace_name || (d as { name?: string })?.name || "connected";
+      return { ok: true, name };
+    }
+    return { ok: false, error: `Notion ${res.status}: ${(await res.text()).slice(0, 160)}` };
+  } catch (e) { return { ok: false, error: String((e as Error).message ?? e) }; }
+}

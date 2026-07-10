@@ -6,7 +6,7 @@ import { claudeMessages } from "./claude";
 import { json, textOf, parseJson, pickModel, webSearchTool } from "./shared";
 import { getConfig, casSaveConfig } from "./db";
 import { getUsage, RATES, DAILY_AI_CALL_CAP } from "./usage";
-import { anthropicKeyStatus, testAnthropicKey, secretsLoad, secretsSave, markKeyChanged } from "./secrets";
+import { anthropicKeyStatus, testAnthropicKey, secretsLoad, secretsSave, markKeyChanged, notionKeyStatus, testNotionKey } from "./secrets";
 import { researchProspect, researchClientSite, researchNiche, researchCompetitors } from "./research";
 import { handleGenerate } from "./generate";
 import { exportNotion, exportNotionDb, createNotionDb } from "./notion";
@@ -46,6 +46,32 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
     case "test_anthropic_key": {
       const cand = body.key ? String(body.key).trim() : undefined;
       return json({ ok: true, result: await testAnthropicKey(cand) });
+    }
+
+    case "get_notion_key_status":
+      return json({ ok: true, status: await notionKeyStatus() });
+
+    case "set_notion_key": {
+      const key = String(body.key ?? "").trim();
+      if (!key) return json({ ok: false, error: "key required" }, 400);
+      const t = await testNotionKey(key);
+      if (!t.ok) return json({ ok: false, error: "Key rejected by Notion: " + (t.error || "invalid") + " — share your destination pages with the integration, then try again." }, 400);
+      const s = await secretsLoad();
+      s.notionKey = key;
+      await secretsSave(s);
+      return json({ ok: true, status: await notionKeyStatus() });
+    }
+
+    case "clear_notion_key": {
+      const s = await secretsLoad();
+      delete s.notionKey;
+      await secretsSave(s);
+      return json({ ok: true, status: await notionKeyStatus() });
+    }
+
+    case "test_notion_key": {
+      const cand = body.key ? String(body.key).trim() : undefined;
+      return json({ ok: true, result: await testNotionKey(cand) });
     }
 
     case "get_config": {

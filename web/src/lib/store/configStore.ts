@@ -22,6 +22,12 @@ type Pill = "server" | "saving" | "error" | "local";
 
 let saveWarned = false;
 
+// Monotonic counter bumped on every local edit. _flush snapshots it before its network
+// round-trip and, on success, only clears _dirty when the count is unchanged — so an edit
+// that lands DURING the save is never marked "saved". Without this, the brief _dirty=false
+// window let a reload/boot adopt the (older) server copy and silently drop that edit.
+let editSeq = 0;
+
 function refreshLens(cfg: Config): void {
   setLensContext({ systemFilter: cfg?.settings?.systemFilter ?? null });
 }
@@ -104,6 +110,7 @@ export const useConfigStore = create<ConfigState>()(immer((set, get) => ({
 
   // Optimistic local write + schedule the debounced server save (mirrors persistConfig).
   update: (recipe) => {
+    editSeq++;
     set((s) => { recipe(s.config as Config); (s.config as Config)._dirty = true; s.pill = "saving"; });
     const cfg = get().config;
     saveLocalConfig(cfg);
@@ -161,6 +168,7 @@ export const useConfigStore = create<ConfigState>()(immer((set, get) => ({
     const cfg = get().config;
     const baseRev = Number(cfg._rev) || 0;
     const payload: any = Object.assign({}, cfg); delete payload._dirty;
+    const seqAtSend = editSeq;   // detect edits that land DURING the round-trip (below)
     try {
       const r = await api({ action: "save_config", config: payload, baseRev });
       if (r && r.conflict) {
@@ -190,9 +198,18 @@ export const useConfigStore = create<ConfigState>()(immer((set, get) => ({
         return;
       }
       if (r && Number.isFinite(Number(r.rev))) set((s) => { (s.config as Config)._rev = Number(r.rev); });
-      set((s) => { (s.config as Config)._dirty = false; s.source = "server"; s.pill = "server"; });
+      // Only mark clean if no edit landed while this save was in flight. If one did, it set
+      // _dirty=true and queued its own save; clearing _dirty here would let a reload/team-pull/
+      // CAS-conflict adopt the server copy and silently drop that edit. Keep _dirty + re-queue.
+      const editedDuringFlush = editSeq !== seqAtSend;
+      set((s) => {
+        if (!editedDuringFlush) (s.config as Config)._dirty = false;
+        s.source = "server";
+        s.pill = editedDuringFlush ? "saving" : "server";
+      });
       saveWarned = false;
       saveLocalConfig(get().config);
+      if (editedDuringFlush) scheduleSave(() => get()._flush(0, 0));
     } catch (e) {
       if (attempt < 2) { setTimeout(() => get()._flush(attempt + 1, conflictDepth), 1500 * (attempt + 1)); return; }
       console.warn("server save failed:", (e as Error).message);

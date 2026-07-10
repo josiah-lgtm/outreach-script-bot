@@ -2,6 +2,10 @@
 // database-row export, and database creation). Port of legacy index.ts:211-264 + 1480-1685.
 
 import { json } from "./shared";
+import { resolveNotionKey } from "./secrets";
+
+// Shared, admin-settable key (Admin → Settings) with the NOTION_API_KEY env var as a fallback.
+const NO_KEY_ERROR = "No Notion API key set — add one in Admin → Settings, or set NOTION_API_KEY on the server.";
 
 // Notion rich_text content caps at 2000 chars; keep a safe margin.
 export function nRich(content: string) {
@@ -57,8 +61,8 @@ export function dashifyId(raw: string): string {
 
 // ─── export_notion: create a page under a parent page ─────────────────────────
 export async function exportNotion(body: Record<string, unknown>): Promise<Response> {
-  const key = process.env.NOTION_API_KEY;
-  if (!key) return json({ ok: false, error: "NOTION_API_KEY not set on the server — add it as an env secret and redeploy" }, 400);
+  const key = await resolveNotionKey();
+  if (!key) return json({ ok: false, error: NO_KEY_ERROR }, 400);
   const parentId = dashifyId(String(body.parentId ?? "").trim());
   if (!parentId) return json({ ok: false, error: "parentId (Notion page) required" }, 400);
   const headers = { "Authorization": `Bearer ${key}`, "Notion-Version": "2022-06-28", "Content-Type": "application/json" };
@@ -101,8 +105,8 @@ export async function exportNotion(body: Record<string, unknown>): Promise<Respo
 
 // ─── export_notion_db: one schema-aware row in a Notion database ──────────────
 export async function exportNotionDb(body: Record<string, unknown>): Promise<Response> {
-  const key = process.env.NOTION_API_KEY;
-  if (!key) return json({ ok: false, error: "NOTION_API_KEY not set on the server — add it as an env secret and redeploy" }, 400);
+  const key = await resolveNotionKey();
+  if (!key) return json({ ok: false, error: NO_KEY_ERROR }, 400);
   const headers = { "Authorization": `Bearer ${key}`, "Notion-Version": "2022-06-28", "Content-Type": "application/json" };
 
   let dbId = dashifyId(String(body.databaseId ?? "").trim());
@@ -210,8 +214,8 @@ export async function exportNotionDb(body: Record<string, unknown>): Promise<Res
 
 // ─── create_notion_db: build the "clients script testing board" database ──────
 export async function createNotionDb(body: Record<string, unknown>): Promise<Response> {
-  const key = process.env.NOTION_API_KEY;
-  if (!key) return json({ ok: false, error: "NOTION_API_KEY not set on the server" }, 400);
+  const key = await resolveNotionKey();
+  if (!key) return json({ ok: false, error: NO_KEY_ERROR }, 400);
   const parentId = dashifyId(String(body.parentId ?? "").trim());
   if (!parentId) return json({ ok: false, error: "parentId (Notion page) required" }, 400);
   const headers = { "Authorization": `Bearer ${key}`, "Notion-Version": "2022-06-28", "Content-Type": "application/json" };
