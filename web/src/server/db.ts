@@ -99,3 +99,13 @@ export async function kvSet(key: string, value: unknown): Promise<void> {
     [key, JSON.stringify(value)],
   );
 }
+
+export async function kvDel(key: string): Promise<void> {
+  await pool().query("DELETE FROM kv WHERE key = $1", [key]);
+}
+
+/** Prefix scan — used by the MCP OAuth store to expire stale grants. */
+export async function kvKeys(prefix: string): Promise<string[]> {
+  const r = await pool().query<{ key: string }>("SELECT key FROM kv WHERE key LIKE $1", [prefix + "%"]);
+  return r.rows.map((x) => x.key);
+}

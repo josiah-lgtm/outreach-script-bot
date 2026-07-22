@@ -11,6 +11,7 @@ import { researchProspect, researchClientSite, researchNiche, researchCompetitor
 import { handleGenerate } from "./generate";
 import { exportNotion, exportNotionDb, createNotionDb } from "./notion";
 import { usersList, usersAdd, usersRemove } from "./auth";
+import { prompts, slotParts } from "./prompts";
 
 export async function dispatch(action: string, body: Record<string, unknown>): Promise<Response> {
   switch (action) {
@@ -132,16 +133,7 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const res = await claudeMessages({
         model: CLAUDE_MODEL,
         max_tokens: 1600,
-        system:
-          `You reverse-engineer winning cold outreach scripts into reusable frameworks for a lead generation agency.\n` +
-          `Given one or more scripts that got replies, extract the underlying repeatable structure:\n` +
-          `- Keep the load-bearing structure and phrasing patterns that make it work.\n` +
-          `- Replace the situation-specific parts (pain, proof, names, numbers, CTA target) with descriptive snake_case {{variables}}.\n` +
-          `- Write rules that capture why it wins: length, tone, rhythm, what each part must do.\n` +
-          `Return valid JSON only, no markdown fences:\n` +
-          `{"name":"short memorable framework name","category":"what it is (Proof-led / Pain-led / Curiosity-led / Ultra-short / ...)",` +
-          `"template":"the structure with {{variables}}","rules":"the rules that make it win",` +
-          `"analysis":"2-3 sentences on why this script structure works"}`,
+        system: (await prompts()).frameworkExtractor,
         messages: [{
           role: "user",
           content: scripts.map((s, i) => `SCRIPT ${i + 1}:\n${s}`).join("\n\n---\n\n") +
@@ -160,7 +152,7 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const res = await claudeMessages({
         model: pickModel(body.model),
         max_tokens: 4000,
-        system: `You are a cold email editor. The user gives you a script and a revision instruction. Make ONLY the requested changes — preserve what works. Return ONLY the revised script text, no commentary, no quotes, no markdown.`,
+        system: (await prompts()).scriptRefiner,
         messages: [{ role: "user", content: `SCRIPT:\n${script}\n\nINSTRUCTION: ${prompt}` }],
       });
       return json({ ok: true, script: textOf(res.content).trim() });
@@ -223,10 +215,7 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const res = await claudeMessages({
         model: CLAUDE_HAIKU,
         max_tokens: 400,
-        system:
-          `You are a cold email editor. The user highlighted ONE EXCERPT of a script and wants only that excerpt rewritten. ` +
-          `Rewrite the excerpt per the instruction so it fits seamlessly back into the surrounding script (tone, tense, flow). ` +
-          `Return ONLY the replacement text for the excerpt — no commentary, no quotes, no markdown, and do NOT return the rest of the script.`,
+        system: (await prompts()).selectionRefiner,
         messages: [{
           role: "user",
           content: `FULL SCRIPT (context):\n${script}\n\nHIGHLIGHTED EXCERPT TO REWRITE:\n${selection}\n\nINSTRUCTION: ${prompt}`,
@@ -241,14 +230,7 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const res = await claudeMessages({
         model: CLAUDE_MODEL,
         max_tokens: 2000,
-        system:
-          `You extract cold outreach intelligence from sales call transcripts. Read the transcript and identify actionable material.\n` +
-          `Return valid JSON only, no markdown fences:\n` +
-          `{"pains":["6-8 specific pain points, phrased in the prospect's exact words where possible"],` +
-          `"desires":["4-6 outcomes they explicitly or implicitly want"],` +
-          `"angles":["5-8 testable cold email angles derived from what you heard — use their exact language"],` +
-          `"offers":["3-5 potential offer structures that would resonate based on what was said"],` +
-          `"insights":"2-3 sentences on what this call reveals about the niche and what messaging will land"}`,
+        system: (await prompts()).transcriptExtractor,
         messages: [{ role: "user", content: `Call transcript:\n${text}` }],
       });
       const parsed = parseJson(textOf(res.content), null as Record<string, unknown> | null);
@@ -264,9 +246,7 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const res = await claudeMessages({
         model: CLAUDE_HAIKU,
         max_tokens: 600,
-        system:
-          `You generate testable cold email angle hooks for a specific niche. Each angle is a 5-14 word specific hook — a problem, trigger event, or curiosity gap. Make them distinct, concrete, and sendable as email openers.\n` +
-          `Return valid JSON only, no markdown: {"angles":["6 angles"]}`,
+        system: (await prompts()).angleSuggester,
         messages: [{
           role: "user",
           content: `Niche: ${nicheName}\n${clientContext ? `Client context: ${clientContext}` : ""}${userPrompt ? `\nDirection / focus: ${userPrompt}` : ""}`,
@@ -282,29 +262,7 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const res = await claudeMessages({
         model: CLAUDE_MODEL,
         max_tokens: 6000,
-        system:
-          `You are a world-renowned outbound/cold-email strategist. Given everything known about a lead-gen agency's client ` +
-          `(their offer, mechanism, proof, customer pains, call-transcript intel, competitors), define the 1-5 BEST ideal customer profiles to target with cold outreach.\n` +
-          `Rules of great outbound ICPs:\n` +
-          `- Specific job titles that actually hold the budget/pain (not generic "decision makers").\n` +
-          `- A market that is ACCESSIBLE via outbound (findable on LinkedIn/Apollo/email databases). The sweet spot is roughly 10,000-100,000 reachable prospects — big enough to scale sequences, small enough to specialize messaging. Around 30-40K is ideal. Flag anything under ~5K (too thin) or over ~500K (unfocused).\n` +
-          `- The client's existing proof must transfer: pick ICPs where their case studies and mechanism are believable.\n` +
-          `- Use web search (up to 4 searches) to ESTIMATE market size: LinkedIn title counts, industry association stats, census/firmographic data ("number of X companies in Y"). State numbers with their basis; never present a guess as fact — if it is a reasoned estimate, say so.\n` +
-          `Return valid JSON only, no markdown fences:\n` +
-          `{"icps":[{` +
-          `"title":"short memorable ICP label",` +
-          `"niche":"the vertical/niche",` +
-          `"jobTitles":["3-6 exact titles to target"],` +
-          `"locations":["1-3 geos, most accessible first"],` +
-          `"employeeSize":"company size band, e.g. 11-50",` +
-          `"revenue":"revenue band if relevant, else empty string",` +
-          `"marketSize":"estimated reachable prospects + one-line basis, e.g. '~35K — LinkedIn shows 32-38K matching titles in US'",` +
-          `"why":"2-3 sentences: why this ICP fits THIS client — tie to their pains/mechanism/proof",` +
-          `"outboundNotes":"reachability, buying triggers, what to lead with",` +
-          `"score":8` +
-          `}],"insights":"2-3 sentences: overall targeting strategy and which ICP to start with"}\n` +
-          `Order icps best-first. score is outbound-fit 1-10.\n` +
-          `IMPORTANT: do all web searching FIRST, then write NOTHING except the single JSON object as your final answer — no commentary before or after it.`,
+        system: (await prompts()).icpBuilder,
         messages: [{ role: "user", content: `CLIENT DOSSIER:\n${context}` }],
         tools: [webSearchTool(4)],
       });
@@ -324,14 +282,7 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const res = await claudeMessages({
         model: CLAUDE_HAIKU,
         max_tokens: 300,
-        system:
-          `You fuse hand-picked ingredients (pains, desired outcomes, guarantees, offers) into ONE cold-email angle hook. ` +
-          `5-14 words, specific, written the way the prospect would say it, sendable as an email opener's theme. ` +
-          `Use the ingredients' substance — don't just concatenate them. The angle must make immediate sense to the prospect: ` +
-          `frame the PAIN as their situation and the outcome/guarantee as the tension or promise.\n` +
-          `Example — pain: "leads go cold before we follow up" + outcome: "predictable booked calls" → {"angle":"Leads going cold while the calendar stays empty"}\n` +
-          `NEVER invent numbers or claims: only numbers that appear verbatim in the ingredients may be used.\n` +
-          `Return valid JSON only: {"angle":"the fused angle"}`,
+        system: (await prompts()).fuseAngle,
         messages: [{
           role: "user",
           content: ingredients.map((i) => `${i.kind}: ${i.text}`).join("\n") +
@@ -380,18 +331,10 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const res = await claudeMessages({
         model: CLAUDE_MODEL,
         max_tokens: 1400,
-        system:
-          `You turn a lead gen agency's internal client notes into a clean client facing brief that opens a growth plan. ` +
-          `The client reading it should feel "they did their research on us".\n` +
-          `STYLE RULES (strict): simple, concise, clear. Plain English a busy founder skims in seconds. ` +
-          `NEVER use dashes or hyphens of any kind in the text, not even in compound words you can rephrase. Use commas or the word "to" instead. ` +
-          `No jargon, no fluff, no exaggeration. Only use facts present in the notes, never invent numbers or names.\n` +
-          (rules ? `HOUSE LANGUAGE RULES (also obey):\n${rules}\n` : "") +
-          `Return valid JSON only, no fences:\n` +
-          `{"services":["3 to 5 short lines, what the client offers, each under 12 words"],` +
-          `"positioning":"2 to 3 sentences: who they serve, how they get results, why them",` +
-          `"caseStudies":["each proven result as one clean line with its real numbers"],` +
-          `"competitors":["each competitor as one line: Name, what they pitch, how our client differs"]}`,
+        system: await (async () => {
+          const p = await slotParts("clientBrief");
+          return p.body + "\n" + (rules ? `HOUSE LANGUAGE RULES (also obey):\n${rules}\n` : "") + p.contract.replace(/^\n/, "");
+        })(),
         messages: [{ role: "user", content: `CLIENT NOTES:\n${ctx}` }],
       });
       const parsed = parseJson(textOf(res.content), null as Record<string, unknown> | null);
@@ -405,12 +348,7 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const res = await claudeMessages({
         model: CLAUDE_MODEL,
         max_tokens: 800,
-        system:
-          `You find ONE real company that is a textbook example of an ideal customer profile, using web search (up to 3 searches). ` +
-          `It must be a real, currently operating company with a working website that matches the ICP's niche, size and location. ` +
-          `Never invent a company. If genuinely nothing fits, return an empty company string.\n` +
-          `Style: no dashes or hyphens in the text, plain clear English.\n` +
-          `Return valid JSON only, no fences: {"company":"name","website":"domain.com","why":"one sentence: why this company is a perfect example of the ICP"}`,
+        system: (await prompts()).icpExample,
         messages: [{
           role: "user",
           content: `ICP: ${icp.title}\nNiche: ${icp.niche ?? ""}\nBuyer titles: ${(icp.jobTitles ?? []).join(", ")}\nCompany size: ${icp.employeeSize ?? ""}\nLocations: ${(icp.locations ?? []).join(", ")}`,
@@ -432,7 +370,7 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const basis = body.basis as { pains?: string[]; desires?: string[]; angles?: string[] } | undefined;
       const rules = String(body.rules ?? "").trim();
       const sys =
-        `You write OUTBOUND FOLLOW-UP emails — short messages sent AFTER a first cold email that got no reply. ` +
+        (await prompts()).followupWriter + " " +
         `Write ${frameworks.length} follow-ups, one per framework given, in order. Each must:\n` +
         `- Follow its framework's structure and fill every {placeholder} from the real client data (never leave a {placeholder} or invent numbers).\n` +
         `- Build on the first script's thread without repeating it; reference it lightly ("circling back", "following up").\n` +
@@ -522,9 +460,7 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const res = await claudeMessages({
         model: CLAUDE_HAIKU,
         max_tokens: 800,
-        system:
-          `You are a cold outreach strategist. Given a client's case study data, suggest 4-6 distinct offer packages they could sell — each with a name and one-line description. Make them concrete, risk-reversed, and outcome-focused.\n` +
-          `Return valid JSON only, no markdown: {"offers":[{"name":"short offer name","description":"one-line description of what's included and the outcome"}]}`,
+        system: (await prompts()).offerSuggester,
         messages: [{ role: "user", content: `Client data:\n${context}` }],
       });
       const parsed = parseJson(textOf(res.content), { offers: [] as { name: string; description: string }[] });

@@ -9,14 +9,25 @@ import { LENS_ACTIONS, FIRST_LINER_ENGINE_ANGLES, FIRST_LINER_ENGINE_SCRIPT } fr
 // deno-style permissive shapes — the config/client documents are dynamic.
 type SystemFilter = { enabled?: boolean; lens?: string; messaging?: string; icpScripter?: string; offers?: string } | null;
 type ActiveClient = { transcripts?: Array<{ text?: string; pains?: string[]; angles?: string[]; desires?: string[] }>; sources?: Record<string, unknown> } | null;
+/** settings.engines — per-install overrides for the baked-in methodology blocks. */
+type Engines = { icpAngles?: string; scriptFirstLiner?: string; [k: string]: unknown } | null;
 
 let _systemFilter: SystemFilter = null;
 let _activeClient: ActiveClient = null;
+let _engines: Engines = null;
 
 /** The store calls this whenever config.settings.systemFilter or the open client changes. */
-export function setLensContext(ctx: { systemFilter?: SystemFilter; activeClient?: ActiveClient }): void {
+export function setLensContext(ctx: { systemFilter?: SystemFilter; activeClient?: ActiveClient; engines?: Engines }): void {
   if ("systemFilter" in ctx) _systemFilter = ctx.systemFilter ?? null;
   if ("activeClient" in ctx) _activeClient = ctx.activeClient ?? null;
+  if ("engines" in ctx) _engines = ctx.engines ?? null;
+}
+
+// An empty/absent override means "use the baked-in default", so a slot is always
+// revertible by clearing it. Kept identical to server/prompts.ts's resolveSlot().
+function engine(key: "icpAngles" | "scriptFirstLiner", fallback: string): string {
+  const v = _engines?.[key];
+  return typeof v === "string" && v.trim() ? v : fallback;
 }
 
 // The client's own research (call transcripts + saved sources) — used to validate pains.
@@ -70,12 +81,12 @@ export function withSystemFilter(body: any): any {
     if (body.action === "generate") {
       const lite = composeLensLite();
       if (lite) parts.push(lite);
-      parts.push(FIRST_LINER_ENGINE_SCRIPT);
+      parts.push(engine("scriptFirstLiner", FIRST_LINER_ENGINE_SCRIPT));
     } else {
       const lens = composeLens();
       if (lens) parts.push(lens);
       if (body.action === "suggest_angles" || body.action === "suggest_offers" || body.action === "build_icp" || body.action === "fuse_angle") {
-        parts.push(FIRST_LINER_ENGINE_ANGLES);
+        parts.push(engine("icpAngles", FIRST_LINER_ENGINE_ANGLES));
         const research = clientResearch();
         if (research) parts.push(research);
       }

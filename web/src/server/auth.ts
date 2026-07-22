@@ -73,6 +73,45 @@ export async function handleLogin(body: Record<string, unknown>, req: Request): 
   return json({ ok: true, adminKey, name: u.name, email: u.email });
 }
 
+/**
+ * Credential check for the MCP OAuth authorize screen. Same user store, same
+ * PBKDF2 parameters and the same per-IP/per-email throttle as `handleLogin` —
+ * the sign-in page in an OAuth popup must not be an easier target than the app's
+ * own login form. Returns the user on success, or a reason string on failure.
+ */
+export async function verifyTeamCredentials(
+  email: string,
+  password: string,
+  req: Request,
+): Promise<{ ok: true; name: string; email: string } | { ok: false; error: string }> {
+  email = String(email ?? "").trim().toLowerCase();
+  password = String(password ?? "");
+  if (!email || !password) return { ok: false, error: "email and password required" };
+
+  const ip = loginClientIp(req);
+  const now = Date.now();
+  const keyIp = "ip:" + ip, keyEmail = "em:" + email;
+  const attempts = await loginAttemptsLoad();
+  for (const k of Object.keys(attempts)) { if (now - attempts[k].first > LOGIN_WINDOW_MS) delete attempts[k]; }
+  const blocked = [keyIp, keyEmail].some((k) => attempts[k] && attempts[k].n >= LOGIN_MAX && (now - attempts[k].first) <= LOGIN_WINDOW_MS);
+  if (blocked) {
+    await new Promise((r) => setTimeout(r, 900));
+    return { ok: false, error: "Too many sign-in attempts. Wait a few minutes and try again." };
+  }
+
+  const users = await usersLoad();
+  const u = users.find((x) => x.email.toLowerCase() === email);
+  const okPw = u ? (await hashPassword(password, u.salt)) === u.hash : false;
+  if (!u || !okPw) {
+    for (const k of [keyIp, keyEmail]) { const a = attempts[k] = attempts[k] || { n: 0, first: now }; a.n += 1; }
+    await loginAttemptsSave(attempts);
+    await new Promise((r) => setTimeout(r, 900));
+    return { ok: false, error: "Wrong email or password." };
+  }
+  if (attempts[keyIp] || attempts[keyEmail]) { delete attempts[keyIp]; delete attempts[keyEmail]; await loginAttemptsSave(attempts); }
+  return { ok: true, name: u.name, email: u.email };
+}
+
 export async function usersList(): Promise<Response> {
   const users = await usersLoad();
   return json({ ok: true, users: users.map((u) => ({ email: u.email, name: u.name, createdAt: u.createdAt })) });

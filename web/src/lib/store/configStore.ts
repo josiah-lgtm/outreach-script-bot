@@ -29,7 +29,10 @@ let saveWarned = false;
 let editSeq = 0;
 
 function refreshLens(cfg: Config): void {
-  setLensContext({ systemFilter: cfg?.settings?.systemFilter ?? null });
+  setLensContext({
+    systemFilter: cfg?.settings?.systemFilter ?? null,
+    engines: cfg?.settings?.engines ?? null,
+  });
 }
 
 interface ConfigState {

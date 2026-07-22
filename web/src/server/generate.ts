@@ -6,6 +6,12 @@
 import { CLAUDE_MODEL } from "./anthropic";
 import { claudeMessages } from "./claude";
 import { textOf, parseJson, json, MAX_FRAMEWORKS, MAX_ANGLES, MAX_VARIANTS_PER_ANGLE, MAX_TOTAL_SCRIPTS, MAX_PROMPT_CHARS } from "./shared";
+import { prompts } from "./prompts";
+
+// Fallback persona when the caller resolves no override (keeps buildSystemPrompt pure
+// and synchronously callable from the MCP prompt-preview tool).
+const DEFAULT_WRITER_PERSONA =
+  "You are a world-class cold email copywriter. You write short, punchy, conversational scripts that get replies, never marketing copy.";
 
 export interface Framework {
   id: string;
@@ -36,7 +42,7 @@ export interface GenerateBody {
   research?: { summary?: string; pains?: string[]; hooks?: string[] };
 }
 
-function buildSystemPrompt(body: GenerateBody, fw: Framework): { shared: string; framework: string } {
+export function buildSystemPrompt(body: GenerateBody, fw: Framework, writerPersona?: string): { shared: string; framework: string } {
   const cs = body.client.caseStudy ?? {};
   const csLines = Object.entries(cs)
     .filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== "")
@@ -84,7 +90,7 @@ function buildSystemPrompt(body: GenerateBody, fw: Framework): { shared: string;
     ? `\nEMPHASIS — the user hand-picked these as the focus. Build the scripts around them:\n${emphasisParts.join("\n")}\n`
     : "";
 
-  const shared = `You are a world-class cold email copywriter. You write short, punchy, conversational scripts that get replies, never marketing copy.
+  const shared = `${writerPersona ?? DEFAULT_WRITER_PERSONA}
 
 GLOBAL STYLE RULES:
 ${body.globalRules || "(none)"}
@@ -131,9 +137,9 @@ function buildUserPrompt(body: GenerateBody): string {
 
 interface VariantOut { angle: string; label: string; script: string }
 
-async function generateForFramework(body: GenerateBody, fw: Framework) {
+async function generateForFramework(body: GenerateBody, fw: Framework, writerPersona: string) {
   const count = body.angles.length * body.variantsPerAngle;
-  const { shared, framework } = buildSystemPrompt(body, fw);
+  const { shared, framework } = buildSystemPrompt(body, fw, writerPersona);
   const user = buildUserPrompt(body);
   if (shared.length + framework.length + user.length > MAX_PROMPT_CHARS) {
     return { frameworkId: fw.id, framework: fw.name, category: fw.category, error: "prompt too long" };
@@ -182,14 +188,17 @@ export async function handleGenerate(body: Record<string, unknown>): Promise<Res
   if (total > MAX_TOTAL_SCRIPTS) {
     return json({ ok: false, error: `matrix too large: ${total} scripts (max ${MAX_TOTAL_SCRIPTS}) — deselect some frameworks/angles` }, 400);
   }
+  // The writer persona is an overridable prompt slot (settings.engines.scriptWriter);
+  // resolve it ONCE so every framework in the fan-out shares a byte-stable cached prefix.
+  const writerPersona = (await prompts()).scriptWriter;
   // Warm the shared cached prefix with the first framework, then fan out the rest.
   let results: Awaited<ReturnType<typeof generateForFramework>>[];
   if (g.frameworks.length > 1) {
-    const first = await generateForFramework(g, g.frameworks[0]);
-    const rest = await Promise.all(g.frameworks.slice(1).map((fw) => generateForFramework(g, fw)));
+    const first = await generateForFramework(g, g.frameworks[0], writerPersona);
+    const rest = await Promise.all(g.frameworks.slice(1).map((fw) => generateForFramework(g, fw, writerPersona)));
     results = [first, ...rest];
   } else {
-    results = [await generateForFramework(g, g.frameworks[0])];
+    results = [await generateForFramework(g, g.frameworks[0], writerPersona)];
   }
   const usage = results.reduce(
     (acc, r) => "usage" in r && r.usage

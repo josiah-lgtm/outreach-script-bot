@@ -281,6 +281,11 @@ export function migrateConfig(cfg: Config): Config {
     cfg.settings.notionParentId = '3744fd2a4cfe8015830fc724e06dcdb3';
   }
   cfg.settings.growthRules = cfg.settings.growthRules || '';
+  // Per-install overrides for the baked-in methodology prompts (ICP builder, script
+  // writer, first-liner engines, …). Empty/absent per key = use the baked-in default,
+  // so this is inert until someone edits a slot (Admin, or the MCP set_logic tool).
+  // See web/src/server/prompts.ts for the slot registry.
+  if (!cfg.settings.engines || typeof cfg.settings.engines !== 'object') cfg.settings.engines = {};
   {
     const sf: any = Object.assign({ enabled: true, model: 'sonnet', lens: '', messaging: '', icpScripter: '', offers: '' }, cfg.settings.systemFilter || {});
     const mergeTxt = (...xs: any[]) => xs.map(x => String(x || '').trim()).filter(Boolean).join('\n\n');
