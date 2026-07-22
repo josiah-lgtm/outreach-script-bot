@@ -86,6 +86,113 @@ export async function casSaveConfig(
   }
 }
 
+// ─── Cross-app export projections (consumed by the Client Growth Engine) ───────
+//
+// The CGE dashboard mirrors each linked client's script board on a cron. Handing
+// it `get_config` would ship the ENTIRE document (clients, transcripts, ICPs,
+// prospects, growth/sales docs — multi-MB) on every tick just to read the script
+// reservoirs, so these read the projection in Postgres and ship only that.
+//
+// `scriptReservoir` entries are passed through VERBATIM: the reservoir is a
+// loosely-typed, still-evolving shape (see lib/sync/types.ts) and the consumer
+// stores the raw object alongside the columns it understands. Projecting named
+// fields here would silently drop anything added later.
+
+/** Current config revision — the cheap "has anything changed?" probe. */
+export async function getConfigRev(): Promise<number | null> {
+  const r = await pool().query<{ rev: number }>("SELECT rev FROM config WHERE id = 1");
+  return r.rowCount ? r.rows[0].rev : null;
+}
+
+// `data->'clients'` is only an array on a well-formed document; guard so a
+// half-written config yields an empty list instead of a SQL type error.
+const JSON_ARRAY = (expr: string) =>
+  `CASE WHEN jsonb_typeof(${expr}) = 'array' THEN ${expr} ELSE '[]'::jsonb END`;
+
+export interface ExportClientLite {
+  id: string;
+  name: string;
+  meta: string | null;
+  website: string | null;
+  scriptCount: number;
+}
+
+/** id/name/counts only — powers the "which OSB client is this?" picker. */
+export async function exportClientsLite(): Promise<{ rev: number; clients: ExportClientLite[] }> {
+  const r = await pool().query<{ rev: number; clients: ExportClientLite[] | null }>(
+    `SELECT c.rev,
+            (SELECT jsonb_agg(jsonb_build_object(
+                      'id',          e->>'id',
+                      'name',        COALESCE(e->>'name', ''),
+                      'meta',        e->>'meta',
+                      'website',     e->>'website',
+                      'scriptCount', jsonb_array_length(${JSON_ARRAY("e->'scriptReservoir'")})
+                    ) ORDER BY lower(COALESCE(e->>'name', '')))
+               FROM jsonb_array_elements(${JSON_ARRAY("c.data->'clients'")}) e
+              WHERE e->>'id' IS NOT NULL) AS clients
+       FROM config c
+      WHERE c.id = 1`,
+  );
+  if (!r.rowCount) return { rev: 0, clients: [] };
+  return { rev: r.rows[0].rev, clients: r.rows[0].clients ?? [] };
+}
+
+export interface ExportClientScripts {
+  id: string;
+  name: string;
+  scripts: Array<Record<string, unknown>>;
+}
+
+export interface ScriptsExport {
+  rev: number;
+  clients: ExportClientScripts[];
+  niches: Array<{ id: string; name: string }>;
+  frameworks: Array<{ id: string; name: string; category: string | null }>;
+}
+
+/**
+ * Script reservoirs for the given client ids (all clients when `clientIds` is
+ * null/empty). Niches and frameworks ride along so the consumer can resolve the
+ * `nicheId` / `frameworkId` on each script to a display name without a 2nd call.
+ */
+export async function exportClientScripts(clientIds: string[] | null): Promise<ScriptsExport> {
+  const ids = clientIds && clientIds.length ? clientIds : null;
+  const r = await pool().query<{
+    rev: number;
+    clients: ExportClientScripts[] | null;
+    niches: Array<{ id: string; name: string }> | null;
+    frameworks: Array<{ id: string; name: string; category: string | null }> | null;
+  }>(
+    `SELECT c.rev,
+            (SELECT jsonb_agg(jsonb_build_object(
+                      'id',      e->>'id',
+                      'name',    COALESCE(e->>'name', ''),
+                      'scripts', ${JSON_ARRAY("e->'scriptReservoir'")}
+                    ) ORDER BY lower(COALESCE(e->>'name', '')))
+               FROM jsonb_array_elements(${JSON_ARRAY("c.data->'clients'")}) e
+              WHERE e->>'id' IS NOT NULL
+                AND ($1::text[] IS NULL OR e->>'id' = ANY($1::text[]))) AS clients,
+            (SELECT jsonb_agg(jsonb_build_object('id', n->>'id', 'name', COALESCE(n->>'name', '')))
+               FROM jsonb_array_elements(${JSON_ARRAY("c.data->'niches'")}) n
+              WHERE n->>'id' IS NOT NULL) AS niches,
+            (SELECT jsonb_agg(jsonb_build_object(
+                      'id', f->>'id', 'name', COALESCE(f->>'name', ''), 'category', f->>'category'))
+               FROM jsonb_array_elements(${JSON_ARRAY("c.data->'frameworks'")}) f
+              WHERE f->>'id' IS NOT NULL) AS frameworks
+       FROM config c
+      WHERE c.id = 1`,
+    [ids],
+  );
+  if (!r.rowCount) return { rev: 0, clients: [], niches: [], frameworks: [] };
+  const row = r.rows[0];
+  return {
+    rev: row.rev,
+    clients: row.clients ?? [],
+    niches: row.niches ?? [],
+    frameworks: row.frameworks ?? [],
+  };
+}
+
 // ─── Small server-side docs (users / usage / secrets / login-attempts) ──────────
 
 export async function kvGet<T = unknown>(key: string): Promise<T | null> {

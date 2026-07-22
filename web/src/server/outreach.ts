@@ -4,7 +4,7 @@
 import { CLAUDE_HAIKU, CLAUDE_MODEL, setApiKeyOverride } from "./anthropic";
 import { claudeMessages } from "./claude";
 import { json, textOf, parseJson, pickModel, webSearchTool } from "./shared";
-import { getConfig, casSaveConfig } from "./db";
+import { getConfig, casSaveConfig, getConfigRev, exportClientsLite, exportClientScripts } from "./db";
 import { getUsage, RATES, DAILY_AI_CALL_CAP } from "./usage";
 import { anthropicKeyStatus, testAnthropicKey, secretsLoad, secretsSave, markKeyChanged, notionKeyStatus, testNotionKey } from "./secrets";
 import { researchProspect, researchClientSite, researchNiche, researchCompetitors } from "./research";
@@ -79,6 +79,33 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       // getConfig throws on a transient DB error → caught by the route → 502 (client keeps local).
       const config = await getConfig();
       return json({ ok: true, config });
+    }
+
+    // ─── Cross-app export (AA Client Growth Engine) ──────────────────────────
+    // Read-only projections so the dashboard can mirror script boards on a cron
+    // without pulling the whole config document each tick. Same x-admin-key gate
+    // as everything else — the caller is a server (an edge function), never a
+    // browser, so the key never leaves the two servers.
+
+    case "export_rev": {
+      // Cheap change probe: the consumer skips the full pull when rev is unchanged.
+      return json({ ok: true, rev: (await getConfigRev()) ?? 0 });
+    }
+
+    case "export_clients": {
+      // id/name/scriptCount only — powers the dashboard's "link this client" picker.
+      return json({ ok: true, ...(await exportClientsLite()) });
+    }
+
+    case "export_scripts": {
+      // Optional clientIds filter; omitted/empty ⇒ every client.
+      const clientIds = Array.isArray(body.clientIds)
+        ? (body.clientIds as unknown[]).map((x) => String(x ?? "").trim()).filter(Boolean)
+        : null;
+      if (clientIds && clientIds.length > 500) {
+        return json({ ok: false, error: "clientIds: max 500 per call" }, 400);
+      }
+      return json({ ok: true, ...(await exportClientScripts(clientIds)) });
     }
 
     case "save_config": {
