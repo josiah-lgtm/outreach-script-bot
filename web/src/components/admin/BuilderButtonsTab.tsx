@@ -24,18 +24,21 @@ import { defaultBuilderButtons } from "@/lib/sync/configClient";
 import type { BuilderButton } from "@/lib/sync/wizard";
 import { notify } from "@/lib/notify";
 
+// Capability tiers, not model ids: the server maps each onto a real model for whichever
+// provider is live (Admin → Usage) — Claude Sonnet/Opus/Haiku or DeepSeek V4 Flash/Pro.
+// The stored values stay 'sonnet'|'opus'|'haiku' so existing configs keep working.
 // Per-button model options (legacy modelOpts, :3214). '' = use the default below.
 const MODEL_OPTS: [string, string][] = [
   ["", "Use default (below)"],
-  ["sonnet", "Claude Sonnet"],
-  ["opus", "Claude Opus (smartest)"],
-  ["haiku", "Claude Haiku (fastest)"],
+  ["sonnet", "Balanced"],
+  ["opus", "Smartest"],
+  ["haiku", "Fastest"],
 ];
 // Default-model options (legacy dModelOpts, :3237).
 const DEFAULT_MODEL_OPTS: [string, string][] = [
-  ["sonnet", "Claude Sonnet (recommended)"],
-  ["opus", "Claude Opus (smartest)"],
-  ["haiku", "Claude Haiku (fastest)"],
+  ["sonnet", "Balanced (recommended)"],
+  ["opus", "Smartest"],
+  ["haiku", "Fastest"],
 ];
 
 // uid (legacy :3259 used 'btn' + Date.now().toString(36)). Date.now() is fine in a client
@@ -132,7 +135,7 @@ export function BuilderButtonsTab() {
           Edit each button&apos;s prompt, add example scripts to steer its style, rename it, turn it
           on/off, or add your own. &ldquo;Keep structure &amp; length&rdquo; keeps the same framework
           and size (good for tone tweaks); turn it off for buttons that should restructure or resize
-          (like Shorten or Reformat). Pick the Claude model each button uses to get sharper rewrites.
+          (like Shorten or Reformat). Pick how much model each button gets to earn sharper rewrites.
           Hit <b>Save</b> when you&apos;re done.
         </p>
       </div>
@@ -143,7 +146,7 @@ export function BuilderButtonsTab() {
             <FormField
               label="Default model for these buttons"
               htmlFor="bb-model"
-              hint="Used by any button set to “Use default”. Opus is the smartest (best rewrites), Haiku the fastest/cheapest."
+              hint="Used by any button set to “Use default”. Smartest gives the best rewrites, Fastest the cheapest. Resolved against the provider set in Admin → Usage."
             >
               <Select id="bb-model" value={model} onChange={(e) => changeDefaultModel(e.target.value)}>
                 {DEFAULT_MODEL_OPTS.map(([v, lbl]) => (

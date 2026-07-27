@@ -1,52 +1,106 @@
 // Action dispatcher — the full switch over the 35 actions. Port of legacy
 // index.ts:961-1739 (everything after the auth gate; login/auth/cap live in the route).
 
-import { CLAUDE_HAIKU, CLAUDE_MODEL, setApiKeyOverride } from "./anthropic";
-import { claudeMessages } from "./claude";
+import { MODEL_FAST, MODEL_DEFAULT, isProviderId, providerSpec, ratesFor, type ProviderId } from "./providers";
+import { aiMessages } from "./ai";
 import { json, textOf, parseJson, pickModel, webSearchTool } from "./shared";
 import { getConfig, casSaveConfig, getConfigRev, exportClientsLite, exportClientScripts } from "./db";
-import { getUsage, RATES, DAILY_AI_CALL_CAP } from "./usage";
-import { anthropicKeyStatus, testAnthropicKey, secretsLoad, secretsSave, markKeyChanged, notionKeyStatus, testNotionKey } from "./secrets";
+import { getUsage, DAILY_AI_CALL_CAP } from "./usage";
+import {
+  activeProvider, aiProviderState, providerKeyStatus, testProviderKey,
+  secretsLoad, secretsSave, markSecretsChanged, notionKeyStatus, testNotionKey,
+} from "./secrets";
 import { researchProspect, researchClientSite, researchNiche, researchCompetitors } from "./research";
 import { handleGenerate } from "./generate";
 import { exportNotion, exportNotionDb, createNotionDb } from "./notion";
 import { usersList, usersAdd, usersRemove } from "./auth";
 import { prompts, slotParts } from "./prompts";
 
+// Which provider a key action targets: `provider` from the body, else the action's own
+// default (the legacy *_anthropic_key actions). Returns undefined for an unknown id so the
+// caller can 400 instead of silently writing the key to the wrong provider.
+function providerOf(body: Record<string, unknown>, fallback?: ProviderId): ProviderId | undefined {
+  const raw = String(body.provider ?? "").trim().toLowerCase();
+  if (!raw) return fallback;
+  return isProviderId(raw) ? raw : undefined;
+}
+
 export async function dispatch(action: string, body: Record<string, unknown>): Promise<Response> {
   switch (action) {
-    case "get_usage":
-      return json({ ok: true, usage: await getUsage(), cap: DAILY_AI_CALL_CAP, rates: RATES });
+    case "get_usage": {
+      // Rates follow the LIVE provider; days recorded before a switch keep the cost they
+      // were billed at, so the dashboard's history stays truthful across a switch.
+      const provider = await activeProvider();
+      return json({ ok: true, usage: await getUsage(), cap: DAILY_AI_CALL_CAP, provider, rates: ratesFor(provider) });
+    }
 
-    case "get_key_status":
-      return json({ ok: true, status: await anthropicKeyStatus() });
+    // ─── AI provider + keys ──────────────────────────────────────────────────
+    // One registry (server/providers.ts) drives both: Anthropic and DeepSeek each
+    // hold their own key, and `aiProvider` in kv['secrets'] decides which one every
+    // AI action goes to. The legacy *_anthropic_key actions below are kept as thin
+    // aliases so anything still calling them keeps working.
 
+    case "get_ai_provider":
+      return json({ ok: true, ...(await aiProviderState()) });
+
+    case "set_ai_provider": {
+      const id = String(body.provider ?? "").trim().toLowerCase();
+      if (!isProviderId(id)) return json({ ok: false, error: `unknown provider "${id}"` }, 400);
+      // Refuse to switch onto a provider with no key — every AI action would start failing.
+      const status = await providerKeyStatus(id);
+      if (!status.set) {
+        return json({ ok: false, error: `No ${providerSpec(id).label} key set — add one before switching to it.` }, 400);
+      }
+      const s = await secretsLoad();
+      s.aiProvider = id;
+      await secretsSave(s);
+      markSecretsChanged();
+      return json({ ok: true, ...(await aiProviderState()) });
+    }
+
+    case "get_key_status": {
+      const id = providerOf(body, "anthropic");
+      if (!id) return json({ ok: false, error: `unknown provider "${String(body.provider ?? "")}"` }, 400);
+      return json({ ok: true, status: await providerKeyStatus(id) });
+    }
+
+    case "set_provider_key":
     case "set_anthropic_key": {
+      const id = providerOf(body, action === "set_anthropic_key" ? "anthropic" : undefined);
+      if (!id) return json({ ok: false, error: `unknown provider "${String(body.provider ?? "")}"` }, 400);
+      const spec = providerSpec(id);
       const key = String(body.key ?? "").trim();
       if (!key) return json({ ok: false, error: "key required" }, 400);
-      if (!key.startsWith("sk-ant-")) return json({ ok: false, error: "That doesn't look like an Anthropic key (should start with sk-ant-)." }, 400);
-      const t = await testAnthropicKey(key);
-      if (!t.ok) return json({ ok: false, error: "Key rejected by Anthropic: " + (t.error || "invalid") }, 400);
+      if (!key.startsWith(spec.keyPrefix)) {
+        return json({ ok: false, error: `That doesn't look like a ${spec.label} key (should start with ${spec.keyPrefix}).` }, 400);
+      }
+      const t = await testProviderKey(id, key);
+      if (!t.ok) return json({ ok: false, error: `Key rejected by ${spec.label}: ` + (t.error || "invalid") }, 400);
       const s = await secretsLoad();
-      s.anthropicKey = key;
+      s[spec.secretField] = key;
       await secretsSave(s);
-      setApiKeyOverride(key);
-      markKeyChanged();
-      return json({ ok: true, status: await anthropicKeyStatus() });
+      markSecretsChanged();
+      return json({ ok: true, status: await providerKeyStatus(id), ...(await aiProviderState()) });
     }
 
+    case "clear_provider_key":
     case "clear_anthropic_key": {
+      const id = providerOf(body, action === "clear_anthropic_key" ? "anthropic" : undefined);
+      if (!id) return json({ ok: false, error: `unknown provider "${String(body.provider ?? "")}"` }, 400);
+      const spec = providerSpec(id);
       const s = await secretsLoad();
-      delete s.anthropicKey;
+      delete s[spec.secretField];
       await secretsSave(s);
-      setApiKeyOverride(null);
-      markKeyChanged();
-      return json({ ok: true, status: await anthropicKeyStatus() });
+      markSecretsChanged();
+      return json({ ok: true, status: await providerKeyStatus(id), ...(await aiProviderState()) });
     }
 
+    case "test_provider_key":
     case "test_anthropic_key": {
+      const id = providerOf(body, action === "test_anthropic_key" ? "anthropic" : undefined);
+      if (!id) return json({ ok: false, error: `unknown provider "${String(body.provider ?? "")}"` }, 400);
       const cand = body.key ? String(body.key).trim() : undefined;
-      return json({ ok: true, result: await testAnthropicKey(cand) });
+      return json({ ok: true, result: await testProviderKey(id, cand) });
     }
 
     case "get_notion_key_status":
@@ -157,8 +211,8 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
     case "extract_framework": {
       const scripts = Array.isArray(body.scripts) ? (body.scripts as unknown[]).map(String).filter((s) => s.trim()) : [];
       if (!scripts.length) return json({ ok: false, error: "scripts required" }, 400);
-      const res = await claudeMessages({
-        model: CLAUDE_MODEL,
+      const res = await aiMessages({
+        model: MODEL_DEFAULT,
         max_tokens: 1600,
         system: (await prompts()).frameworkExtractor,
         messages: [{
@@ -176,7 +230,7 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const script = String(body.script ?? "").trim();
       const prompt = String(body.prompt ?? "").trim();
       if (!script || !prompt) return json({ ok: false, error: "script and prompt required" }, 400);
-      const res = await claudeMessages({
+      const res = await aiMessages({
         model: pickModel(body.model),
         max_tokens: 4000,
         system: (await prompts()).scriptRefiner,
@@ -190,7 +244,7 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const prompt = String(body.prompt ?? "").trim();
       if (!items.length || !prompt) return json({ ok: false, error: "items and prompt required" }, 400);
       if (items.length > 40) return json({ ok: false, error: "too many items in one batch (max 40)" }, 400);
-      const res = await claudeMessages({
+      const res = await aiMessages({
         model: pickModel(body.model),
         max_tokens: Math.min(500 + 160 * items.length, 8000),
         system:
@@ -214,8 +268,8 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       if (items.length > 30) return json({ ok: false, error: "too many items in one batch (max 30)" }, 400);
       const ctx = String(body.context ?? "").slice(0, 6000);
       const rules = String(body.rules ?? "").trim();
-      const res = await claudeMessages({
-        model: CLAUDE_HAIKU,
+      const res = await aiMessages({
+        model: MODEL_FAST,
         max_tokens: Math.min(800 + 320 * items.length, 8000),
         system:
           `You restyle passages of a client-facing growth-plan document to match a house style. ` +
@@ -239,8 +293,8 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const selection = String(body.selection ?? "").trim();
       const prompt = String(body.prompt ?? "").trim();
       if (!script || !selection || !prompt) return json({ ok: false, error: "script, selection and prompt required" }, 400);
-      const res = await claudeMessages({
-        model: CLAUDE_HAIKU,
+      const res = await aiMessages({
+        model: MODEL_FAST,
         max_tokens: 400,
         system: (await prompts()).selectionRefiner,
         messages: [{
@@ -254,8 +308,8 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
     case "extract_transcript": {
       const text = String(body.text ?? "").slice(0, 30_000);
       if (!text.trim()) return json({ ok: false, error: "transcript text required" }, 400);
-      const res = await claudeMessages({
-        model: CLAUDE_MODEL,
+      const res = await aiMessages({
+        model: MODEL_DEFAULT,
         max_tokens: 2000,
         system: (await prompts()).transcriptExtractor,
         messages: [{ role: "user", content: `Call transcript:\n${text}` }],
@@ -270,8 +324,8 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const clientContext = String(body.clientContext ?? "").trim();
       const userPrompt = String(body.prompt ?? "").trim();
       if (!nicheName) return json({ ok: false, error: "niche required" }, 400);
-      const res = await claudeMessages({
-        model: CLAUDE_HAIKU,
+      const res = await aiMessages({
+        model: MODEL_FAST,
         max_tokens: 600,
         system: (await prompts()).angleSuggester,
         messages: [{
@@ -286,8 +340,8 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
     case "build_icp": {
       const context = String(body.context ?? "").slice(0, 14_000);
       if (!context.trim()) return json({ ok: false, error: "client context required" }, 400);
-      const res = await claudeMessages({
-        model: CLAUDE_MODEL,
+      const res = await aiMessages({
+        model: MODEL_DEFAULT,
         max_tokens: 6000,
         system: (await prompts()).icpBuilder,
         messages: [{ role: "user", content: `CLIENT DOSSIER:\n${context}` }],
@@ -306,8 +360,8 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
     case "fuse_angle": {
       const ingredients = Array.isArray(body.ingredients) ? body.ingredients as Array<{ kind: string; text: string }> : [];
       if (!ingredients.length) return json({ ok: false, error: "ingredients required" }, 400);
-      const res = await claudeMessages({
-        model: CLAUDE_HAIKU,
+      const res = await aiMessages({
+        model: MODEL_FAST,
         max_tokens: 300,
         system: (await prompts()).fuseAngle,
         messages: [{
@@ -327,8 +381,8 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const instruction = String(body.instruction ?? "").trim();
       if (!text || !instruction) return json({ ok: false, error: "text and instruction required" }, 400);
       const rules = String(body.rules ?? "").trim();
-      const res = await claudeMessages({
-        model: CLAUDE_HAIKU,
+      const res = await aiMessages({
+        model: MODEL_FAST,
         max_tokens: 1200,
         system:
           `You edit text inside a client-facing outbound growth plan document. The user highlighted a passage and gave an instruction ` +
@@ -355,8 +409,8 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const ctx = String(body.context ?? "").slice(0, 10_000);
       if (!ctx.trim()) return json({ ok: false, error: "client context required" }, 400);
       const rules = String(body.rules ?? "").trim();
-      const res = await claudeMessages({
-        model: CLAUDE_MODEL,
+      const res = await aiMessages({
+        model: MODEL_DEFAULT,
         max_tokens: 1400,
         system: await (async () => {
           const p = await slotParts("clientBrief");
@@ -372,8 +426,8 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
     case "find_icp_example": {
       const icp = body.icp as { title?: string; niche?: string; jobTitles?: string[]; employeeSize?: string; locations?: string[] } | undefined;
       if (!icp?.title) return json({ ok: false, error: "icp required" }, 400);
-      const res = await claudeMessages({
-        model: CLAUDE_MODEL,
+      const res = await aiMessages({
+        model: MODEL_DEFAULT,
         max_tokens: 800,
         system: (await prompts()).icpExample,
         messages: [{
@@ -414,8 +468,8 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
         (basis?.angles?.length ? `Angles: ${basis.angles.join("; ")}\n` : "") +
         `\nFRAMEWORKS (write one follow-up each, in this order):\n` +
         frameworks.map((f, i) => `FRAMEWORK ${i + 1} — ${f.name}:\n${f.template}`).join("\n\n");
-      const res = await claudeMessages({
-        model: CLAUDE_MODEL,
+      const res = await aiMessages({
+        model: MODEL_DEFAULT,
         max_tokens: 1800,
         system: sys,
         messages: [{ role: "user", content: user }],
@@ -431,8 +485,8 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
       const rules = String(body.rules ?? "").trim();
       const customPrompt = String(body.prompt ?? "").trim();
       const mention = Array.isArray(body.mention) ? (body.mention as unknown[]).map(String).filter((s) => s.trim()) : [];
-      const res = await claudeMessages({
-        model: CLAUDE_MODEL,
+      const res = await aiMessages({
+        model: MODEL_DEFAULT,
         max_tokens: 1400,
         system:
           `You are an outreach expert writing a short, warm sales plan that an agency sends to a prospect to win their business. ` +
@@ -461,8 +515,8 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
         client: body.client, targets: body.targets, numbers: body.numbers,
         channels: body.channels, targetBookings: body.targetBookings, nicheSize: body.nicheSize,
       }).slice(0, 12_000);
-      const res = await claudeMessages({
-        model: CLAUDE_MODEL,
+      const res = await aiMessages({
+        model: MODEL_DEFAULT,
         max_tokens: 1600,
         system:
           `You are a senior outbound strategist writing a client-facing growth plan. Write crisp, confident, plain-English prose — no fluff, no hype. ` +
@@ -484,8 +538,8 @@ export async function dispatch(action: string, body: Record<string, unknown>): P
     case "suggest_offers": {
       const context = String(body.context ?? "").slice(0, 6_000);
       if (!context.trim()) return json({ ok: false, error: "context required" }, 400);
-      const res = await claudeMessages({
-        model: CLAUDE_HAIKU,
+      const res = await aiMessages({
+        model: MODEL_FAST,
         max_tokens: 800,
         system: (await prompts()).offerSuggester,
         messages: [{ role: "user", content: `Client data:\n${context}` }],

@@ -16,10 +16,13 @@ import { useConfigStore } from "@/lib/store/configStore";
 import { notify } from "@/lib/notify";
 import { runFilterAcrossAll, runGroupAll } from "@/lib/sync/adminBulk";
 
+// Capability tiers, not model ids: the server maps each onto a real model for whichever
+// provider is live (Admin → Usage) — Claude Sonnet/Opus/Haiku or DeepSeek V4 Flash/Pro.
+// The stored values stay 'sonnet'|'opus'|'haiku' so existing configs keep working.
 const MODELS: Array<[string, string]> = [
-  ["sonnet", "Claude Sonnet (recommended)"],
-  ["opus", "Claude Opus"],
-  ["haiku", "Claude Haiku"],
+  ["sonnet", "Balanced (recommended)"],
+  ["opus", "Smartest"],
+  ["haiku", "Fastest"],
   ["gemini", "Gemini 2.5 Flash"],
 ];
 

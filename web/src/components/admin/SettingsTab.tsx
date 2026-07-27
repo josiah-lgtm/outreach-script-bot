@@ -30,6 +30,7 @@ import {
   DEFAULT_CONFIG,
 } from "@/lib/sync/configClient";
 import type { Config } from "@/lib/sync/types";
+import { AiProviderCard } from "./AiProviderCard";
 
 // Rate keys are stored as decimals (0.04) but shown/edited as percentages (4). Verbatim
 // from the legacy PD_RATE_KEYS set (index.html:4881).
@@ -421,6 +422,9 @@ export function SettingsTab() {
 
   return (
     <div className="space-y-5">
+      {/* ── AI provider + API keys (shared component, also on Admin → Usage) ── */}
+      <AiProviderCard />
+
       {/* ── Backup & restore ── */}
       <Card>
         <CardBody>

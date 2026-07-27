@@ -2,8 +2,8 @@
 // research, competitor intel. All use Anthropic's server-side web_search tool.
 // Port of legacy index.ts:569-700.
 
-import { CLAUDE_HAIKU, CLAUDE_MODEL } from "./anthropic";
-import { claudeMessages } from "./claude";
+import { MODEL_FAST, MODEL_DEFAULT } from "./providers";
+import { aiMessages } from "./ai";
 import { textOf, parseJson, webSearchTool } from "./shared";
 import { fetchSiteText, normalizeUrl } from "./ssrf";
 
@@ -21,8 +21,8 @@ export async function researchProspect(rawUrl: string, classification: string) {
     `{"summary":"2-3 sentences: what they do, who they sell to, anything notable",` +
     `"pains":["3-4 likely business pains, specific to them"],` +
     `"hooks":["3-4 personalization hooks — concrete details a cold email could reference"]}`;
-  const res = await claudeMessages({
-    model: CLAUDE_HAIKU,
+  const res = await aiMessages({
+    model: MODEL_FAST,
     max_tokens: 1200,
     system,
     messages: [{
@@ -45,8 +45,8 @@ export async function researchClientSite(rawUrl: string) {
   const userContent = page.ok
     ? `Client website: ${target}\n\nHomepage text:\n${page.text}`
     : `Client website: ${target}\n\nThe homepage could not be read directly (JS-rendered or blocked). You MUST rely on web searches: try "site:${domain}", "${domain}", the company name, their LinkedIn page, reviews, and directories.`;
-  const res = await claudeMessages({
-    model: CLAUDE_MODEL,
+  const res = await aiMessages({
+    model: MODEL_DEFAULT,
     max_tokens: 2400,
     system:
       `You onboard clients for a lead generation agency. ` +
@@ -81,8 +81,8 @@ export async function researchClientSite(rawUrl: string) {
 
 // Niche research: real web search incl. Reddit/forums for pains → angles.
 export async function researchNiche(nicheName: string, clientContext: string) {
-  const res = await claudeMessages({
-    model: CLAUDE_MODEL,
+  const res = await aiMessages({
+    model: MODEL_DEFAULT,
     max_tokens: 2400,
     system:
       `You are a lead generation researcher building cold outreach assets for a niche. ` +
@@ -108,8 +108,8 @@ export async function researchNiche(nicheName: string, clientContext: string) {
 
 // Competitor research: find the client's competitors and pull their offers.
 export async function researchCompetitors(clientName: string, clientUrl: string, nicheName: string) {
-  const res = await claudeMessages({
-    model: CLAUDE_MODEL,
+  const res = await aiMessages({
+    model: MODEL_DEFAULT,
     max_tokens: 2600,
     system:
       `You are a lead generation strategist doing competitor intel. ` +

@@ -22,6 +22,18 @@ We are migrating a legacy single-file app to a **fully self-hosted Next.js + Pos
 >
 > **Verified live** against a real Postgres + dev server, not just the gates: 401→discovery→DCR→PKCE authorize→token→refresh-rotation, read-only vs write scope enforcement, tools/resources/prompts, the max-8 Testing cap, `preview_prompt` showing an edited slot landing in the assembled prompt with the JSON contract intact, and 8 concurrent writes with zero lost updates. **All four gates green** (typecheck, lint, 68 tests, `next build`). Not yet exercised with a real `ANTHROPIC_API_KEY` — `build_icp` / `generate_scripts` were verified up to the Anthropic call, which surfaced the key error cleanly.
 
+> **Update 5 (2026-07-27) — pluggable AI provider (Anthropic | DeepSeek).** The bot is no longer hardwired to Claude. Which backend runs every AI call is now a setting in **Admin → Usage**, switchable live. Both providers speak the SAME wire protocol (DeepSeek publishes an Anthropic-compatible Messages endpoint at `https://api.deepseek.com/anthropic`), so there is still one client and one call path.
+>
+> - **New `server/providers.ts`** — the registry: per-provider api url, key env var + `kv['secrets']` field, key prefix, console url, model ids per TIER, rate card, and capability flags (`webSearch`, `promptCaching`). Adding a third provider is one entry here.
+> - **Call sites name a TIER, never a model.** `MODEL_SMART` / `MODEL_DEFAULT` / `MODEL_FAST` (was `CLAUDE_MODEL_OPUS` / `CLAUDE_MODEL` / `CLAUDE_HAIKU`) resolve per-provider at call time. The UI's stored `'sonnet'|'opus'|'haiku'` values (`settings.builderModel`, `settings.systemFilter.model`) still work — `tierOf()` maps them.
+> - **`claude.ts` → `ai.ts`, `claudeMessages()` → `aiMessages()`.** It now resolves the endpoint per call, and DROPS what the provider can't do: on DeepSeek the server-side `web_search` tool is stripped and a "you cannot search, don't invent" note is PREPENDED to the system blocks (prepended, so the caller's "last block is volatile" cache contract survives), and no `cache_control` breakpoint is set (DeepSeek caches automatically).
+> - **`anthropic.ts` is now the wire client only** — `messages(req, endpoint)` takes `{url, key, label}`; key resolution moved to `secrets.ts` (`resolveEndpoint()`, 30s per-process cache, `markSecretsChanged()` on any set/clear/switch).
+> - **Cost meter is provider-aware.** `RATES`/`modelKey` left `usage.ts`; prices live on each provider spec as explicit per-1M `in`/`out`/`cacheRead`/`cacheWrite`. The Anthropic numbers are identical to the old `×0.1`/`×1.25` multipliers (pinned by a test).
+> - **Actions:** new `get_ai_provider`, `set_ai_provider`, `set_provider_key`, `clear_provider_key`, `test_provider_key`. The legacy `get_key_status` / `set_anthropic_key` / `clear_anthropic_key` / `test_anthropic_key` still work as Anthropic-scoped aliases. `get_usage` and the `usage` MCP tool now also return the active `provider`.
+> - **Switching is guarded:** the server refuses to switch onto a provider with no key, so the bot can't end up pointing at a dead backend.
+> - **UI:** `src/components/admin/AiProviderCard.tsx` — one self-contained card (provider switch + BOTH keys: add/test/save/clear per provider, masked `••••last4`), rendered in **Admin → Settings** (top, with the other shared keys) AND **Admin → Usage** (above the spend dashboard). It re-reads the server on mount, so the two copies can't disagree. `UsageTab` mirrors its state only to name the live provider in the spend copy.
+> - New env: `AI_PROVIDER` (fallback only — the stored choice wins), `DEEPSEEK_API_KEY`. New tests: `server/__tests__/providers.test.ts`, `server/__tests__/ai.test.ts`, `server/__tests__/provider-actions.test.ts` (40 total — the last one drives the real add-key → switch → reload flow through `dispatch()` with an in-memory kv). **All four gates green** (typecheck, lint, 108 tests, `next build`). **Not yet exercised against a live DeepSeek key.**
+
 - `legacy/` — the old app (one 7.7k-line `index.html` + a Deno Supabase Edge Function). **Untouched and still deployable** to Supabase as a fallback.
 - `web/` — the new full-stack Next.js 16 app. **Build here.**
 
@@ -49,7 +61,8 @@ Browser (Next.js client components; holds a per-user admin key in localStorage)
 Next.js route handler  src/app/api/outreach/route.ts   (Node runtime)
   → src/server/outreach.ts  (the 35-action dispatch)
       ├─ config (jsonb+rev, atomic CAS) · kv(users/usage/secrets/login-attempts) ── Postgres
-      ├─ Anthropic Claude + web_search (pause-turn loop)  ── ANTHROPIC_API_KEY (server env)
+      ├─ AI provider (Anthropic Claude | DeepSeek, both on the Messages API) ── ANTHROPIC_API_KEY / DEEPSEEK_API_KEY
+      │     web_search + prompt caching are Anthropic-only; server/ai.ts strips them elsewhere
       └─ Notion REST                                      ── NOTION_API_KEY (server env)
 
 docker compose:  web (Next.js :3000)  +  db (postgres:16, named volume `pgdata`)
@@ -178,12 +191,13 @@ web/
       wizard/                      #   ✅ CreateScriptWizard.tsx (state machine) · SwipeDeck.tsx · parts.tsx
     server/                        # ── backend port (DONE) ──
       db.ts                        # pg pool; getConfig; casSaveConfig (atomic CAS); kvGet/kvSet
-      anthropic.ts                 # Messages API client (non-streaming, retries)
-      claude.ts                    # claudeMessages wrapper: lens caching + cost meter + pause-turn loop
+      anthropic.ts                 # Messages API WIRE client (non-streaming, retries); endpoint passed in
+      providers.ts                 # the provider registry: Anthropic | DeepSeek — urls, tiers, model ids, rates, caps
+      ai.ts                        # aiMessages wrapper: provider+tier resolve, lens caching, cost meter, pause-turn loop
       usage.ts                     # metering + daily cap (AsyncLocalStorage) + AI_ACTIONS
-      secrets.ts                   # admin Anthropic-key override (kv['secrets']) + rotation/test
+      secrets.ts                   # per-provider key override + active provider (kv['secrets']) + rotation/test
       ssrf.ts                      # SSRF guard + fetchSiteText (node:dns rebinding check)
-      shared.ts                    # limits, pickModel, webSearchTool, textOf, parseJson, json()
+      shared.ts                    # limits, pickModel (alias→tier), webSearchTool, textOf, parseJson, json()
       notion.ts                    # toNotionBlock + export_notion/_db + create_notion_db
       research.ts                  # research / research_client_site / _niche / _competitors
       generate.ts                  # matrix generation (cached shared prefix + per-fw tail)
@@ -218,11 +232,11 @@ web/
 - **One save queue:** `src/lib/store/saveQueue.ts` is a module-level singleton; do not create per-component debounces.
 - **`migrateConfig` runs on every new config object** (load, conflict-merge, adopt, restore). It's idempotent — keep it that way.
 - **Sets → arrays:** never reintroduce JS `Set`s into persisted config or the store (they don't serialize / break React identity).
-- **Pure-logic constants:** dedupe Jaccard **≥0.82 rejects**, 36→30 cap; funnel-math formulas + `PD_RATE_KEYS` %↔fraction; CSV formula-injection defang (`= + - @ \t \r`); Anthropic model ids (`claude-sonnet-4-6` / `claude-opus-4-6` / `claude-haiku-4-5`); all `MAX_*` limits; Notion block schema in `server/notion.ts`. These have golden tests — keep them green.
+- **Pure-logic constants:** dedupe Jaccard **≥0.82 rejects**, 36→30 cap; funnel-math formulas + `PD_RATE_KEYS` %↔fraction; CSV formula-injection defang (`= + - @ \t \r`); the provider registry in `server/providers.ts` (Anthropic `claude-sonnet-4-6`/`claude-opus-4-6`/`claude-haiku-4-5`, DeepSeek `deepseek-v4-flash`/`deepseek-v4-pro` + both rate cards); all `MAX_*` limits; Notion block schema in `server/notion.ts`. These have golden tests — keep them green.
 - **Kanban:** max **8** scripts in "Testing"; drop-to-delete confirms.
 - **Prompt slots:** the baked-in prompt text in `server/prompts.ts` and `lib/sync/engines.ts` is the DEFAULT layer — keep it verbatim. Overrides live at `settings.engines.<slot>`; empty means default. A `full` slot's `contract` (the JSON output shape) is appended by code and must stay non-overridable. If you change a `lens` slot's resolution, change it in BOTH `lib/sync/systemFilter.ts` (browser) and `server/lens.ts` (MCP) — they must compose identically.
 - **MCP writes** go through `server/mcp/config-io.ts#mutateConfig`, which is the CAS analogue of the browser's save queue. Recipes must be re-runnable (they are re-applied against a fresh config on conflict) — never close over a config read earlier.
-- **Secrets:** `ADMIN_KEY`/`ANTHROPIC_API_KEY`/`NOTION_API_KEY` are server-only. **Never** expose any as `NEXT_PUBLIC_*`. The admin key is a per-user runtime credential in `localStorage` (`offer_admin_key`), captured from `?admin=…` (then scrubbed from the URL) or the login form.
+- **Secrets:** `ADMIN_KEY`/`ANTHROPIC_API_KEY`/`DEEPSEEK_API_KEY`/`NOTION_API_KEY` are server-only. **Never** expose any as `NEXT_PUBLIC_*`. The admin key is a per-user runtime credential in `localStorage` (`offer_admin_key`), captured from `?admin=…` (then scrubbed from the URL) or the login form.
 - **localStorage keys (unchanged):** `outreach_config_v2`, `outreach_config_bak_index`, `outreach_config_bak_<ts>`, `offer_admin_key`, `outreach_user`.
 
 ---
@@ -231,7 +245,7 @@ web/
 
 ```bash
 cd web
-cp .env.example .env        # set ADMIN_KEY, ANTHROPIC_API_KEY, POSTGRES_*, DATABASE_URL
+cp .env.example .env        # set ADMIN_KEY, ANTHROPIC_API_KEY (and/or DEEPSEEK_API_KEY), POSTGRES_*, DATABASE_URL
 
 # Option A — full stack:
 docker compose up -d --build           # web :3000 + postgres (schema auto-runs)

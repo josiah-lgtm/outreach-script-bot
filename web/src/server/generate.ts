@@ -3,8 +3,8 @@
 // sent as a cached prefix; the per-framework tail is the volatile block. Port of legacy
 // index.ts:702-869 + the generate handler at 1702-1735.
 
-import { CLAUDE_MODEL } from "./anthropic";
-import { claudeMessages } from "./claude";
+import { MODEL_DEFAULT } from "./providers";
+import { aiMessages } from "./ai";
 import { textOf, parseJson, json, MAX_FRAMEWORKS, MAX_ANGLES, MAX_VARIANTS_PER_ANGLE, MAX_TOTAL_SCRIPTS, MAX_PROMPT_CHARS } from "./shared";
 import { prompts } from "./prompts";
 
@@ -145,8 +145,8 @@ async function generateForFramework(body: GenerateBody, fw: Framework, writerPer
     return { frameworkId: fw.id, framework: fw.name, category: fw.category, error: "prompt too long" };
   }
   try {
-    const res = await claudeMessages({
-      model: CLAUDE_MODEL,
+    const res = await aiMessages({
+      model: MODEL_DEFAULT,
       max_tokens: Math.min(800 + 260 * count, 7000),
       system: [{ type: "text", text: shared }, { type: "text", text: framework }],
       messages: [{ role: "user", content: user }],

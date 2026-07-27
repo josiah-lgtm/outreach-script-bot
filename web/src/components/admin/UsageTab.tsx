@@ -1,32 +1,26 @@
 // UsageTab — Admin → Usage. Port of the legacy adminUsage :3283 +
-// renderUsageDashboard :3358 + the key-management helpers (loadKeyStatus :3302,
-// testAnthropicKeyInput :3312, saveAnthropicKey :3322, clearAnthropicKey :3335,
-// loadUsage :3346). Two blocks: the Anthropic API-key manager and the usage/spend
-// dashboard. All numbers + prices come from the server (`get_usage` returns
-// { usage, cap, rates }); the dashboard renders RATES from the response rather than
-// hardcoding a price copy. The legacy SVG bar graph is rendered here as a simple
-// CSS bar chart (divs). The key is NEVER shown in full — status renders ••••last4 only.
+// renderUsageDashboard :3358 + loadUsage :3346. Two blocks: the AI-provider + key manager
+// (shared with Admin → Settings, see AiProviderCard.tsx) and the usage/spend dashboard.
+// All numbers + prices come from the server (`get_usage` returns { usage, cap, provider,
+// rates }); the dashboard renders the active provider's rate card from the response rather
+// than hardcoding a price copy. The legacy SVG bar graph is rendered here as a simple CSS
+// bar chart (divs).
 
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useConfigStore } from "@/lib/store/configStore";
 import { api } from "@/lib/sync/api";
-import { notify } from "@/lib/notify";
-import {
-  Button, Card, CardBody, CardHeader, Input, FormField, Icon, Badge, Spinner, EmptyState, cn,
-} from "@/components/ui";
+import { AiProviderCard, type ProviderState, type PublicProvider, type Rates } from "./AiProviderCard";
+import { Card, CardBody, CardHeader, Button, Icon, Spinner, EmptyState, cn } from "@/components/ui";
 
-// ── server response shapes (see web/src/server/usage.ts + secrets.ts) ────────────
-type Rate = { in: number; out: number };
-type Rates = Record<string, Rate>;
+// ── server response shapes (see web/src/server/usage.ts) ─────────────────────────
 type DayActions = Record<string, { requests?: number; input?: number; output?: number; cost?: number }>;
 type DayRec = {
   requests?: number; input?: number; output?: number; cost?: number;
   cacheRead?: number; cacheWrite?: number; actions?: DayActions;
 };
 type UsageDoc = { days?: Record<string, DayRec> };
-type KeyStatus = { set: boolean; source: string; last4: string };
 
 // ── formatters (ports of the legacy `money` / `num`) ─────────────────────────────
 const money = (n: unknown) => "$" + (Number(n) || 0).toFixed(2);
@@ -37,14 +31,9 @@ export function UsageTab() {
   // Read login state from the config store (the legacy tab gated on the admin key).
   const loggedIn = useConfigStore((s) => s.loggedIn);
 
-  // ── Anthropic key state ──
-  const [keyStatus, setKeyStatus] = useState<KeyStatus | null>(null);
-  const [keyStatusErr, setKeyStatusErr] = useState<string>("");
-  const [keyInput, setKeyInput] = useState("");
-  const [keyMsg, setKeyMsg] = useState<{ text: string; tone: "ok" | "err" | "info" } | null>(null);
-  const [testing, setTesting] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [clearing, setClearing] = useState(false);
+  // The provider card owns provider/key state; we only mirror it so the dashboard copy
+  // (rate card, console link) names whichever provider is actually live.
+  const [providers, setProviders] = useState<ProviderState | null>(null);
 
   // ── usage dashboard state ──
   const [usage, setUsage] = useState<UsageDoc | null>(null);
@@ -52,18 +41,6 @@ export function UsageTab() {
   const [rates, setRates] = useState<Rates>({});
   const [usageLoading, setUsageLoading] = useState(true);
   const [usageErr, setUsageErr] = useState("");
-
-  // Port of loadKeyStatus :3302.
-  const loadKeyStatus = useCallback(async () => {
-    setKeyStatusErr("");
-    try {
-      const r = await api({ action: "get_key_status" });
-      setKeyStatus((r.status || {}) as KeyStatus);
-    } catch (e) {
-      setKeyStatus(null);
-      setKeyStatusErr("Could not read key status: " + (e as Error).message);
-    }
-  }, []);
 
   // Port of loadUsage :3346.
   const loadUsage = useCallback(async () => {
@@ -85,20 +62,13 @@ export function UsageTab() {
     }
   }, []);
 
-  // Mount: load key status + usage together (the contract's required useEffect).
-  // The async work lives INSIDE the effect and only setState after `await`, guarded by
-  // `alive`, so we never call setState synchronously in the effect body
+  // Mount: load usage. The async work lives INSIDE the effect and only setState after the
+  // await, guarded by `alive`, so we never call setState synchronously in the effect body
   // (react-hooks/set-state-in-effect).
   useEffect(() => {
     if (!loggedIn) return;
     let alive = true;
     (async () => {
-      try {
-        const r = await api({ action: "get_key_status" });
-        if (alive) { setKeyStatus((r.status || {}) as KeyStatus); setKeyStatusErr(""); }
-      } catch (e) {
-        if (alive) { setKeyStatus(null); setKeyStatusErr("Could not read key status: " + (e as Error).message); }
-      }
       try {
         const r = await api({ action: "get_usage" });
         if (alive) {
@@ -122,89 +92,24 @@ export function UsageTab() {
     return () => { alive = false; };
   }, [loggedIn]);
 
-  // Port of testAnthropicKeyInput :3312.
-  async function testKey() {
-    const cand = keyInput.trim();
-    setTesting(true);
-    setKeyMsg({ text: cand ? "Testing the pasted key…" : "Testing the current key…", tone: "info" });
-    try {
-      const r = await api({ action: "test_anthropic_key", key: cand || undefined });
-      const res = r.result || {};
-      setKeyMsg(res.ok
-        ? { text: `Works (responded on ${res.model || "Claude"})`, tone: "ok" }
-        : { text: res.error || "failed", tone: "err" });
-    } catch (e) {
-      setKeyMsg({ text: (e as Error).message, tone: "err" });
-    } finally {
-      setTesting(false);
-    }
-  }
-
-  // Port of saveAnthropicKey :3322.
-  async function saveKey() {
-    const key = keyInput.trim();
-    if (!key) { setKeyMsg({ text: "Paste a key first.", tone: "info" }); return; }
-    setSaving(true);
-    setKeyMsg({ text: "Verifying & saving…", tone: "info" });
-    try {
-      const r = await api({ action: "set_anthropic_key", key });
-      setKeyInput("");
-      setKeyMsg({ text: "Saved & verified — the bot now uses this key.", tone: "ok" });
-      notify("Anthropic key updated");
-      // set_anthropic_key returns the fresh status; fall back to a reload otherwise.
-      if (r.status) setKeyStatus(r.status as KeyStatus); else loadKeyStatus();
-    } catch (e) {
-      setKeyMsg({ text: (e as Error).message, tone: "err" });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // Port of clearAnthropicKey :3335.
-  async function clearKey() {
-    if (!confirm("Clear the stored key and fall back to the deployed env key?")) return;
-    setClearing(true);
-    try {
-      const r = await api({ action: "clear_anthropic_key" });
-      setKeyMsg({ text: "Cleared — using the deployed env key.", tone: "info" });
-      notify("Stored key cleared");
-      if (r.status) setKeyStatus(r.status as KeyStatus); else loadKeyStatus();
-    } catch (e) {
-      setKeyMsg({ text: (e as Error).message, tone: "err" });
-    } finally {
-      setClearing(false);
-    }
-  }
-
   if (!loggedIn) {
     return (
       <EmptyState
         icon="bolt"
         title="Admin key required"
-        description="Enter your admin key to manage the API key and view usage."
+        description="Enter your admin key to manage the API keys and view usage."
       />
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <KeyManager
-        status={keyStatus}
-        statusErr={keyStatusErr}
-        keyInput={keyInput}
-        setKeyInput={setKeyInput}
-        keyMsg={keyMsg}
-        testing={testing}
-        saving={saving}
-        clearing={clearing}
-        onTest={testKey}
-        onSave={saveKey}
-        onClear={clearKey}
-      />
+      <AiProviderCard onState={setProviders} />
       <UsageDashboard
         usage={usage}
         cap={cap}
         rates={rates}
+        active={providers?.providers.find((p) => p.id === providers?.provider) ?? null}
         loading={usageLoading}
         error={usageErr}
         onRefresh={loadUsage}
@@ -214,122 +119,15 @@ export function UsageTab() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────────
-// Anthropic API key manager (legacy adminUsage key block :3285-3295).
-// ─────────────────────────────────────────────────────────────────────────────────
-function KeyManager({
-  status, statusErr, keyInput, setKeyInput, keyMsg, testing, saving, clearing, onTest, onSave, onClear,
-}: {
-  status: KeyStatus | null;
-  statusErr: string;
-  keyInput: string;
-  setKeyInput: (v: string) => void;
-  keyMsg: { text: string; tone: "ok" | "err" | "info" } | null;
-  testing: boolean; saving: boolean; clearing: boolean;
-  onTest: () => void; onSave: () => void; onClear: () => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-1.5 text-[13px] font-semibold text-text">
-          <Icon name="plug" size={16} /> Anthropic API key
-        </div>
-        <KeyBadge status={status} />
-      </CardHeader>
-      <CardBody className="flex flex-col gap-3">
-        <p className="text-[11px] text-muted leading-snug">
-          The key the bot uses for every AI call. Rotate it here after creating a new one at{" "}
-          <a
-            href="https://console.anthropic.com/settings/keys"
-            target="_blank"
-            rel="noreferrer"
-            className="text-accent2 no-underline hover:underline"
-          >
-            console.anthropic.com
-          </a>
-          . It is stored server-side, never shown in full or sent back to the browser, and overrides the
-          deployed env key. &ldquo;Use deployed default&rdquo; clears it and falls back to the env key.
-        </p>
-
-        {/* Current key status — masked ••••last4 only, NEVER the full key. */}
-        <div className="text-[12px] text-subtle">
-          {statusErr
-            ? <span className="text-red">{statusErr}</span>
-            : !status
-              ? <span className="inline-flex items-center gap-1.5 text-muted"><Spinner size="sm" /> Checking key…</span>
-              : status.set
-                ? <>
-                    Current key: <b className="text-text">••••{status.last4}</b> · source:{" "}
-                    <b className="text-text">{status.source}</b>{" "}
-                    {status.source === "stored" ? "(set here)" : "(deployed env)"}
-                  </>
-                : <span className="inline-flex items-center gap-1 text-amber">
-                    <Icon name="alert-triangle" size={14} /> No API key set — the bot can&rsquo;t make AI calls until you add one.
-                  </span>}
-        </div>
-
-        <FormField
-          className="mb-0"
-          label="New key"
-          hint="Paste a new sk-ant-… key, then Test or Save & verify."
-        >
-          <Input
-            ref={inputRef}
-            type="password"
-            autoComplete="off"
-            placeholder="sk-ant-… paste a new key"
-            value={keyInput}
-            onChange={(e) => setKeyInput(e.target.value)}
-            className="max-w-[420px]"
-          />
-        </FormField>
-
-        <div className="flex gap-2 flex-wrap">
-          <Button variant="secondary" size="sm" icon="plug" loading={testing} onClick={onTest}>
-            Test
-          </Button>
-          <Button variant="primary" size="sm" icon="device-floppy" loading={saving} onClick={onSave}>
-            Save &amp; verify
-          </Button>
-          <Button variant="mini" size="sm" loading={clearing} onClick={onClear}>
-            Use deployed default
-          </Button>
-        </div>
-
-        {keyMsg && (
-          <div
-            className={cn(
-              "text-[12px] inline-flex items-center gap-1",
-              keyMsg.tone === "ok" && "text-green",
-              keyMsg.tone === "err" && "text-red",
-              keyMsg.tone === "info" && "text-muted",
-            )}
-          >
-            {keyMsg.tone === "ok" && <Icon name="check" size={14} />}
-            {keyMsg.tone === "err" && <Icon name="x" size={14} />}
-            {keyMsg.text}
-          </div>
-        )}
-      </CardBody>
-    </Card>
-  );
-}
-
-function KeyBadge({ status }: { status: KeyStatus | null }) {
-  if (!status) return null;
-  if (!status.set) return <Badge tone="amber">No key</Badge>;
-  return <Badge tone={status.source === "stored" ? "accent" : "neutral"}>{status.source}</Badge>;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────────
 // Usage & spend dashboard (legacy renderUsageDashboard :3358).
 // ─────────────────────────────────────────────────────────────────────────────────
 function UsageDashboard({
-  usage, cap, rates, loading, error, onRefresh,
+  usage, cap, rates, active, loading, error, onRefresh,
 }: {
   usage: UsageDoc | null;
   cap: number;
   rates: Rates;
+  active: PublicProvider | null;
   loading: boolean;
   error: string;
   onRefresh: () => void;
@@ -367,13 +165,15 @@ function UsageDashboard({
         </Button>
       </CardHeader>
       <CardBody className="flex flex-col gap-4">
-        {/* Prices rendered from the server's `rates` — NOT a hardcoded price copy. */}
+        {/* Prices rendered from the active provider's `rates` — NOT a hardcoded price copy. */}
         <p className="text-[11px] text-muted leading-snug">
-          Tokens and estimated cost of every AI action the bot runs through your Anthropic key, by day and
-          by task. Cost is an estimate from the model used per call ({" "}
-          <RatesLine rates={rates} />). The authoritative number is always your{" "}
-          <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" className="text-accent2 no-underline hover:underline">
-            Anthropic Console
+          Tokens and estimated cost of every AI action the bot runs through your{" "}
+          {active?.label ?? "provider"} key, by day and by task. Cost is an estimate from the model used per
+          call ({" "}
+          <RatesLine rates={rates} />). Days recorded before a provider switch keep the cost they were
+          billed at. The authoritative number is always your{" "}
+          <a href={active?.consoleUrl ?? "https://console.anthropic.com"} target="_blank" rel="noreferrer" className="text-accent2 no-underline hover:underline">
+            {active?.label ?? "provider"} console
           </a>
           .
         </p>
@@ -400,7 +200,7 @@ function UsageDashboard({
               <Stat
                 label="Cache (30d)"
                 value={num(tCacheRead) + " read"}
-                sub={(tCacheRead || tCacheWrite) ? num(tCacheWrite) + " written · cached reads cost ~10%" : "not engaging yet"}
+                sub={(tCacheRead || tCacheWrite) ? num(tCacheWrite) + " written · cached reads bill at a fraction of input" : "not engaging yet"}
               />
             </div>
 

@@ -1,7 +1,8 @@
 // Small shared helpers + limits for the action handlers. Port of legacy index.ts
 // (limits 181-192, pickModel 25-28, textOf 194-196, parseJson 198-209).
 
-import { CLAUDE_HAIKU, CLAUDE_MODEL, CLAUDE_MODEL_OPUS, type Tool } from "./anthropic";
+import type { Tool } from "./anthropic";
+import { tierOf, type Tier } from "./providers";
 
 // ─── Limits ─────────────────────────────────────────────────────────────────
 export const MAX_FRAMEWORKS = 6;
@@ -10,13 +11,15 @@ export const MAX_VARIANTS_PER_ANGLE = 3;
 export const MAX_TOTAL_SCRIPTS = Number(process.env.MAX_TOTAL_SCRIPTS || 24);
 export const MAX_PROMPT_CHARS = Number(process.env.MAX_PROMPT_CHARS || 80_000);
 
-// Map a safe model alias (from the UI) to a real Claude model id. Unknown → default.
-export function pickModel(alias: unknown): string {
-  const map: Record<string, string> = { sonnet: CLAUDE_MODEL, opus: CLAUDE_MODEL_OPUS, haiku: CLAUDE_HAIKU };
-  return map[String(alias ?? "").toLowerCase()] || CLAUDE_MODEL;
+// Map a model alias from the UI ('sonnet' | 'opus' | 'haiku' — what settings.builderModel and
+// settings.systemFilter.model still store) onto a capability tier. server/ai.ts turns the tier
+// into a real model id for whichever provider is active. Unknown → the balanced tier.
+export function pickModel(alias: unknown): Tier {
+  return tierOf(alias);
 }
 
-// Anthropic server-side web search tool (executed by the API, not by us).
+// Anthropic server-side web search tool (executed by the API, not by us). Providers without
+// server-side search have it stripped in server/ai.ts.
 export const webSearchTool = (maxUses: number): Tool =>
   ({ type: "web_search_20250305", name: "web_search", max_uses: maxUses }) as unknown as Tool;
 

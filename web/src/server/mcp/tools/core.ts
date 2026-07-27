@@ -10,7 +10,9 @@ import {
   getPath, setPath, deletePath, summarize, type Cfg,
 } from "../config-io";
 import { callAction } from "../invoke";
-import { getUsage, RATES, DAILY_AI_CALL_CAP } from "../../usage";
+import { getUsage, DAILY_AI_CALL_CAP } from "../../usage";
+import { ratesFor } from "../../providers";
+import { activeProvider } from "../../secrets";
 import { SLOT_KEYS, loadEngineOverrides } from "../../prompts";
 import { schema, str, bool, num, arr, argStr, argBool, argNum, argArr, required, type McpTool } from "../types";
 
@@ -722,7 +724,8 @@ export const usageReport: McpTool = {
   inputSchema: schema({}),
   handler: async () => {
     const u = await getUsage();
-    return { cap: DAILY_AI_CALL_CAP, rates: RATES, usage: u };
+    const provider = await activeProvider();
+    return { cap: DAILY_AI_CALL_CAP, provider, rates: ratesFor(provider), usage: u };
   },
 };
 

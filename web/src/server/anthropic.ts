@@ -1,14 +1,20 @@
 // Minimal Anthropic Messages API client (Node port of the old Deno _shared/anthropic.ts).
 // Non-streaming only — the backend never streamed. Retries transient failures with backoff.
 // Docs: https://docs.anthropic.com/en/api/messages
+//
+// This is the PROTOCOL, not the vendor: the caller passes the endpoint (url + key + label),
+// so the same client drives Anthropic and DeepSeek's Anthropic-compatible surface. Which
+// endpoint is live, and which model ids it takes, lives in server/providers.ts.
 
-const API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 
-export const CLAUDE_MODEL = "claude-sonnet-4-6";
-export const CLAUDE_MODEL_OPUS = "claude-opus-4-6";
-// Cheap/fast model for side tasks: chip suggestions, website summarization.
-export const CLAUDE_HAIKU = "claude-haiku-4-5";
+/** Where to send a request and how to authenticate it. Resolved in server/secrets.ts. */
+export interface Endpoint {
+  url: string;
+  key: string;
+  /** Provider name, used only in error messages. */
+  label: string;
+}
 
 export interface CacheControl { type: "ephemeral" }
 
@@ -51,19 +57,10 @@ export interface MessagesResponse {
   role: "assistant";
   content: ContentBlock[];
   // "pause_turn" is returned when a long server-tool turn (e.g. web_search) is paused
-  // and must be resumed by re-sending the assistant content. See claudeMessages().
+  // and must be resumed by re-sending the assistant content. See aiMessages().
   stop_reason: "end_turn" | "tool_use" | "max_tokens" | "stop_sequence" | "pause_turn";
   // cache_* fields are present when prompt caching engages — used by the Usage dashboard.
   usage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number };
-}
-
-// Optional runtime override (set from the admin console). Falls back to the env secret.
-let keyOverride: string | null = null;
-export function setApiKeyOverride(k: string | null): void { keyOverride = (k && k.trim()) ? k.trim() : null; }
-function apiKey(): string {
-  const k = keyOverride || process.env.ANTHROPIC_API_KEY;
-  if (!k) throw new Error("ANTHROPIC_API_KEY is not set");
-  return k;
 }
 
 // Retryable transient conditions per Anthropic guidance: 429 (rate limit),
@@ -79,16 +76,16 @@ function backoffMs(attempt: number, retryAfter: string | null): number {
 }
 
 /** Non-streaming call. Returns the full response. Retries transient failures with backoff. */
-export async function messages(req: MessagesRequest): Promise<MessagesResponse> {
+export async function messages(req: MessagesRequest, ep: Endpoint): Promise<MessagesResponse> {
   let lastErr: unknown;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     let res: Response;
     try {
-      res = await fetch(API_URL, {
+      res = await fetch(ep.url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": apiKey(),
+          "x-api-key": ep.key,
           "anthropic-version": ANTHROPIC_VERSION,
         },
         body: JSON.stringify(req),
@@ -96,7 +93,7 @@ export async function messages(req: MessagesRequest): Promise<MessagesResponse> 
     } catch (e) {
       lastErr = e;
       if (attempt < MAX_RETRIES) { await sleep(backoffMs(attempt, null)); continue; }
-      throw new Error(`Anthropic request failed: ${String((e as Error).message ?? e)}`);
+      throw new Error(`${ep.label} request failed: ${String((e as Error).message ?? e)}`);
     }
     if (res.ok) return (await res.json()) as MessagesResponse;
     const body = await res.text();
@@ -104,7 +101,7 @@ export async function messages(req: MessagesRequest): Promise<MessagesResponse> 
       await sleep(backoffMs(attempt, res.headers.get("retry-after")));
       continue;
     }
-    throw new Error(`Anthropic ${res.status}: ${body}`);
+    throw new Error(`${ep.label} ${res.status}: ${body}`);
   }
-  throw new Error(`Anthropic request failed after retries: ${String((lastErr as Error)?.message ?? lastErr ?? "unknown")}`);
+  throw new Error(`${ep.label} request failed after retries: ${String((lastErr as Error)?.message ?? lastErr ?? "unknown")}`);
 }

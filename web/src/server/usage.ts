@@ -4,15 +4,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { kvGet, kvSet } from "./db";
 
-// Approx Anthropic prices, USD per 1M tokens (input/output). Keep in sync with model IDs
-// in anthropic.ts. Opus 4.x = $5/$25, Sonnet 4.x = $3/$15, Haiku 4.5 = $1/$5.
-export const RATES: Record<string, { in: number; out: number }> = {
-  sonnet: { in: 3, out: 15 }, opus: { in: 5, out: 25 }, haiku: { in: 1, out: 5 },
-};
-export function modelKey(m: unknown): string {
-  const s = String(m ?? "").toLowerCase();
-  return s.includes("opus") ? "opus" : s.includes("haiku") ? "haiku" : "sonnet";
-}
+// Prices live with the provider that charges them — see the `rates` field of each entry in
+// server/providers.ts. server/ai.ts bills each response against the active provider's card.
 
 export interface UsageAccum { input: number; output: number; cost: number; lens?: string; cacheRead?: number; cacheWrite?: number }
 // Per-request accumulator, concurrency-safe via AsyncLocalStorage.
